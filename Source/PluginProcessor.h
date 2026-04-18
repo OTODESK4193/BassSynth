@@ -52,6 +52,7 @@ private:
     std::array<float, 512> outputScopeData;
     int scopeWriteIndex = 0;
 
+    // --- OSC Parameters ---
     std::atomic<float>* pWave = nullptr;
     std::atomic<float>* pPos = nullptr;
     std::atomic<float>* pFm = nullptr;
@@ -60,17 +61,15 @@ private:
     std::atomic<float>* pUni = nullptr;
     std::atomic<float>* pDetune = nullptr;
     std::atomic<float>* pOscPitch = nullptr;
+    std::atomic<float>* pDrift = nullptr;
 
-    std::atomic<float>* pGlide = nullptr;
-    std::atomic<float>* pAAtk = nullptr;
-    std::atomic<float>* pADec = nullptr;
-    std::atomic<float>* pASus = nullptr;
-    std::atomic<float>* pARel = nullptr;
-    std::atomic<float>* pFAtk = nullptr;
-    std::atomic<float>* pFDec = nullptr;
-    std::atomic<float>* pFSus = nullptr;
-    std::atomic<float>* pFRel = nullptr;
+    // --- Sub Parameters ---
+    std::atomic<float>* pSubOn = nullptr;
+    std::atomic<float>* pSubWave = nullptr;
+    std::atomic<float>* pSubVol = nullptr;
+    std::atomic<float>* pSubPitch = nullptr;
 
+    // --- Filter / Drive / Envelope ---
     std::atomic<float>* pCutoff = nullptr;
     std::atomic<float>* pReso = nullptr;
     std::atomic<float>* pFltEnvAmt = nullptr;
@@ -79,24 +78,15 @@ private:
     std::atomic<float>* pShpRate = nullptr;
     std::atomic<float>* pShpBit = nullptr;
     std::atomic<float>* pGain = nullptr;
+    std::atomic<float>* pGlide = nullptr;
 
-    juce::SmoothedValue<float> smoothedPitchMult;
-    juce::SmoothedValue<float> smoothedCutoff;
-    juce::SmoothedValue<float> smoothedReso;
-    juce::SmoothedValue<float> smoothedFltEnvAmt;
-    juce::SmoothedValue<float> smoothedDrive;
-    juce::SmoothedValue<float> smoothedShpAmt;
-    juce::SmoothedValue<float> smoothedShpRate;
-    juce::SmoothedValue<float> smoothedShpBit;
-    juce::SmoothedValue<float> smoothedGain;
+    std::atomic<float>* pAAtk = nullptr; std::atomic<float>* pADec = nullptr; std::atomic<float>* pASus = nullptr; std::atomic<float>* pARel = nullptr;
+    std::atomic<float>* pFAtk = nullptr; std::atomic<float>* pFDec = nullptr; std::atomic<float>* pFSus = nullptr; std::atomic<float>* pFRel = nullptr;
 
-    // --- 追加：Wavetable系パラメータのスムージング用 ---
-    juce::SmoothedValue<float> smoothedWtPos;
-    juce::SmoothedValue<float> smoothedFm;
-    juce::SmoothedValue<float> smoothedSync;
-    juce::SmoothedValue<float> smoothedMorph;
+    // --- Smoothed Values ---
+    juce::SmoothedValue<float> smoothedPitchMult, smoothedCutoff, smoothedReso, smoothedFltEnvAmt, smoothedDrive, smoothedShpAmt, smoothedShpRate, smoothedShpBit, smoothedGain;
+    juce::SmoothedValue<float> smoothedWtPos, smoothedFm, smoothedSync, smoothedMorph, smoothedDrift, smoothedSubVol, smoothedSubPitch;
 
-    // --- 追加：CPU負荷対策のためのキャッシュ ---
     float lastOscFreq = -1.0f;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(LiquidDreamAudioProcessor)

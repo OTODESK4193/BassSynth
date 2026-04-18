@@ -35,6 +35,12 @@ public:
         emptySet->frameSize = 2048;
         emptySet->numFrames = 1;
         currentWavetableSet = emptySet;
+
+        auto& random = juce::Random::getSystemRandom();
+        for (int i = 0; i < MaxVoices; ++i) {
+            float speedHz = 0.1f + random.nextFloat() * 0.4f;
+            driftRate[i] = speedHz;
+        }
         resetPhase();
     }
 
@@ -47,49 +53,37 @@ public:
 
     void loadWavetableFile(juce::String fileName) {
         const int myJobId = ++loadJobId;
-
         backgroundPool.addJob([this, fileName, myJobId]() {
             juce::File file = juce::File(EmbeddedWavetables::wavetablesDir).getChildFile(fileName);
             if (!file.existsAsFile()) return;
-
             std::unique_ptr<juce::AudioFormatReader> reader(formatManager.createReaderFor(file));
             if (reader != nullptr) {
                 WavetableSet::Ptr newSet = new WavetableSet();
                 juce::AudioBuffer<float> tempRaw;
                 tempRaw.setSize(1, (int)reader->lengthInSamples);
                 reader->read(&tempRaw, 0, (int)reader->lengthInSamples, 0, true, false);
-
                 newSet->totalSamples = tempRaw.getNumSamples();
                 newSet->frameSize = (newSet->totalSamples >= 2048) ? 2048 : newSet->totalSamples;
                 newSet->numFrames = std::max(1, newSet->totalSamples / newSet->frameSize);
-
                 juce::dsp::FFT fft(11);
                 juce::AudioBuffer<float> workBuf(1, 4096);
-
                 for (int lvl = 0; lvl < NumLevels; ++lvl) {
                     if (myJobId != loadJobId.load()) return;
-
                     newSet->levels[lvl].setSize(1, newSet->totalSamples);
-
                     if (newSet->frameSize == 2048) {
                         for (int f = 0; f < newSet->numFrames; ++f) {
                             if (myJobId != loadJobId.load()) return;
-
                             workBuf.clear();
                             auto* workPtr = workBuf.getWritePointer(0);
-
                             for (int i = 0; i < 2048; ++i) {
                                 int srcIdx = f * 2048 + i;
                                 workPtr[i] = (srcIdx < newSet->totalSamples) ? tempRaw.getSample(0, srcIdx) : 0.0f;
                             }
-
                             fft.performRealOnlyForwardTransform(workPtr);
-
                             if (lvl > 0) {
                                 int harmonicLimit = 1024 >> lvl;
                                 if (harmonicLimit < 2) harmonicLimit = 2;
                                 int transitionStart = std::max(1, (int)(harmonicLimit * 0.8f));
-
                                 for (int k = transitionStart; k <= 1024; ++k) {
                                     float multiplier = 0.0f;
                                     if (k < harmonicLimit) {
@@ -97,40 +91,24 @@ public:
                                         multiplier = 0.5f * (1.0f + std::cos(fraction * juce::MathConstants<float>::pi));
                                     }
                                     if (k == 1024) workPtr[1] *= multiplier;
-                                    else {
-                                        workPtr[2 * k] *= multiplier;
-                                        workPtr[2 * k + 1] *= multiplier;
-                                    }
+                                    else { workPtr[2 * k] *= multiplier; workPtr[2 * k + 1] *= multiplier; }
                                 }
                             }
-
                             workPtr[0] = 0.0f;
                             fft.performRealOnlyInverseTransform(workPtr);
-
                             float peak = 1e-9f;
-                            for (int i = 0; i < 2048; ++i) {
-                                peak = std::max(peak, std::abs(workPtr[i]));
-                            }
-
+                            for (int i = 0; i < 2048; ++i) peak = std::max(peak, std::abs(workPtr[i]));
                             float normalizeScale = 1.0f / peak;
                             auto* destPtr = newSet->levels[lvl].getWritePointer(0);
-
                             for (int i = 0; i < 2048; ++i) {
                                 int dstIdx = f * 2048 + i;
-                                if (dstIdx < newSet->totalSamples) {
-                                    destPtr[dstIdx] = juce::jlimit(-1.0f, 1.0f, workPtr[i] * normalizeScale);
-                                }
+                                if (dstIdx < newSet->totalSamples) destPtr[dstIdx] = juce::jlimit(-1.0f, 1.0f, workPtr[i] * normalizeScale);
                             }
                         }
                     }
-                    else {
-                        newSet->levels[lvl].makeCopyOf(tempRaw);
-                    }
+                    else { newSet->levels[lvl].makeCopyOf(tempRaw); }
                 }
-
-                if (myJobId == loadJobId.load()) {
-                    currentWavetableSet = newSet;
-                }
+                if (myJobId == loadJobId.load()) currentWavetableSet = newSet;
             }
             });
     }
@@ -138,31 +116,24 @@ public:
     void generateSingleCycle(std::array<float, 512>& displayBuffer) {
         WavetableSet::Ptr set = currentWavetableSet.get();
         if (set == nullptr || set->totalSamples == 0) { displayBuffer.fill(0.0f); return; }
-
         auto* ptr = set->levels[0].getReadPointer(0);
         float framePos = wtPosition * (float)std::max(0, set->numFrames - 1);
         int frameIdx = (int)framePos;
         float frameFrac = framePos - (float)frameIdx;
-
         int f0_base = frameIdx * set->frameSize;
         int f1_base = std::min(frameIdx + 1, set->numFrames - 1) * set->frameSize;
-
         for (int i = 0; i < 512; ++i) {
             float phase = i / 512.0f;
             float mod = std::sin(phase * 2.0f * juce::MathConstants<float>::pi) * fmAmount * 0.1f;
             float syncPhase = std::fmod((phase + mod) * syncAmount, 1.0f);
             if (syncPhase < 0.0f) syncPhase += 1.0f;
-
-            // UI用もHermite補間で美しく描画
             float floatPos = syncPhase * set->frameSize;
             int pos = (int)floatPos;
             if (pos >= set->frameSize) pos -= set->frameSize;
             float frac = floatPos - (float)pos;
-
             float val0 = getHermiteSample(ptr, f0_base, set->frameSize, pos, frac);
             float val1 = getHermiteSample(ptr, f1_base, set->frameSize, pos, frac);
             float val = val0 * (1.0f - frameFrac) + val1 * frameFrac;
-
             if (morphParam > 0.01f) {
                 val *= (1.0f + morphParam * 4.0f);
                 val = std::sin(val * juce::MathConstants<float>::halfPi);
@@ -178,9 +149,23 @@ public:
     void setFMAmount(float amt) { fmAmount = amt; }
     void setSyncAmount(float amt) { syncAmount = std::max(1.0f, amt); }
     void setMorph(float m) { morphParam = m; }
+    void setDriftAmount(float amt) { driftAmount = amt; }
+
+    // --- Sub Osc API ---
+    void setSubOn(bool on) { subOn = on; }
+    void setSubWaveform(int shape) { subWaveform = juce::jlimit(0, 3, shape); }
+    void setSubVolume(float vol) { subVolume = vol; }
+    void setSubPitchOffset(float semitones) { subPitchOffset = semitones; }
 
     void resetPhase() {
-        for (int b = 0; b < MaxBlocks; ++b) phases[b] = SIMDFloat(0.0f);
+        auto& random = juce::Random::getSystemRandom();
+        for (int b = 0; b < MaxBlocks; ++b) {
+            SIMDFloat initialPhase;
+            for (int i = 0; i < SimdWidth; ++i) initialPhase.set(i, random.nextFloat());
+            phases[b] = initialPhase;
+        }
+        subPhase = 0.0f;
+        for (int i = 0; i < MaxVoices; ++i) driftPhase[i] = random.nextFloat();
     }
 
     void getSampleStereo(float& outL, float& outR) {
@@ -190,11 +175,9 @@ public:
 
         SIMDFloat fmScaled(fmAmount * 0.1f);
         SIMDFloat sync(syncAmount);
-
         float framePos = wtPosition * (float)std::max(0, set->numFrames - 1);
         int frameIdx = (int)framePos;
         float frameFrac = framePos - (float)frameIdx;
-
         int f0_base = frameIdx * set->frameSize;
         int f1_base = std::min(frameIdx + 1, set->numFrames - 1) * set->frameSize;
 
@@ -207,119 +190,84 @@ public:
             SIMDFloat z = p - half;
             SIMDFloat fmSin = (z * c1 - (z * z * z) * c2 + (z * z * z * z * z) * c3) * negOne;
             SIMDFloat totalPhase = (p + fmSin * fmScaled) * sync;
-
             SIMDFloat vAmp(0.0f), nextP(0.0f);
 
             for (int i = 0; i < SimdWidth; ++i) {
                 int voiceIdx = b * SimdWidth + i;
                 if (voiceIdx >= unisonCount) {
-                    vAmp.set(i, 0.0f);
-                    nextP.set(i, p.get(i));
-                    continue;
+                    vAmp.set(i, 0.0f); nextP.set(i, p.get(i)); continue;
                 }
-
-                float step = increments[b].get(i);
+                driftPhase[voiceIdx] += driftRate[voiceIdx] / (float)sampleRate;
+                if (driftPhase[voiceIdx] >= 1.0f) driftPhase[voiceIdx] -= 1.0f;
+                float currentDriftMod = std::sin(driftPhase[voiceIdx] * juce::MathConstants<float>::twoPi) * driftAmount * 0.01f;
+                float step = increments[b].get(i) * (1.0f + currentDriftMod);
                 float voiceFreq = std::max(1.0f, step * (float)sampleRate);
-
                 float maxH = (float)sampleRate / (2.0f * voiceFreq);
-                int level0 = 0;
-                float hLimit = 1024.0f;
-
-                while (level0 < NumLevels - 2 && (hLimit * 0.5f) > maxH) {
-                    level0++;
-                    hLimit *= 0.5f;
-                }
-
-                float levelFrac = 0.0f;
-                if (hLimit > maxH) {
+                int level0 = 0; float hLimit = 1024.0f;
+                while (level0 < NumLevels - 2 && (hLimit * 0.5f) > maxH) { level0++; hLimit *= 0.5f; }
+                float levelFrac = 0.0f; if (hLimit > maxH) {
                     levelFrac = (hLimit - maxH) / (hLimit * 0.5f);
                     levelFrac = juce::jlimit(0.0f, 1.0f, levelFrac);
                 }
                 int level1 = level0 + 1;
-
                 const float* ptr0 = set->levels[level0].getReadPointer(0);
                 const float* ptr1 = set->levels[level1].getReadPointer(0);
-
-                float tp = totalPhase.get(i);
-                tp -= std::floor(tp);
-                if (tp < 0.0f) tp += 1.0f;
-
-                // --- 【Phase 3】時間軸の3次Hermite補間 ---
-                float floatPos = tp * set->frameSize;
-                int pos = (int)floatPos;
-                if (pos >= set->frameSize) pos -= set->frameSize;
-                float frac = floatPos - (float)pos;
-
-                // Mipmapレベル0のフレーム間補間
-                float val0_f0 = getHermiteSample(ptr0, f0_base, set->frameSize, pos, frac);
-                float val0_f1 = getHermiteSample(ptr0, f1_base, set->frameSize, pos, frac);
-                float val0 = val0_f0 * (1.0f - frameFrac) + val0_f1 * frameFrac;
-
-                // Mipmapレベル1のフレーム間補間
-                float val1_f0 = getHermiteSample(ptr1, f0_base, set->frameSize, pos, frac);
-                float val1_f1 = getHermiteSample(ptr1, f1_base, set->frameSize, pos, frac);
-                float val1 = val1_f0 * (1.0f - frameFrac) + val1_f1 * frameFrac;
-
-                // Mipmapレベル間のクロスフェード（3次元補間の完了）
+                float tp = totalPhase.get(i); tp -= std::floor(tp); if (tp < 0.0f) tp += 1.0f;
+                float floatPos = tp * set->frameSize; int pos = (int)floatPos;
+                if (pos >= set->frameSize) pos -= set->frameSize; float frac = floatPos - (float)pos;
+                float val0 = getHermiteSample(ptr0, f0_base, set->frameSize, pos, frac) * (1.0f - frameFrac) + getHermiteSample(ptr0, f1_base, set->frameSize, pos, frac) * frameFrac;
+                float val1 = getHermiteSample(ptr1, f0_base, set->frameSize, pos, frac) * (1.0f - frameFrac) + getHermiteSample(ptr1, f1_base, set->frameSize, pos, frac) * frameFrac;
                 float val = val0 * (1.0f - levelFrac) + val1 * levelFrac;
-
                 if (morphParam > 0.01f) {
-                    val *= (1.0f + morphParam * 4.0f);
-                    val = std::sin(val * juce::MathConstants<float>::halfPi);
+                    val *= (1.0f + morphParam * 4.0f); val = std::sin(val * juce::MathConstants<float>::halfPi);
                 }
-
                 vAmp.set(i, val * amp[b].get(i));
-                float phaseInc = p.get(i) + step;
-                if (phaseInc >= 1.0f) phaseInc -= 1.0f;
-                nextP.set(i, phaseInc);
+                float phaseInc = p.get(i) + step; if (phaseInc >= 1.0f) phaseInc -= 1.0f; nextP.set(i, phaseInc);
             }
-
-            outL_simd += vAmp * panL[b];
-            outR_simd += vAmp * panR[b];
-            phases[b] = nextP;
+            outL_simd += vAmp * panL[b]; outR_simd += vAmp * panR[b]; phases[b] = nextP;
         }
+        for (int i = 0; i < SimdWidth; ++i) { outL += outL_simd.get(i); outR += outR_simd.get(i); }
 
-        for (int i = 0; i < SimdWidth; ++i) {
-            outL += outL_simd.get(i);
-            outR += outR_simd.get(i);
+        // --- Sub Osc with 250Hz LPF ---
+        if (subOn && subVolume > 0.001f) {
+            float subFreq = std::max(1.0f, baseFreq * std::pow(2.0f, subPitchOffset / 12.0f));
+            subPhase += subFreq / (float)sampleRate;
+            if (subPhase >= 1.0f) subPhase -= 1.0f;
+            float rawSub = 0.0f;
+            switch (subWaveform) {
+            case 0: rawSub = std::sin(subPhase * juce::MathConstants<float>::twoPi); break;
+            case 1: rawSub = 4.0f * std::abs(subPhase - 0.5f) - 1.0f; break;
+            case 2: rawSub = subPhase < 0.5f ? 1.0f : -1.0f; break;
+            case 3: rawSub = 2.0f * subPhase - 1.0f; break;
+            }
+            float alpha = juce::MathConstants<float>::twoPi * 250.0f / (float)sampleRate;
+            subLpfState += alpha * (rawSub - subLpfState);
+            float s = subLpfState * subVolume; outL += s; outR += s;
         }
     }
 
 private:
     double sampleRate = 44100.0;
-    float baseFreq = 440.0f, detuneAmount = 0.0f, wtPosition = 0.0f;
-    float fmAmount = 0.0f, syncAmount = 1.0f, morphParam = 0.0f;
+    float baseFreq = 440.0f, detuneAmount = 0.0f, wtPosition = 0.0f, fmAmount = 0.0f, syncAmount = 1.0f, morphParam = 0.0f, driftAmount = 0.0f;
     int unisonCount = 1;
-
+    bool subOn = true; int subWaveform = 0; float subVolume = 0.0f, subPitchOffset = -12.0f, subPhase = 0.0f, subLpfState = 0.0f;
+    std::array<float, MaxVoices> driftPhase = { 0 }, driftRate = { 0 };
     juce::AudioFormatManager formatManager;
     juce::ThreadPool backgroundPool{ 1 };
     std::atomic<int> loadJobId{ 0 };
-
     juce::ReferenceCountedObjectPtr<WavetableSet> currentWavetableSet;
     std::array<SIMDFloat, MaxBlocks> phases, increments, panL, panR, amp;
 
-    // --- 3次Hermite（エルミート）補間アルゴリズム ---
     static inline float hermite(float t, float y0, float y1, float y2, float y3) {
-        float c0 = y1;
-        float c1 = 0.5f * (y2 - y0);
-        float c2 = y0 - 2.5f * y1 + 2.0f * y2 - 0.5f * y3;
-        float c3 = 0.5f * (y3 - y0) + 1.5f * (y1 - y2);
+        float c0 = y1; float c1 = 0.5f * (y2 - y0); float c2 = y0 - 2.5f * y1 + 2.0f * y2 - 0.5f * y3; float c3 = 0.5f * (y3 - y0) + 1.5f * (y1 - y2);
         return c0 + t * (c1 + t * (c2 + t * c3));
     }
-
-    // テーブルの端を安全にループ（ラップアラウンド）して4点を取得するヘルパー
     inline float getHermiteSample(const float* ptr, int baseOffset, int fs, int pos, float t) const {
         int p0 = pos - 1; if (p0 < 0) p0 += fs;
         int p1 = pos;
         int p2 = pos + 1; if (p2 >= fs) p2 -= fs;
         int p3 = pos + 2; if (p3 >= fs) p3 -= fs;
-
-        return hermite(t,
-            ptr[baseOffset + p0],
-            ptr[baseOffset + p1],
-            ptr[baseOffset + p2],
-            ptr[baseOffset + p3]
-        );
+        return hermite(t, ptr[baseOffset + p0], ptr[baseOffset + p1], ptr[baseOffset + p2], ptr[baseOffset + p3]);
     }
 
     void recalculate() {
@@ -330,16 +278,14 @@ private:
                 int voiceIdx = b * SimdWidth + i;
                 if (voiceIdx < unisonCount) {
                     float bias = (unisonCount == 1) ? 0.0f : (2.0f * voiceIdx / (float)(unisonCount - 1) - 1.0f);
+                    bias = bias * bias * bias;
                     float step = (float)((baseFreq * std::pow(2.0f, (bias * detuneAmount * 0.5f) / 12.0f)) / sampleRate);
                     float angle = (bias + 1.0f) * 0.25f * juce::MathConstants<float>::pi;
                     if (baseFreq < 150.0f) {
                         float centerWeight = juce::jlimit(0.0f, 1.0f, baseFreq / 150.0f);
                         angle = (0.25f * juce::MathConstants<float>::pi) + (angle - 0.25f * juce::MathConstants<float>::pi) * centerWeight;
                     }
-                    pL.set(i, std::cos(angle));
-                    pR.set(i, std::sin(angle));
-                    a.set(i, norm);
-                    inc.set(i, step);
+                    pL.set(i, std::cos(angle)); pR.set(i, std::sin(angle)); a.set(i, norm); inc.set(i, step);
                 }
             }
             panL[b] = pL; panR[b] = pR; amp[b] = a; increments[b] = inc;

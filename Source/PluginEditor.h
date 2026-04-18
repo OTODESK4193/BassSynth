@@ -22,11 +22,20 @@ private:
     WavetableBrowser browser;
     juce::TextButton openBrowserButton{ "BROWSE WAVETABLE" };
 
-    juce::GroupComponent oscGroup, shaperGroup, filterGroup, ampEnvGroup, modEnvGroup, controlGroup;
+    // --- グループコンポーネント ---
+    juce::GroupComponent oscGroup, subGroup, shaperGroup, filterGroup, ampEnvGroup, modEnvGroup, controlGroup;
 
-    juce::Slider wtPosSlider, fmAmtSlider, syncSlider, morphSlider, uniCountSlider, detuneSlider, oscPitchSlider;
-    juce::Label  wtPosLabel, fmAmtLabel, syncLabel, morphLabel, uniCountLabel, detuneLabel, oscPitchLabel;
+    // --- Osc Parameters ---
+    juce::Slider wtPosSlider, fmAmtSlider, syncSlider, morphSlider, uniCountSlider, detuneSlider, oscPitchSlider, driftSlider;
+    juce::Label  wtPosLabel, fmAmtLabel, syncLabel, morphLabel, uniCountLabel, detuneLabel, oscPitchLabel, driftLabel;
 
+    // --- Sub Osc Parameters ---
+    juce::ToggleButton subOnButton{ "ON" };
+    juce::ComboBox subWaveCombo;
+    juce::Slider subVolSlider, subPitchSlider;
+    juce::Label  subVolLabel, subPitchLabel;
+
+    // --- Filter / Shaper / Perf ---
     juce::Slider distDriveSlider, shpAmtSlider, bitSlider, rateSlider;
     juce::Label  distDriveLabel, shpAmtLabel, bitLabel, rateLabel;
 
@@ -42,6 +51,10 @@ private:
     juce::Slider glideSlider, pitchSlider, gainSlider;
     juce::Label  glideLabel, pitchLabel, gainLabel;
 
+    // --- Attachments ---
     std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>> attachments;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> subOnAttachment;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> subWaveAttachment;
+
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(LiquidDreamAudioProcessorEditor)
 };
