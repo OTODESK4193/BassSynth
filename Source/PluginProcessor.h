@@ -59,7 +59,7 @@ private:
     std::atomic<float>* pMorph = nullptr;
     std::atomic<float>* pUni = nullptr;
     std::atomic<float>* pDetune = nullptr;
-    std::atomic<float>* pOscPitch = nullptr; // 追加
+    std::atomic<float>* pOscPitch = nullptr;
 
     std::atomic<float>* pGlide = nullptr;
     std::atomic<float>* pAAtk = nullptr;
@@ -80,7 +80,7 @@ private:
     std::atomic<float>* pShpBit = nullptr;
     std::atomic<float>* pGain = nullptr;
 
-    juce::SmoothedValue<float> smoothedPitchMult; // 追加 (周波数乗数用)
+    juce::SmoothedValue<float> smoothedPitchMult;
     juce::SmoothedValue<float> smoothedCutoff;
     juce::SmoothedValue<float> smoothedReso;
     juce::SmoothedValue<float> smoothedFltEnvAmt;
@@ -89,6 +89,15 @@ private:
     juce::SmoothedValue<float> smoothedShpRate;
     juce::SmoothedValue<float> smoothedShpBit;
     juce::SmoothedValue<float> smoothedGain;
+
+    // --- 追加：Wavetable系パラメータのスムージング用 ---
+    juce::SmoothedValue<float> smoothedWtPos;
+    juce::SmoothedValue<float> smoothedFm;
+    juce::SmoothedValue<float> smoothedSync;
+    juce::SmoothedValue<float> smoothedMorph;
+
+    // --- 追加：CPU負荷対策のためのキャッシュ ---
+    float lastOscFreq = -1.0f;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(LiquidDreamAudioProcessor)
 };

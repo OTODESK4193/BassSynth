@@ -104,6 +104,12 @@ void LiquidDreamAudioProcessor::prepareToPlay(double sampleRate, int samplesPerB
     smoothedShpBit.reset(sampleRate, smoothingTime);
     smoothedGain.reset(sampleRate, smoothingTime);
 
+    // --- 追加：Wavetable系パラメータの初期化 ---
+    smoothedWtPos.reset(sampleRate, smoothingTime);
+    smoothedFm.reset(sampleRate, smoothingTime);
+    smoothedSync.reset(sampleRate, smoothingTime);
+    smoothedMorph.reset(sampleRate, smoothingTime);
+
     smoothedPitchMult.setCurrentAndTargetValue(std::pow(2.0f, pOscPitch->load(std::memory_order_relaxed) / 12.0f));
     smoothedCutoff.setCurrentAndTargetValue(pCutoff->load(std::memory_order_relaxed));
     smoothedReso.setCurrentAndTargetValue(pReso->load(std::memory_order_relaxed));
@@ -113,6 +119,14 @@ void LiquidDreamAudioProcessor::prepareToPlay(double sampleRate, int samplesPerB
     smoothedShpRate.setCurrentAndTargetValue(pShpRate->load(std::memory_order_relaxed));
     smoothedShpBit.setCurrentAndTargetValue(pShpBit->load(std::memory_order_relaxed));
     smoothedGain.setCurrentAndTargetValue(pGain->load(std::memory_order_relaxed));
+
+    // --- 追加：Wavetable系パラメータの現在地セット ---
+    smoothedWtPos.setCurrentAndTargetValue(pPos->load(std::memory_order_relaxed));
+    smoothedFm.setCurrentAndTargetValue(pFm->load(std::memory_order_relaxed));
+    smoothedSync.setCurrentAndTargetValue(pSync->load(std::memory_order_relaxed));
+    smoothedMorph.setCurrentAndTargetValue(pMorph->load(std::memory_order_relaxed));
+
+    lastOscFreq = -1.0f; // キャッシュクリア
 }
 
 void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
@@ -131,6 +145,12 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     smoothedShpRate.setTargetValue(pShpRate->load(std::memory_order_relaxed));
     smoothedShpBit.setTargetValue(pShpBit->load(std::memory_order_relaxed));
     smoothedGain.setTargetValue(pGain->load(std::memory_order_relaxed));
+
+    // --- 追加：Wavetable系パラメータのターゲットセット ---
+    smoothedWtPos.setTargetValue(pPos->load(std::memory_order_relaxed));
+    smoothedFm.setTargetValue(pFm->load(std::memory_order_relaxed));
+    smoothedSync.setTargetValue(pSync->load(std::memory_order_relaxed));
+    smoothedMorph.setTargetValue(pMorph->load(std::memory_order_relaxed));
 
     int waveIdx = (int)pWave->load(std::memory_order_relaxed);
     static int lastWaveIdx = -1;
@@ -156,10 +176,7 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         }
     }
 
-    oscillator.setWavetablePosition(pPos->load(std::memory_order_relaxed));
-    oscillator.setFMAmount(pFm->load(std::memory_order_relaxed));
-    oscillator.setSyncAmount(pSync->load(std::memory_order_relaxed));
-    oscillator.setMorph(pMorph->load(std::memory_order_relaxed));
+    // ここにあった oscillator.setWavetablePosition(...) 等は、毎サンプル処理するためループ内に移動しました
     oscillator.setUnisonCount((int)pUni->load(std::memory_order_relaxed));
     oscillator.setUnisonDetune(pDetune->load(std::memory_order_relaxed));
 
@@ -187,9 +204,20 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         float aVal = ampEnv.getNextSample();
         float fVal = filterEnv.getNextSample();
 
+        // --- 追加：Wavetableパラメータの1サンプル単位の滑らかな更新 ---
+        oscillator.setWavetablePosition(smoothedWtPos.getNextValue());
+        oscillator.setFMAmount(smoothedFm.getNextValue());
+        oscillator.setSyncAmount(smoothedSync.getNextValue());
+        oscillator.setMorph(smoothedMorph.getNextValue());
+
         float currentFreq = voiceManager.getCurrentFrequency() * curPitchMult;
         if (currentFreq < 1.0f) currentFreq = 1.0f;
-        oscillator.setFrequency(currentFreq);
+
+        // --- 追加：CPUセーフティ（0.01Hz以上の有意な変化があった時だけ重い再計算を回す） ---
+        if (std::abs(currentFreq - lastOscFreq) > 0.01f) {
+            oscillator.setFrequency(currentFreq);
+            lastOscFreq = currentFreq;
+        }
 
         float oL = 0.0f, oR = 0.0f;
         oscillator.getSampleStereo(oL, oR);
@@ -203,7 +231,6 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         sR = filter.processSample(sR);
 
         // --- DISTORTION & SHAPER (ADAA Integrated) ---
-        // Drive(tanh) と Shaper(sin) を ADAA で一括処理
         shaper.processStereo(sL, sR, curDrive, curShpAmt, curShpRate, curShpBit, sL, sR);
 
         // --- AMP & MASTER GAIN ---
