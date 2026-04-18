@@ -39,7 +39,6 @@ public:
     }
 
     ~WavetableOscillator() {
-        // プラグイン終了時、裏で動いているスレッドを安全に停止させる
         loadJobId++;
         backgroundPool.removeAllJobs(true, 1000);
     }
@@ -47,10 +46,8 @@ public:
     void prepare(double sr) { sampleRate = std::max(1.0, sr); }
 
     void loadWavetableFile(juce::String fileName) {
-        // 新しいロード命令が来たので、ジョブIDを更新（これにより過去の重い処理は即座にキャンセルされる）
         const int myJobId = ++loadJobId;
 
-        // 裏方（バックグラウンドスレッド）に重いFFT処理を丸投げする
         backgroundPool.addJob([this, fileName, myJobId]() {
             juce::File file = juce::File(EmbeddedWavetables::wavetablesDir).getChildFile(fileName);
             if (!file.existsAsFile()) return;
@@ -70,14 +67,12 @@ public:
                 juce::AudioBuffer<float> workBuf(1, 4096);
 
                 for (int lvl = 0; lvl < NumLevels; ++lvl) {
-                    // 【高速化の鍵】もしユーザーが次の波形を選んでいたら、この重い処理を即座に捨てる
                     if (myJobId != loadJobId.load()) return;
 
                     newSet->levels[lvl].setSize(1, newSet->totalSamples);
 
                     if (newSet->frameSize == 2048) {
                         for (int f = 0; f < newSet->numFrames; ++f) {
-                            // フレームの計算ループ内でも常にキャンセルを監視
                             if (myJobId != loadJobId.load()) return;
 
                             workBuf.clear();
@@ -93,7 +88,6 @@ public:
                             if (lvl > 0) {
                                 int harmonicLimit = 1024 >> lvl;
                                 if (harmonicLimit < 2) harmonicLimit = 2;
-
                                 int transitionStart = std::max(1, (int)(harmonicLimit * 0.8f));
 
                                 for (int k = transitionStart; k <= 1024; ++k) {
@@ -102,10 +96,7 @@ public:
                                         float fraction = (float)(k - transitionStart) / (float)(harmonicLimit - transitionStart);
                                         multiplier = 0.5f * (1.0f + std::cos(fraction * juce::MathConstants<float>::pi));
                                     }
-
-                                    if (k == 1024) {
-                                        workPtr[1] *= multiplier;
-                                    }
+                                    if (k == 1024) workPtr[1] *= multiplier;
                                     else {
                                         workPtr[2 * k] *= multiplier;
                                         workPtr[2 * k + 1] *= multiplier;
@@ -122,8 +113,8 @@ public:
                             }
 
                             float normalizeScale = 1.0f / peak;
-
                             auto* destPtr = newSet->levels[lvl].getWritePointer(0);
+
                             for (int i = 0; i < 2048; ++i) {
                                 int dstIdx = f * 2048 + i;
                                 if (dstIdx < newSet->totalSamples) {
@@ -137,7 +128,6 @@ public:
                     }
                 }
 
-                // 全ての計算が無事終わり、かつこの波形がまだ最新の要求であれば、差し替える
                 if (myJobId == loadJobId.load()) {
                     currentWavetableSet = newSet;
                 }
@@ -154,17 +144,25 @@ public:
         int frameIdx = (int)framePos;
         float frameFrac = framePos - (float)frameIdx;
 
+        int f0_base = frameIdx * set->frameSize;
+        int f1_base = std::min(frameIdx + 1, set->numFrames - 1) * set->frameSize;
+
         for (int i = 0; i < 512; ++i) {
             float phase = i / 512.0f;
             float mod = std::sin(phase * 2.0f * juce::MathConstants<float>::pi) * fmAmount * 0.1f;
             float syncPhase = std::fmod((phase + mod) * syncAmount, 1.0f);
             if (syncPhase < 0.0f) syncPhase += 1.0f;
 
-            int samplePos = (int)(syncPhase * (set->frameSize - 1));
-            int idx1 = juce::jlimit(0, set->totalSamples - 1, (frameIdx * set->frameSize) + samplePos);
-            int idx2 = juce::jlimit(0, set->totalSamples - 1, ((frameIdx + 1) * set->frameSize) + samplePos);
+            // UI用もHermite補間で美しく描画
+            float floatPos = syncPhase * set->frameSize;
+            int pos = (int)floatPos;
+            if (pos >= set->frameSize) pos -= set->frameSize;
+            float frac = floatPos - (float)pos;
 
-            float val = ptr[idx1] * (1.0f - frameFrac) + ptr[idx2] * frameFrac;
+            float val0 = getHermiteSample(ptr, f0_base, set->frameSize, pos, frac);
+            float val1 = getHermiteSample(ptr, f1_base, set->frameSize, pos, frac);
+            float val = val0 * (1.0f - frameFrac) + val1 * frameFrac;
+
             if (morphParam > 0.01f) {
                 val *= (1.0f + morphParam * 4.0f);
                 val = std::sin(val * juce::MathConstants<float>::halfPi);
@@ -192,9 +190,13 @@ public:
 
         SIMDFloat fmScaled(fmAmount * 0.1f);
         SIMDFloat sync(syncAmount);
+
         float framePos = wtPosition * (float)std::max(0, set->numFrames - 1);
         int frameIdx = (int)framePos;
         float frameFrac = framePos - (float)frameIdx;
+
+        int f0_base = frameIdx * set->frameSize;
+        int f1_base = std::min(frameIdx + 1, set->numFrames - 1) * set->frameSize;
 
         SIMDFloat outL_simd(0.0f), outR_simd(0.0f);
         int numBlocks = (unisonCount + SimdWidth - 1) / SimdWidth;
@@ -242,13 +244,23 @@ public:
                 tp -= std::floor(tp);
                 if (tp < 0.0f) tp += 1.0f;
 
-                int samplePos = (int)(tp * (set->frameSize - 1));
-                int idx1 = juce::jlimit(0, set->totalSamples - 1, (frameIdx * set->frameSize) + samplePos);
-                int idx2 = juce::jlimit(0, set->totalSamples - 1, ((frameIdx + 1) * set->frameSize) + samplePos);
+                // --- 【Phase 3】時間軸の3次Hermite補間 ---
+                float floatPos = tp * set->frameSize;
+                int pos = (int)floatPos;
+                if (pos >= set->frameSize) pos -= set->frameSize;
+                float frac = floatPos - (float)pos;
 
-                float val0 = ptr0[idx1] * (1.0f - frameFrac) + ptr0[idx2] * frameFrac;
-                float val1 = ptr1[idx1] * (1.0f - frameFrac) + ptr1[idx2] * frameFrac;
+                // Mipmapレベル0のフレーム間補間
+                float val0_f0 = getHermiteSample(ptr0, f0_base, set->frameSize, pos, frac);
+                float val0_f1 = getHermiteSample(ptr0, f1_base, set->frameSize, pos, frac);
+                float val0 = val0_f0 * (1.0f - frameFrac) + val0_f1 * frameFrac;
 
+                // Mipmapレベル1のフレーム間補間
+                float val1_f0 = getHermiteSample(ptr1, f0_base, set->frameSize, pos, frac);
+                float val1_f1 = getHermiteSample(ptr1, f1_base, set->frameSize, pos, frac);
+                float val1 = val1_f0 * (1.0f - frameFrac) + val1_f1 * frameFrac;
+
+                // Mipmapレベル間のクロスフェード（3次元補間の完了）
                 float val = val0 * (1.0f - levelFrac) + val1 * levelFrac;
 
                 if (morphParam > 0.01f) {
@@ -280,13 +292,35 @@ private:
     int unisonCount = 1;
 
     juce::AudioFormatManager formatManager;
-
-    // --- 追加：バックグラウンドロード用のスレッドとジョブ管理 ---
     juce::ThreadPool backgroundPool{ 1 };
     std::atomic<int> loadJobId{ 0 };
 
     juce::ReferenceCountedObjectPtr<WavetableSet> currentWavetableSet;
     std::array<SIMDFloat, MaxBlocks> phases, increments, panL, panR, amp;
+
+    // --- 3次Hermite（エルミート）補間アルゴリズム ---
+    static inline float hermite(float t, float y0, float y1, float y2, float y3) {
+        float c0 = y1;
+        float c1 = 0.5f * (y2 - y0);
+        float c2 = y0 - 2.5f * y1 + 2.0f * y2 - 0.5f * y3;
+        float c3 = 0.5f * (y3 - y0) + 1.5f * (y1 - y2);
+        return c0 + t * (c1 + t * (c2 + t * c3));
+    }
+
+    // テーブルの端を安全にループ（ラップアラウンド）して4点を取得するヘルパー
+    inline float getHermiteSample(const float* ptr, int baseOffset, int fs, int pos, float t) const {
+        int p0 = pos - 1; if (p0 < 0) p0 += fs;
+        int p1 = pos;
+        int p2 = pos + 1; if (p2 >= fs) p2 -= fs;
+        int p3 = pos + 2; if (p3 >= fs) p3 -= fs;
+
+        return hermite(t,
+            ptr[baseOffset + p0],
+            ptr[baseOffset + p1],
+            ptr[baseOffset + p2],
+            ptr[baseOffset + p3]
+        );
+    }
 
     void recalculate() {
         float norm = 1.0f / std::sqrt((float)unisonCount);
