@@ -12,8 +12,30 @@ public:
     static constexpr int SimdWidth = SIMDFloat::size();
     static constexpr int MaxBlocks = (MaxVoices + SimdWidth - 1) / SimdWidth;
 
+    // --- STEP 1: RCU (Read-Copy-Update) 管理用のデータ構造 ---
+    // 波形データとそのメタデータをひとまとめにし、参照カウントで保護します。
+    struct WavetableSet : public juce::ReferenceCountedObject {
+        using Ptr = juce::ReferenceCountedObjectPtr<WavetableSet>;
+        juce::AudioBuffer<float> tableData;
+        int frameSize = 2048;
+        int numFrames = 0;
+        int totalSamples = 0;
+
+        WavetableSet() = default;
+    };
+
     WavetableOscillator() {
         formatManager.registerBasicFormats();
+
+        // 起動時にNullアクセスを防ぐため、無音の安全なセットを初期化します
+        auto* emptySet = new WavetableSet();
+        emptySet->tableData.setSize(1, 2048);
+        emptySet->tableData.clear();
+        emptySet->totalSamples = 2048;
+        emptySet->frameSize = 2048;
+        emptySet->numFrames = 1;
+        currentWavetableSet = emptySet;
+
         resetPhase();
     }
 
@@ -25,31 +47,34 @@ public:
 
         std::unique_ptr<juce::AudioFormatReader> reader(formatManager.createReaderFor(file));
         if (reader != nullptr) {
-            juce::AudioBuffer<float> tempBuffer;
-            tempBuffer.setSize(1, (int)reader->lengthInSamples);
-            reader->read(&tempBuffer, 0, (int)reader->lengthInSamples, 0, true, false);
+            // --- Copy (裏で新しいデータを作る) ---
+            WavetableSet::Ptr newSet = new WavetableSet();
+            newSet->tableData.setSize(1, (int)reader->lengthInSamples);
+            reader->read(&newSet->tableData, 0, (int)reader->lengthInSamples, 0, true, false);
 
-            tableData.setSize(1, tempBuffer.getNumSamples());
-            tableData.copyFrom(0, 0, tempBuffer, 0, 0, tempBuffer.getNumSamples());
-
-            int totalSamples = tableData.getNumSamples();
-            if (totalSamples >= 2048 && totalSamples % 2048 == 0) {
-                frameSize = 2048;
-                numFrames = totalSamples / 2048;
+            newSet->totalSamples = newSet->tableData.getNumSamples();
+            if (newSet->totalSamples >= 2048 && newSet->totalSamples % 2048 == 0) {
+                newSet->frameSize = 2048;
+                newSet->numFrames = newSet->totalSamples / 2048;
             }
             else {
-                frameSize = std::max(1, totalSamples);
-                numFrames = 1;
+                newSet->frameSize = std::max(1, newSet->totalSamples);
+                newSet->numFrames = 1;
             }
+
+            // --- Update (完成したデータを一瞬で差し替える) ---
+            // オーディオスレッドが古いデータを読んでいる最中でも、安全に切り替わります。
+            currentWavetableSet = newSet;
         }
     }
 
     void generateSingleCycle(std::array<float, 512>& displayBuffer) {
-        int totalSamples = tableData.getNumSamples();
-        if (totalSamples == 0) { displayBuffer.fill(0.0f); return; }
+        // --- Read (現在のデータの参照を確保する) ---
+        WavetableSet::Ptr set = currentWavetableSet.get();
+        if (set == nullptr || set->totalSamples == 0) { displayBuffer.fill(0.0f); return; }
 
-        auto* ptr = tableData.getReadPointer(0);
-        float framePos = wtPosition * (float)std::max(0, numFrames - 1);
+        auto* ptr = set->tableData.getReadPointer(0);
+        float framePos = wtPosition * (float)std::max(0, set->numFrames - 1);
         int frameIdx = (int)framePos;
         float frameFrac = framePos - (float)frameIdx;
 
@@ -60,9 +85,9 @@ public:
             float syncPhase = std::fmod((phase + mod) * syncAmount, 1.0f);
             if (syncPhase < 0.0f) syncPhase += 1.0f;
 
-            int samplePos = (int)(syncPhase * (frameSize - 1));
-            int idx1 = juce::jlimit(0, totalSamples - 1, (frameIdx * frameSize) + samplePos);
-            int idx2 = juce::jlimit(0, totalSamples - 1, ((frameIdx + 1) * frameSize) + samplePos);
+            int samplePos = (int)(syncPhase * (set->frameSize - 1));
+            int idx1 = juce::jlimit(0, set->totalSamples - 1, (frameIdx * set->frameSize) + samplePos);
+            int idx2 = juce::jlimit(0, set->totalSamples - 1, ((frameIdx + 1) * set->frameSize) + samplePos);
 
             float val = ptr[idx1] * (1.0f - frameFrac) + ptr[idx2] * frameFrac;
 
@@ -88,15 +113,18 @@ public:
 
     void getSampleStereo(float& outL, float& outR) {
         outL = 0.0f; outR = 0.0f;
-        int totalSamples = tableData.getNumSamples();
-        if (totalSamples == 0) return;
 
-        auto* ptr = tableData.getReadPointer(0);
+        // --- Read (オーディオスレッドでの安全な参照確保) ---
+        // 処理の途中でファイルが切り替わっても、このブロックが終わるまでメモリは消えません。
+        WavetableSet::Ptr set = currentWavetableSet.get();
+        if (set == nullptr || set->totalSamples == 0) return;
+
+        auto* ptr = set->tableData.getReadPointer(0);
 
         SIMDFloat fmScaled(fmAmount * 0.1f);
         SIMDFloat sync(syncAmount);
 
-        float framePos = wtPosition * (float)std::max(0, numFrames - 1);
+        float framePos = wtPosition * (float)std::max(0, set->numFrames - 1);
         int frameIdx = (int)framePos;
         float frameFrac = framePos - (float)frameIdx;
 
@@ -141,9 +169,9 @@ public:
                 tp -= std::floor(tp);
                 if (tp < 0.0f) tp += 1.0f;
 
-                int samplePos = (int)(tp * (frameSize - 1));
-                int idx1 = juce::jlimit(0, totalSamples - 1, (frameIdx * frameSize) + samplePos);
-                int idx2 = juce::jlimit(0, totalSamples - 1, ((frameIdx + 1) * frameSize) + samplePos);
+                int samplePos = (int)(tp * (set->frameSize - 1));
+                int idx1 = juce::jlimit(0, set->totalSamples - 1, (frameIdx * set->frameSize) + samplePos);
+                int idx2 = juce::jlimit(0, set->totalSamples - 1, ((frameIdx + 1) * set->frameSize) + samplePos);
 
                 float val = ptr[idx1] * (1.0f - frameFrac) + ptr[idx2] * frameFrac;
 
@@ -179,10 +207,12 @@ private:
     double sampleRate = 44100.0;
     float baseFreq = 440.0f, detuneAmount = 0.0f, wtPosition = 0.0f;
     float fmAmount = 0.0f, syncAmount = 1.0f, morphParam = 0.0f;
-    int unisonCount = 1, numFrames = 0, frameSize = 2048;
+    int unisonCount = 1;
 
-    juce::AudioBuffer<float> tableData;
     juce::AudioFormatManager formatManager;
+
+    // --- 参照カウントによるポインタ管理 ---
+    juce::ReferenceCountedObjectPtr<WavetableSet> currentWavetableSet;
 
     // 12ボイスをSIMDブロック（4または8）にパックして管理
     std::array<SIMDFloat, MaxBlocks> phases, increments, panL, panR, amp;
