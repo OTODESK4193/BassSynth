@@ -1,6 +1,8 @@
 #pragma once
 #include <JuceHeader.h>
 #include <array>
+#include <vector>
+#include <complex>
 #include "../Generated/WavetableData_Generated.h"
 
 class WavetableOscillator
@@ -8,34 +10,30 @@ class WavetableOscillator
 public:
     using SIMDFloat = juce::dsp::SIMDRegister<float>;
     static constexpr int MaxVoices = 12;
-    // SIMDレジスタの幅（通常SSE/NEONで4、AVXで8）
     static constexpr int SimdWidth = SIMDFloat::size();
     static constexpr int MaxBlocks = (MaxVoices + SimdWidth - 1) / SimdWidth;
+    static constexpr int NumLevels = 10;
 
-    // --- STEP 1: RCU (Read-Copy-Update) 管理用のデータ構造 ---
-    // 波形データとそのメタデータをひとまとめにし、参照カウントで保護します。
     struct WavetableSet : public juce::ReferenceCountedObject {
         using Ptr = juce::ReferenceCountedObjectPtr<WavetableSet>;
-        juce::AudioBuffer<float> tableData;
+        std::array<juce::AudioBuffer<float>, NumLevels> levels;
         int frameSize = 2048;
         int numFrames = 0;
         int totalSamples = 0;
-
         WavetableSet() = default;
     };
 
     WavetableOscillator() {
         formatManager.registerBasicFormats();
-
-        // 起動時にNullアクセスを防ぐため、無音の安全なセットを初期化します
         auto* emptySet = new WavetableSet();
-        emptySet->tableData.setSize(1, 2048);
-        emptySet->tableData.clear();
+        for (int i = 0; i < NumLevels; ++i) {
+            emptySet->levels[i].setSize(1, 2048);
+            emptySet->levels[i].clear();
+        }
         emptySet->totalSamples = 2048;
         emptySet->frameSize = 2048;
         emptySet->numFrames = 1;
         currentWavetableSet = emptySet;
-
         resetPhase();
     }
 
@@ -47,33 +45,95 @@ public:
 
         std::unique_ptr<juce::AudioFormatReader> reader(formatManager.createReaderFor(file));
         if (reader != nullptr) {
-            // --- Copy (裏で新しいデータを作る) ---
             WavetableSet::Ptr newSet = new WavetableSet();
-            newSet->tableData.setSize(1, (int)reader->lengthInSamples);
-            reader->read(&newSet->tableData, 0, (int)reader->lengthInSamples, 0, true, false);
+            juce::AudioBuffer<float> tempRaw;
+            tempRaw.setSize(1, (int)reader->lengthInSamples);
+            reader->read(&tempRaw, 0, (int)reader->lengthInSamples, 0, true, false);
 
-            newSet->totalSamples = newSet->tableData.getNumSamples();
-            if (newSet->totalSamples >= 2048 && newSet->totalSamples % 2048 == 0) {
-                newSet->frameSize = 2048;
-                newSet->numFrames = newSet->totalSamples / 2048;
-            }
-            else {
-                newSet->frameSize = std::max(1, newSet->totalSamples);
-                newSet->numFrames = 1;
-            }
+            newSet->totalSamples = tempRaw.getNumSamples();
+            newSet->frameSize = (newSet->totalSamples >= 2048) ? 2048 : newSet->totalSamples;
+            newSet->numFrames = std::max(1, newSet->totalSamples / newSet->frameSize);
 
-            // --- Update (完成したデータを一瞬で差し替える) ---
-            // オーディオスレッドが古いデータを読んでいる最中でも、安全に切り替わります。
+            juce::dsp::FFT fft(11); // 2048ポイント
+
+            // 【解決策1】SIMDアライメントが完全に保証されたJUCE標準バッファを使用
+            // Real-Only FFTは 2 * N のサイズを要求するため、2048 * 2 = 4096 を確保
+            juce::AudioBuffer<float> workBuf(1, 4096);
+
+            for (int lvl = 0; lvl < NumLevels; ++lvl) {
+                newSet->levels[lvl].setSize(1, newSet->totalSamples);
+
+                if (newSet->frameSize == 2048) {
+                    for (int f = 0; f < newSet->numFrames; ++f) {
+                        workBuf.clear();
+                        auto* workPtr = workBuf.getWritePointer(0);
+
+                        // 1. 元データをセット
+                        for (int i = 0; i < 2048; ++i) {
+                            int srcIdx = f * 2048 + i;
+                            workPtr[i] = (srcIdx < newSet->totalSamples) ? tempRaw.getSample(0, srcIdx) : 0.0f;
+                        }
+
+                        // 2. 実数専用フォワードFFT（メモリ安全）
+                        fft.performRealOnlyForwardTransform(workPtr);
+
+                        // 3. 帯域制限（Nyquistと高周波のクリア）
+                        if (lvl > 0) {
+                            int harmonicLimit = 1024 >> lvl;
+                            if (harmonicLimit < 2) harmonicLimit = 2;
+
+                            // JUCE Real-Only FFTの仕様：[0]がDC, [1]がNyquist, 以降はReal/Imagのペア
+                            for (int k = harmonicLimit; k <= 1024; ++k) {
+                                if (k == 1024) {
+                                    workPtr[1] = 0.0f; // Nyquist成分
+                                }
+                                else {
+                                    workPtr[2 * k] = 0.0f;     // Real成分
+                                    workPtr[2 * k + 1] = 0.0f; // Imag成分
+                                }
+                            }
+                        }
+
+                        // 【絶対防衛】DCオフセットの完全消去
+                        workPtr[0] = 0.0f;
+
+                        // 4. 実数専用インバースFFT
+                        fft.performRealOnlyInverseTransform(workPtr);
+
+                        // 5. 【解決策2】オート・ノーマライズ
+                        // 逆FFT後の波形の最大ピークを探す
+                        float peak = 1e-9f; // ゼロ除算防止
+                        for (int i = 0; i < 2048; ++i) {
+                            peak = std::max(peak, std::abs(workPtr[i]));
+                        }
+
+                        // ピークを1.0にするための倍率を計算
+                        float normalizeScale = 1.0f / peak;
+
+                        // 6. スケーリングして安全に最終バッファへ書き込み
+                        auto* destPtr = newSet->levels[lvl].getWritePointer(0);
+                        for (int i = 0; i < 2048; ++i) {
+                            int dstIdx = f * 2048 + i;
+                            if (dstIdx < newSet->totalSamples) {
+                                // ここで必ず -1.0 〜 +1.0 の美しい波形に収まる
+                                destPtr[dstIdx] = juce::jlimit(-1.0f, 1.0f, workPtr[i] * normalizeScale);
+                            }
+                        }
+                    }
+                }
+                else {
+                    newSet->levels[lvl].makeCopyOf(tempRaw);
+                }
+            }
             currentWavetableSet = newSet;
         }
     }
 
     void generateSingleCycle(std::array<float, 512>& displayBuffer) {
-        // --- Read (現在のデータの参照を確保する) ---
         WavetableSet::Ptr set = currentWavetableSet.get();
         if (set == nullptr || set->totalSamples == 0) { displayBuffer.fill(0.0f); return; }
 
-        auto* ptr = set->tableData.getReadPointer(0);
+        auto* ptr = set->levels[0].getReadPointer(0);
         float framePos = wtPosition * (float)std::max(0, set->numFrames - 1);
         int frameIdx = (int)framePos;
         float frameFrac = framePos - (float)frameIdx;
@@ -81,7 +141,6 @@ public:
         for (int i = 0; i < 512; ++i) {
             float phase = i / 512.0f;
             float mod = std::sin(phase * 2.0f * juce::MathConstants<float>::pi) * fmAmount * 0.1f;
-
             float syncPhase = std::fmod((phase + mod) * syncAmount, 1.0f);
             if (syncPhase < 0.0f) syncPhase += 1.0f;
 
@@ -90,7 +149,6 @@ public:
             int idx2 = juce::jlimit(0, set->totalSamples - 1, ((frameIdx + 1) * set->frameSize) + samplePos);
 
             float val = ptr[idx1] * (1.0f - frameFrac) + ptr[idx2] * frameFrac;
-
             if (morphParam > 0.01f) {
                 val *= (1.0f + morphParam * 4.0f);
                 val = std::sin(val * juce::MathConstants<float>::halfPi);
@@ -113,57 +171,58 @@ public:
 
     void getSampleStereo(float& outL, float& outR) {
         outL = 0.0f; outR = 0.0f;
-
-        // --- Read (オーディオスレッドでの安全な参照確保) ---
-        // 処理の途中でファイルが切り替わっても、このブロックが終わるまでメモリは消えません。
         WavetableSet::Ptr set = currentWavetableSet.get();
         if (set == nullptr || set->totalSamples == 0) return;
 
-        auto* ptr = set->tableData.getReadPointer(0);
-
         SIMDFloat fmScaled(fmAmount * 0.1f);
         SIMDFloat sync(syncAmount);
-
         float framePos = wtPosition * (float)std::max(0, set->numFrames - 1);
         int frameIdx = (int)framePos;
         float frameFrac = framePos - (float)frameIdx;
 
-        SIMDFloat outL_simd(0.0f);
-        SIMDFloat outR_simd(0.0f);
-
-        // 計算が必要なブロック数のみ処理
+        SIMDFloat outL_simd(0.0f), outR_simd(0.0f);
         int numBlocks = (unisonCount + SimdWidth - 1) / SimdWidth;
-
-        // 定数のSIMD化（単項演算子のエラー回避用）
-        SIMDFloat half(0.5f);
-        SIMDFloat c1(6.2831853f), c2(41.341702f), c3(81.605249f), negOne(-1.0f);
+        SIMDFloat half(0.5f), c1(6.2831853f), c2(41.341702f), c3(81.605249f), negOne(-1.0f);
 
         for (int b = 0; b < numBlocks; ++b) {
             SIMDFloat p = phases[b];
-
-            // 1. 高速SIMDサイン近似 (-(z * c1 - z3 * c2 + z5 * c3) の代替として -1.0f を掛ける)
             SIMDFloat z = p - half;
-            SIMDFloat z2 = z * z;
-            SIMDFloat z3 = z2 * z;
-            SIMDFloat z5 = z3 * z2;
-            SIMDFloat fmSin = (z * c1 - z3 * c2 + z5 * c3) * negOne;
+            SIMDFloat fmSin = (z * c1 - (z * z * z) * c2 + (z * z * z * z * z) * c3) * negOne;
+            SIMDFloat totalPhase = (p + fmSin * fmScaled) * sync;
 
-            SIMDFloat mod = fmSin * fmScaled;
-            SIMDFloat totalPhase = (p + mod) * sync;
-
-            // 2. メモリ・ギャザー（テーブル参照）のためのスカラー・アンパック（安全な.get()と.set()を使用）
-            SIMDFloat vAmp(0.0f);
-            SIMDFloat nextP(0.0f);
+            SIMDFloat vAmp(0.0f), nextP(0.0f);
 
             for (int i = 0; i < SimdWidth; ++i) {
                 int voiceIdx = b * SimdWidth + i;
-
-                // 無効なボイスは計算をスキップし0で埋める
                 if (voiceIdx >= unisonCount) {
                     vAmp.set(i, 0.0f);
-                    nextP.set(i, p.get(i)); // 位相は維持
+                    nextP.set(i, p.get(i));
                     continue;
                 }
+
+                float step = increments[b].get(i);
+                float voiceFreq = std::max(1.0f, step * (float)sampleRate);
+
+                // --- 【STEP 4】Mipmapの滑らかなクロスフェード ---
+                float maxH = (float)sampleRate / (2.0f * voiceFreq);
+                int level0 = 0;
+                float hLimit = 1024.0f;
+
+                while (level0 < NumLevels - 2 && (hLimit * 0.5f) > maxH) {
+                    level0++;
+                    hLimit *= 0.5f;
+                }
+
+                // 境界での小数割合（フェード量）を計算
+                float levelFrac = 0.0f;
+                if (hLimit > maxH) {
+                    levelFrac = (hLimit - maxH) / (hLimit * 0.5f);
+                    levelFrac = juce::jlimit(0.0f, 1.0f, levelFrac);
+                }
+                int level1 = level0 + 1;
+
+                const float* ptr0 = set->levels[level0].getReadPointer(0);
+                const float* ptr1 = set->levels[level1].getReadPointer(0);
 
                 float tp = totalPhase.get(i);
                 tp -= std::floor(tp);
@@ -173,30 +232,29 @@ public:
                 int idx1 = juce::jlimit(0, set->totalSamples - 1, (frameIdx * set->frameSize) + samplePos);
                 int idx2 = juce::jlimit(0, set->totalSamples - 1, ((frameIdx + 1) * set->frameSize) + samplePos);
 
-                float val = ptr[idx1] * (1.0f - frameFrac) + ptr[idx2] * frameFrac;
+                // 両方のレベルから値を読み出し
+                float val0 = ptr0[idx1] * (1.0f - frameFrac) + ptr0[idx2] * frameFrac;
+                float val1 = ptr1[idx1] * (1.0f - frameFrac) + ptr1[idx2] * frameFrac;
+
+                // レベル間を滑らかにブレンド（クロスフェード）
+                float val = val0 * (1.0f - levelFrac) + val1 * levelFrac;
 
                 if (morphParam > 0.01f) {
                     val *= (1.0f + morphParam * 4.0f);
                     val = std::sin(val * juce::MathConstants<float>::halfPi);
                 }
 
-                float finalAmp = val * amp[b].get(i);
-                vAmp.set(i, finalAmp);
-
-                // 位相のインクリメントとラップアラウンド
-                float phaseInc = p.get(i) + increments[b].get(i);
+                vAmp.set(i, val * amp[b].get(i));
+                float phaseInc = p.get(i) + step;
                 if (phaseInc >= 1.0f) phaseInc -= 1.0f;
                 nextP.set(i, phaseInc);
             }
 
-            // 3. リパックされたSIMDとパンニングの乗算（Accumulate）
             outL_simd += vAmp * panL[b];
             outR_simd += vAmp * panR[b];
-
             phases[b] = nextP;
         }
 
-        // 全SIMDブロックの結果をステレオのスカラー変数に集約
         for (int i = 0; i < SimdWidth; ++i) {
             outL += outL_simd.get(i);
             outR += outR_simd.get(i);
@@ -210,42 +268,30 @@ private:
     int unisonCount = 1;
 
     juce::AudioFormatManager formatManager;
-
-    // --- 参照カウントによるポインタ管理 ---
     juce::ReferenceCountedObjectPtr<WavetableSet> currentWavetableSet;
-
-    // 12ボイスをSIMDブロック（4または8）にパックして管理
     std::array<SIMDFloat, MaxBlocks> phases, increments, panL, panR, amp;
 
     void recalculate() {
         float norm = 1.0f / std::sqrt((float)unisonCount);
-
-        // 安全にSIMDレジスタへパックする
         for (int b = 0; b < MaxBlocks; ++b) {
             SIMDFloat pL(0.0f), pR(0.0f), a(0.0f), inc(0.0f);
-
             for (int i = 0; i < SimdWidth; ++i) {
                 int voiceIdx = b * SimdWidth + i;
                 if (voiceIdx < unisonCount) {
                     float bias = (unisonCount == 1) ? 0.0f : (2.0f * voiceIdx / (float)(unisonCount - 1) - 1.0f);
                     float step = (float)((baseFreq * std::pow(2.0f, (bias * detuneAmount * 0.5f) / 12.0f)) / sampleRate);
-
                     float angle = (bias + 1.0f) * 0.25f * juce::MathConstants<float>::pi;
                     if (baseFreq < 150.0f) {
                         float centerWeight = juce::jlimit(0.0f, 1.0f, baseFreq / 150.0f);
                         angle = (0.25f * juce::MathConstants<float>::pi) + (angle - 0.25f * juce::MathConstants<float>::pi) * centerWeight;
                     }
-
                     pL.set(i, std::cos(angle));
                     pR.set(i, std::sin(angle));
                     a.set(i, norm);
                     inc.set(i, step);
                 }
             }
-            panL[b] = pL;
-            panR[b] = pR;
-            amp[b] = a;
-            increments[b] = inc;
+            panL[b] = pL; panR[b] = pR; amp[b] = a; increments[b] = inc;
         }
     }
 };
