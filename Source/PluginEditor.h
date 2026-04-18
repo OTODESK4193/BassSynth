@@ -26,8 +26,10 @@ private:
     juce::GroupComponent oscGroup, subGroup, shaperGroup, filterGroup, ampEnvGroup, modEnvGroup, controlGroup;
 
     // --- Osc Parameters ---
-    juce::Slider wtPosSlider, fmAmtSlider, syncSlider, morphSlider, uniCountSlider, detuneSlider, oscPitchSlider, driftSlider;
-    juce::Label  wtPosLabel, fmAmtLabel, syncLabel, morphLabel, uniCountLabel, detuneLabel, oscPitchLabel, driftLabel;
+    // widthSlider ‚ð’Ç‰Á
+    juce::Slider wtPosSlider, fmAmtSlider, syncSlider, morphSlider, uniCountSlider, detuneSlider, widthSlider, oscPitchSlider, driftSlider;
+    // widthLabel ‚ð’Ç‰Á
+    juce::Label  wtPosLabel, fmAmtLabel, syncLabel, morphLabel, uniCountLabel, detuneLabel, widthLabel, oscPitchLabel, driftLabel;
 
     // --- Sub Osc Parameters ---
     juce::ToggleButton subOnButton{ "ON" };

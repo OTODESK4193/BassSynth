@@ -22,7 +22,7 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
         };
 
     oscGroup.setText("WAVETABLE"); addAndMakeVisible(oscGroup);
-    subGroup.setText("SUB OSC"); addAndMakeVisible(subGroup); // Sub Oscグループを追加
+    subGroup.setText("SUB OSC"); addAndMakeVisible(subGroup);
     shaperGroup.setText("DISTORTION & SHAPER"); addAndMakeVisible(shaperGroup);
     filterGroup.setText("FILTER"); addAndMakeVisible(filterGroup);
     ampEnvGroup.setText("AMP ENVELOPE"); addAndMakeVisible(ampEnvGroup);
@@ -33,8 +33,9 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     setupS(wtPosSlider, wtPosLabel, "Pos"); setupS(fmAmtSlider, fmAmtLabel, "FM");
     setupS(syncSlider, syncLabel, "Sync"); setupS(morphSlider, morphLabel, "Warp");
     setupS(uniCountSlider, uniCountLabel, "Unison"); setupS(detuneSlider, detuneLabel, "Detune");
+    setupS(widthSlider, widthLabel, "Width"); // Unison Widthノブ追加
     setupS(oscPitchSlider, oscPitchLabel, "Pitch");
-    setupS(driftSlider, driftLabel, "Drift"); // Driftノブ追加
+    setupS(driftSlider, driftLabel, "Drift");
 
     // Sub Osc Params
     addAndMakeVisible(subOnButton);
@@ -62,8 +63,10 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
 
     // Attach Osc
     att(wtPosSlider, "osc_pos"); att(fmAmtSlider, "osc_fm"); att(syncSlider, "osc_sync"); att(morphSlider, "osc_morph");
-    att(uniCountSlider, "osc_uni"); att(detuneSlider, "osc_detune"); att(oscPitchSlider, "osc_pitch");
-    att(driftSlider, "osc_drift"); // Driftバインド
+    att(uniCountSlider, "osc_uni"); att(detuneSlider, "osc_detune");
+    att(widthSlider, "osc_width"); // Unison Widthバインド
+    att(oscPitchSlider, "osc_pitch");
+    att(driftSlider, "osc_drift");
 
     // Attach Sub
     subOnAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(apvts, "sub_on", subOnButton);
@@ -114,17 +117,21 @@ void LiquidDreamAudioProcessorEditor::resized()
     dualScope.setBounds(leftArea.removeFromTop(310));
     leftArea.removeFromTop(10);
 
-    auto leftBottom = leftArea;
-    controlGroup.setBounds(leftBottom.removeFromTop(120));
-    glideLabel.setBounds(leftBottom.getX() + 10, leftBottom.getY() - 95, 70, 20); glideSlider.setBounds(leftBottom.getX() + 10, leftBottom.getY() - 75, 70, 65);
-    pitchLabel.setBounds(leftBottom.getX() + 90, leftBottom.getY() - 95, 70, 20); pitchSlider.setBounds(leftBottom.getX() + 90, leftBottom.getY() - 75, 70, 65);
-    gainLabel.setBounds(leftBottom.getX() + 170, leftBottom.getY() - 95, 70, 20); gainSlider.setBounds(leftBottom.getX() + 170, leftBottom.getY() - 75, 70, 65);
+    auto ctrlRect = leftArea.removeFromTop(120);
+    controlGroup.setBounds(ctrlRect);
+    int cX = ctrlRect.getX(), cY = ctrlRect.getY();
+    // Y座標の余白調整：タイトルの下(cY+20)から開始
+    glideLabel.setBounds(cX + 10, cY + 20, 70, 20); glideSlider.setBounds(cX + 10, cY + 40, 70, 65);
+    pitchLabel.setBounds(cX + 90, cY + 20, 70, 20); pitchSlider.setBounds(cX + 90, cY + 40, 70, 65);
+    gainLabel.setBounds(cX + 170, cY + 20, 70, 20); gainSlider.setBounds(cX + 170, cY + 40, 70, 65);
 
-    modEnvGroup.setBounds(leftBottom.removeFromTop(120));
-    modAtkLabel.setBounds(leftBottom.getX() + 10, leftBottom.getY() - 95, 60, 20); modAtkSlider.setBounds(leftBottom.getX() + 10, leftBottom.getY() - 75, 60, 65);
-    modDecLabel.setBounds(leftBottom.getX() + 80, leftBottom.getY() - 95, 60, 20); modDecSlider.setBounds(leftBottom.getX() + 80, leftBottom.getY() - 75, 60, 65);
-    modSusLabel.setBounds(leftBottom.getX() + 150, leftBottom.getY() - 95, 60, 20); modSusSlider.setBounds(leftBottom.getX() + 150, leftBottom.getY() - 75, 60, 65);
-    modRelLabel.setBounds(leftBottom.getX() + 220, leftBottom.getY() - 95, 60, 20); modRelSlider.setBounds(leftBottom.getX() + 220, leftBottom.getY() - 75, 60, 65);
+    auto modRect = leftArea.removeFromTop(120);
+    modEnvGroup.setBounds(modRect);
+    int mX = modRect.getX(), mY = modRect.getY();
+    modAtkLabel.setBounds(mX + 10, mY + 20, 60, 20); modAtkSlider.setBounds(mX + 10, mY + 40, 60, 65);
+    modDecLabel.setBounds(mX + 80, mY + 20, 60, 20); modDecSlider.setBounds(mX + 80, mY + 40, 60, 65);
+    modSusLabel.setBounds(mX + 150, mY + 20, 60, 20); modSusSlider.setBounds(mX + 150, mY + 40, 60, 65);
+    modRelLabel.setBounds(mX + 220, mY + 20, 60, 20); modRelSlider.setBounds(mX + 220, mY + 40, 60, 65);
 
     // --- 右側エリア (Osc, Sub, Shaper, Filter, AmpEnv) ---
     area.removeFromLeft(15);
@@ -132,59 +139,62 @@ void LiquidDreamAudioProcessorEditor::resized()
 
     browser.setBounds(rightArea);
 
-    // 1. Wavetable Osc
+    // 1. Wavetable Osc (200px)
     auto oscRect = rightArea.removeFromTop(200);
     oscGroup.setBounds(oscRect);
     int oX = oscRect.getX(), oY = oscRect.getY();
-    wtPosLabel.setBounds(oX + 10, oY + 35, 70, 20); wtPosSlider.setBounds(oX + 10, oY + 55, 70, 60);
-    fmAmtLabel.setBounds(oX + 90, oY + 35, 70, 20); fmAmtSlider.setBounds(oX + 90, oY + 55, 70, 60);
-    syncLabel.setBounds(oX + 170, oY + 35, 70, 20); syncSlider.setBounds(oX + 170, oY + 55, 70, 60);
-    morphLabel.setBounds(oX + 250, oY + 35, 70, 20); morphSlider.setBounds(oX + 250, oY + 55, 70, 60);
+    // 1段目：タイトル直下(oY+20)に配置
+    wtPosLabel.setBounds(oX + 10, oY + 20, 70, 20); wtPosSlider.setBounds(oX + 10, oY + 40, 70, 60);
+    fmAmtLabel.setBounds(oX + 90, oY + 20, 70, 20); fmAmtSlider.setBounds(oX + 90, oY + 40, 70, 60);
+    syncLabel.setBounds(oX + 170, oY + 20, 70, 20); syncSlider.setBounds(oX + 170, oY + 40, 70, 60);
+    morphLabel.setBounds(oX + 250, oY + 20, 70, 20); morphSlider.setBounds(oX + 250, oY + 40, 70, 60);
 
-    uniCountLabel.setBounds(oX + 10, oY + 120, 70, 20); uniCountSlider.setBounds(oX + 10, oY + 140, 70, 60);
-    detuneLabel.setBounds(oX + 90, oY + 120, 70, 20); detuneSlider.setBounds(oX + 90, oY + 140, 70, 60);
-    oscPitchLabel.setBounds(oX + 170, oY + 120, 70, 20); oscPitchSlider.setBounds(oX + 170, oY + 140, 70, 60);
-    driftLabel.setBounds(oX + 250, oY + 120, 70, 20); driftSlider.setBounds(oX + 250, oY + 140, 70, 60); // Driftノブ
+    // 2段目：中央(oY+100)に配置
+    uniCountLabel.setBounds(oX + 10, oY + 100, 70, 20); uniCountSlider.setBounds(oX + 10, oY + 120, 70, 60);
+    detuneLabel.setBounds(oX + 90, oY + 100, 70, 20); detuneSlider.setBounds(oX + 90, oY + 120, 70, 60);
+    widthLabel.setBounds(oX + 170, oY + 100, 70, 20); widthSlider.setBounds(oX + 170, oY + 120, 70, 60); // Width
+    oscPitchLabel.setBounds(oX + 250, oY + 100, 70, 20); oscPitchSlider.setBounds(oX + 250, oY + 120, 70, 60);
+    driftLabel.setBounds(oX + 330, oY + 100, 70, 20); driftSlider.setBounds(oX + 330, oY + 120, 70, 60);
 
     rightArea.removeFromTop(10);
 
-    // 2. Sub Osc
-    auto subRect = rightArea.removeFromTop(90); // Sub Osc用のスペース
+    // 2. Sub Osc (85px)
+    auto subRect = rightArea.removeFromTop(85);
     subGroup.setBounds(subRect);
     int sbX = subRect.getX(), sbY = subRect.getY();
-    subOnButton.setBounds(sbX + 15, sbY + 40, 50, 24);
-    subWaveCombo.setBounds(sbX + 75, sbY + 40, 80, 24);
-    subVolLabel.setBounds(sbX + 170, sbY + 20, 70, 20); subVolSlider.setBounds(sbX + 170, sbY + 35, 70, 50);
-    subPitchLabel.setBounds(sbX + 250, sbY + 20, 70, 20); subPitchSlider.setBounds(sbX + 250, sbY + 35, 70, 50);
+    subOnButton.setBounds(sbX + 15, sbY + 35, 50, 24);
+    subWaveCombo.setBounds(sbX + 75, sbY + 35, 80, 24);
+    subVolLabel.setBounds(sbX + 170, sbY + 15, 70, 20); subVolSlider.setBounds(sbX + 170, sbY + 30, 70, 50);
+    subPitchLabel.setBounds(sbX + 250, sbY + 15, 70, 20); subPitchSlider.setBounds(sbX + 250, sbY + 30, 70, 50);
 
     rightArea.removeFromTop(10);
 
-    // 3. Shaper
+    // 3. Shaper (110px)
     auto shpRect = rightArea.removeFromTop(110);
     shaperGroup.setBounds(shpRect);
     int sX = shpRect.getX(), sY = shpRect.getY();
-    distDriveLabel.setBounds(sX + 10, sY + 25, 70, 20); distDriveSlider.setBounds(sX + 10, sY + 45, 70, 60);
-    shpAmtLabel.setBounds(sX + 90, sY + 25, 70, 20); shpAmtSlider.setBounds(sX + 90, sY + 45, 70, 60);
-    bitLabel.setBounds(sX + 170, sY + 25, 70, 20); bitSlider.setBounds(sX + 170, sY + 45, 70, 60);
-    rateLabel.setBounds(sX + 250, sY + 25, 70, 20); rateSlider.setBounds(sX + 250, sY + 45, 70, 60);
+    shpAmtLabel.setBounds(sX + 10, sY + 20, 70, 20); shpAmtSlider.setBounds(sX + 10, sY + 40, 70, 60);
+    distDriveLabel.setBounds(sX + 90, sY + 20, 70, 20); distDriveSlider.setBounds(sX + 90, sY + 40, 70, 60);
+    bitLabel.setBounds(sX + 170, sY + 20, 70, 20); bitSlider.setBounds(sX + 170, sY + 40, 70, 60);
+    rateLabel.setBounds(sX + 250, sY + 20, 70, 20); rateSlider.setBounds(sX + 250, sY + 40, 70, 60);
 
     rightArea.removeFromTop(10);
 
-    // 4. Filter
+    // 4. Filter (110px)
     auto fltRect = rightArea.removeFromTop(110);
     filterGroup.setBounds(fltRect);
     int fX = fltRect.getX(), fY = fltRect.getY();
-    cutoffLabel.setBounds(fX + 10, fY + 25, 70, 20); cutoffSlider.setBounds(fX + 10, fY + 45, 70, 60);
-    resLabel.setBounds(fX + 90, fY + 25, 70, 20); resSlider.setBounds(fX + 90, fY + 45, 70, 60);
-    fltEnvAmtLabel.setBounds(fX + 170, fY + 25, 70, 20); fltEnvAmtSlider.setBounds(fX + 170, fY + 45, 70, 60);
+    cutoffLabel.setBounds(fX + 10, fY + 20, 70, 20); cutoffSlider.setBounds(fX + 10, fY + 40, 70, 60);
+    resLabel.setBounds(fX + 90, fY + 20, 70, 20); resSlider.setBounds(fX + 90, fY + 40, 70, 60);
+    fltEnvAmtLabel.setBounds(fX + 170, fY + 20, 70, 20); fltEnvAmtSlider.setBounds(fX + 170, fY + 40, 70, 60);
 
     rightArea.removeFromTop(10);
 
-    // 5. Amp Envelope
-    ampEnvGroup.setBounds(rightArea); // 残りのスペースを使用
+    // 5. Amp Envelope (Remaining Area)
+    ampEnvGroup.setBounds(rightArea);
     int eX = rightArea.getX(), eY = rightArea.getY();
-    ampAtkLabel.setBounds(eX + 10, eY + 25, 60, 20); ampAtkSlider.setBounds(eX + 10, eY + 45, 60, 60);
-    ampDecLabel.setBounds(eX + 80, eY + 25, 60, 20); ampDecSlider.setBounds(eX + 80, eY + 45, 60, 60);
-    ampSusLabel.setBounds(eX + 150, eY + 25, 60, 20); ampSusSlider.setBounds(eX + 150, eY + 45, 60, 60);
-    ampRelLabel.setBounds(eX + 220, eY + 25, 60, 20); ampRelSlider.setBounds(eX + 220, eY + 45, 60, 60);
+    ampAtkLabel.setBounds(eX + 10, eY + 20, 60, 20); ampAtkSlider.setBounds(eX + 10, eY + 40, 60, 60);
+    ampDecLabel.setBounds(eX + 80, eY + 20, 60, 20); ampDecSlider.setBounds(eX + 80, eY + 40, 60, 60);
+    ampSusLabel.setBounds(eX + 150, eY + 20, 60, 20); ampSusSlider.setBounds(eX + 150, eY + 40, 60, 60);
+    ampRelLabel.setBounds(eX + 220, eY + 20, 60, 20); ampRelSlider.setBounds(eX + 220, eY + 40, 60, 60);
 }

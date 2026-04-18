@@ -60,6 +60,7 @@ private:
     std::atomic<float>* pMorph = nullptr;
     std::atomic<float>* pUni = nullptr;
     std::atomic<float>* pDetune = nullptr;
+    std::atomic<float>* pWidth = nullptr; // í«â¡ÅFUnison Width
     std::atomic<float>* pOscPitch = nullptr;
     std::atomic<float>* pDrift = nullptr;
 
@@ -80,12 +81,18 @@ private:
     std::atomic<float>* pGain = nullptr;
     std::atomic<float>* pGlide = nullptr;
 
-    std::atomic<float>* pAAtk = nullptr; std::atomic<float>* pADec = nullptr; std::atomic<float>* pASus = nullptr; std::atomic<float>* pARel = nullptr;
-    std::atomic<float>* pFAtk = nullptr; std::atomic<float>* pFDec = nullptr; std::atomic<float>* pFSus = nullptr; std::atomic<float>* pFRel = nullptr;
+    std::atomic<float>* pAAtk = nullptr;
+    std::atomic<float>* pADec = nullptr;
+    std::atomic<float>* pASus = nullptr;
+    std::atomic<float>* pARel = nullptr;
+    std::atomic<float>* pFAtk = nullptr;
+    std::atomic<float>* pFDec = nullptr;
+    std::atomic<float>* pFSus = nullptr;
+    std::atomic<float>* pFRel = nullptr;
 
     // --- Smoothed Values ---
     juce::SmoothedValue<float> smoothedPitchMult, smoothedCutoff, smoothedReso, smoothedFltEnvAmt, smoothedDrive, smoothedShpAmt, smoothedShpRate, smoothedShpBit, smoothedGain;
-    juce::SmoothedValue<float> smoothedWtPos, smoothedFm, smoothedSync, smoothedMorph, smoothedDrift, smoothedSubVol, smoothedSubPitch;
+    juce::SmoothedValue<float> smoothedWtPos, smoothedFm, smoothedSync, smoothedMorph, smoothedDrift, smoothedSubVol, smoothedSubPitch, smoothedWidth; // í«â¡ÅFsmoothedWidth
 
     float lastOscFreq = -1.0f;
 

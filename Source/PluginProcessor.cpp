@@ -1,6 +1,7 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 
+//==============================================================================
 LiquidDreamAudioProcessor::LiquidDreamAudioProcessor()
     : AudioProcessor(BusesProperties().withOutput("Output", juce::AudioChannelSet::stereo(), true)),
     apvts(*this, nullptr, "PARAMS", createParameterLayout())
@@ -15,6 +16,7 @@ LiquidDreamAudioProcessor::LiquidDreamAudioProcessor()
     pMorph = apvts.getRawParameterValue("osc_morph");
     pUni = apvts.getRawParameterValue("osc_uni");
     pDetune = apvts.getRawParameterValue("osc_detune");
+    pWidth = apvts.getRawParameterValue("osc_width"); // ’Ç‰Á
     pDrift = apvts.getRawParameterValue("osc_drift");
 
     pSubOn = apvts.getRawParameterValue("sub_on");
@@ -49,6 +51,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout LiquidDreamAudioProcessor::c
     params.push_back(std::make_unique<juce::AudioParameterFloat>("osc_morph", "Warp", 0.0f, 1.0f, 0.0f));
     params.push_back(std::make_unique<juce::AudioParameterInt>("osc_uni", "Unison", 1, 12, 1));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("osc_detune", "Detune", 0.0f, 1.0f, 0.2f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("osc_width", "Width", 0.0f, 1.0f, 1.0f)); // ’Ç‰Á
     params.push_back(std::make_unique<juce::AudioParameterFloat>("osc_drift", "Drift", 0.0f, 1.0f, 0.1f));
 
     params.push_back(std::make_unique<juce::AudioParameterBool>("sub_on", "Sub On", true));
@@ -91,6 +94,7 @@ void LiquidDreamAudioProcessor::prepareToPlay(double sampleRate, int samplesPerB
     smoothedWtPos.reset(sampleRate, st); smoothedFm.reset(sampleRate, st); smoothedSync.reset(sampleRate, st);
     smoothedMorph.reset(sampleRate, st); smoothedDrift.reset(sampleRate, st); smoothedSubVol.reset(sampleRate, st);
     smoothedSubPitch.reset(sampleRate, st);
+    smoothedWidth.reset(sampleRate, st); // ’Ç‰Á
 
     smoothedPitchMult.setCurrentAndTargetValue(std::pow(2.0f, pOscPitch->load(std::memory_order_relaxed) / 12.0f));
     smoothedCutoff.setCurrentAndTargetValue(pCutoff->load(std::memory_order_relaxed));
@@ -108,6 +112,7 @@ void LiquidDreamAudioProcessor::prepareToPlay(double sampleRate, int samplesPerB
     smoothedDrift.setCurrentAndTargetValue(pDrift->load(std::memory_order_relaxed));
     smoothedSubVol.setCurrentAndTargetValue(pSubVol->load(std::memory_order_relaxed));
     smoothedSubPitch.setCurrentAndTargetValue(pSubPitch->load(std::memory_order_relaxed));
+    smoothedWidth.setCurrentAndTargetValue(pWidth->load(std::memory_order_relaxed)); // ’Ç‰Á
     lastOscFreq = -1.0f;
 }
 
@@ -124,6 +129,7 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     smoothedSync.setTargetValue(pSync->load(std::memory_order_relaxed)); smoothedMorph.setTargetValue(pMorph->load(std::memory_order_relaxed));
     smoothedDrift.setTargetValue(pDrift->load(std::memory_order_relaxed)); smoothedSubVol.setTargetValue(pSubVol->load(std::memory_order_relaxed));
     smoothedSubPitch.setTargetValue(pSubPitch->load(std::memory_order_relaxed));
+    smoothedWidth.setTargetValue(pWidth->load(std::memory_order_relaxed)); // ’Ç‰Á
 
     int waveIdx = (int)pWave->load(std::memory_order_relaxed); static int lastWaveIdx = -1;
     if (waveIdx != lastWaveIdx && waveIdx >= 0 && waveIdx < EmbeddedWavetables::numTables) {
@@ -139,6 +145,7 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     oscillator.setSubWaveform((int)pSubWave->load(std::memory_order_relaxed));
     oscillator.setUnisonCount((int)pUni->load(std::memory_order_relaxed));
     oscillator.setUnisonDetune(pDetune->load(std::memory_order_relaxed));
+    oscillator.setStereoWidth(pWidth->load(std::memory_order_relaxed)); // ’Ç‰Á
 
     voiceManager.setGlideTime(pGlide->load(std::memory_order_relaxed));
     ampEnv.setParameters(pAAtk->load(std::memory_order_relaxed), pADec->load(std::memory_order_relaxed), pASus->load(std::memory_order_relaxed), pARel->load(std::memory_order_relaxed));
@@ -166,6 +173,7 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         outputScopeData[scopeWriteIndex] = (left[i] + right[i]) * 0.5f; scopeWriteIndex = (scopeWriteIndex + 1) % 512;
     }
 }
+
 
 juce::AudioProcessorEditor* LiquidDreamAudioProcessor::createEditor() { return new LiquidDreamAudioProcessorEditor(*this); }
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter() { return new LiquidDreamAudioProcessor(); }

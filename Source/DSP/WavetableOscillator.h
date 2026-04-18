@@ -145,13 +145,13 @@ public:
     void setFrequency(float freqHz) { baseFreq = freqHz; recalculate(); }
     void setUnisonCount(int c) { unisonCount = juce::jlimit(1, MaxVoices, c); recalculate(); }
     void setUnisonDetune(float d) { detuneAmount = d; recalculate(); }
+    void setStereoWidth(float w) { stereoWidth = juce::jlimit(0.0f, 1.0f, w); recalculate(); } // Width追加
     void setWavetablePosition(float pos) { wtPosition = pos; }
     void setFMAmount(float amt) { fmAmount = amt; }
     void setSyncAmount(float amt) { syncAmount = std::max(1.0f, amt); }
     void setMorph(float m) { morphParam = m; }
     void setDriftAmount(float amt) { driftAmount = amt; }
 
-    // --- Sub Osc API ---
     void setSubOn(bool on) { subOn = on; }
     void setSubWaveform(int shape) { subWaveform = juce::jlimit(0, 3, shape); }
     void setSubVolume(float vol) { subVolume = vol; }
@@ -228,7 +228,6 @@ public:
         }
         for (int i = 0; i < SimdWidth; ++i) { outL += outL_simd.get(i); outR += outR_simd.get(i); }
 
-        // --- Sub Osc with 250Hz LPF ---
         if (subOn && subVolume > 0.001f) {
             float subFreq = std::max(1.0f, baseFreq * std::pow(2.0f, subPitchOffset / 12.0f));
             subPhase += subFreq / (float)sampleRate;
@@ -248,7 +247,7 @@ public:
 
 private:
     double sampleRate = 44100.0;
-    float baseFreq = 440.0f, detuneAmount = 0.0f, wtPosition = 0.0f, fmAmount = 0.0f, syncAmount = 1.0f, morphParam = 0.0f, driftAmount = 0.0f;
+    float baseFreq = 440.0f, detuneAmount = 0.0f, stereoWidth = 1.0f, wtPosition = 0.0f, fmAmount = 0.0f, syncAmount = 1.0f, morphParam = 0.0f, driftAmount = 0.0f;
     int unisonCount = 1;
     bool subOn = true; int subWaveform = 0; float subVolume = 0.0f, subPitchOffset = -12.0f, subPhase = 0.0f, subLpfState = 0.0f;
     std::array<float, MaxVoices> driftPhase = { 0 }, driftRate = { 0 };
@@ -272,19 +271,26 @@ private:
 
     void recalculate() {
         float norm = 1.0f / std::sqrt((float)unisonCount);
+        float centerAngle = 0.25f * juce::MathConstants<float>::pi;
+
         for (int b = 0; b < MaxBlocks; ++b) {
             SIMDFloat pL(0.0f), pR(0.0f), a(0.0f), inc(0.0f);
             for (int i = 0; i < SimdWidth; ++i) {
                 int voiceIdx = b * SimdWidth + i;
                 if (voiceIdx < unisonCount) {
                     float bias = (unisonCount == 1) ? 0.0f : (2.0f * voiceIdx / (float)(unisonCount - 1) - 1.0f);
-                    bias = bias * bias * bias;
-                    float step = (float)((baseFreq * std::pow(2.0f, (bias * detuneAmount * 0.5f) / 12.0f)) / sampleRate);
-                    float angle = (bias + 1.0f) * 0.25f * juce::MathConstants<float>::pi;
+                    float pitchBias = bias * bias * bias;
+                    float step = (float)((baseFreq * std::pow(2.0f, (pitchBias * detuneAmount * 0.5f) / 12.0f)) / sampleRate);
+
+                    // --- Widthノブと低音モノラル化の魔法 ---
+                    float targetAngle = (bias + 1.0f) * centerAngle;
+                    float actualWidth = stereoWidth;
                     if (baseFreq < 150.0f) {
-                        float centerWeight = juce::jlimit(0.0f, 1.0f, baseFreq / 150.0f);
-                        angle = (0.25f * juce::MathConstants<float>::pi) + (angle - 0.25f * juce::MathConstants<float>::pi) * centerWeight;
+                        // ベース帯域（150Hz以下）は自動的にモノラルに近づけ、芯を担保する
+                        actualWidth *= juce::jlimit(0.0f, 1.0f, baseFreq / 150.0f);
                     }
+                    float angle = centerAngle + (targetAngle - centerAngle) * actualWidth;
+
                     pL.set(i, std::cos(angle)); pR.set(i, std::sin(angle)); a.set(i, norm); inc.set(i, step);
                 }
             }
