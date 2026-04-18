@@ -3,6 +3,7 @@
 #include <array>
 #include <vector>
 #include <complex>
+#include <atomic>
 #include "../Generated/WavetableData_Generated.h"
 
 class WavetableOscillator
@@ -37,97 +38,113 @@ public:
         resetPhase();
     }
 
+    ~WavetableOscillator() {
+        // プラグイン終了時、裏で動いているスレッドを安全に停止させる
+        loadJobId++;
+        backgroundPool.removeAllJobs(true, 1000);
+    }
+
     void prepare(double sr) { sampleRate = std::max(1.0, sr); }
 
     void loadWavetableFile(juce::String fileName) {
-        juce::File file = juce::File(EmbeddedWavetables::wavetablesDir).getChildFile(fileName);
-        if (!file.existsAsFile()) return;
+        // 新しいロード命令が来たので、ジョブIDを更新（これにより過去の重い処理は即座にキャンセルされる）
+        const int myJobId = ++loadJobId;
 
-        std::unique_ptr<juce::AudioFormatReader> reader(formatManager.createReaderFor(file));
-        if (reader != nullptr) {
-            WavetableSet::Ptr newSet = new WavetableSet();
-            juce::AudioBuffer<float> tempRaw;
-            tempRaw.setSize(1, (int)reader->lengthInSamples);
-            reader->read(&tempRaw, 0, (int)reader->lengthInSamples, 0, true, false);
+        // 裏方（バックグラウンドスレッド）に重いFFT処理を丸投げする
+        backgroundPool.addJob([this, fileName, myJobId]() {
+            juce::File file = juce::File(EmbeddedWavetables::wavetablesDir).getChildFile(fileName);
+            if (!file.existsAsFile()) return;
 
-            newSet->totalSamples = tempRaw.getNumSamples();
-            newSet->frameSize = (newSet->totalSamples >= 2048) ? 2048 : newSet->totalSamples;
-            newSet->numFrames = std::max(1, newSet->totalSamples / newSet->frameSize);
+            std::unique_ptr<juce::AudioFormatReader> reader(formatManager.createReaderFor(file));
+            if (reader != nullptr) {
+                WavetableSet::Ptr newSet = new WavetableSet();
+                juce::AudioBuffer<float> tempRaw;
+                tempRaw.setSize(1, (int)reader->lengthInSamples);
+                reader->read(&tempRaw, 0, (int)reader->lengthInSamples, 0, true, false);
 
-            juce::dsp::FFT fft(11); // 2048ポイント
-            juce::AudioBuffer<float> workBuf(1, 4096);
+                newSet->totalSamples = tempRaw.getNumSamples();
+                newSet->frameSize = (newSet->totalSamples >= 2048) ? 2048 : newSet->totalSamples;
+                newSet->numFrames = std::max(1, newSet->totalSamples / newSet->frameSize);
 
-            for (int lvl = 0; lvl < NumLevels; ++lvl) {
-                newSet->levels[lvl].setSize(1, newSet->totalSamples);
+                juce::dsp::FFT fft(11);
+                juce::AudioBuffer<float> workBuf(1, 4096);
 
-                if (newSet->frameSize == 2048) {
-                    for (int f = 0; f < newSet->numFrames; ++f) {
-                        workBuf.clear();
-                        auto* workPtr = workBuf.getWritePointer(0);
+                for (int lvl = 0; lvl < NumLevels; ++lvl) {
+                    // 【高速化の鍵】もしユーザーが次の波形を選んでいたら、この重い処理を即座に捨てる
+                    if (myJobId != loadJobId.load()) return;
 
-                        for (int i = 0; i < 2048; ++i) {
-                            int srcIdx = f * 2048 + i;
-                            workPtr[i] = (srcIdx < newSet->totalSamples) ? tempRaw.getSample(0, srcIdx) : 0.0f;
-                        }
+                    newSet->levels[lvl].setSize(1, newSet->totalSamples);
 
-                        fft.performRealOnlyForwardTransform(workPtr);
+                    if (newSet->frameSize == 2048) {
+                        for (int f = 0; f < newSet->numFrames; ++f) {
+                            // フレームの計算ループ内でも常にキャンセルを監視
+                            if (myJobId != loadJobId.load()) return;
 
-                        // --- 【Phase 2】窓関数（コサイン・ロールオフ）による純化 ---
-                        if (lvl > 0) {
-                            int harmonicLimit = 1024 >> lvl;
-                            if (harmonicLimit < 2) harmonicLimit = 2;
+                            workBuf.clear();
+                            auto* workPtr = workBuf.getWritePointer(0);
 
-                            // 減衰を開始するポイント（限界の80%あたりから滑らかに落とす）
-                            int transitionStart = std::max(1, (int)(harmonicLimit * 0.8f));
+                            for (int i = 0; i < 2048; ++i) {
+                                int srcIdx = f * 2048 + i;
+                                workPtr[i] = (srcIdx < newSet->totalSamples) ? tempRaw.getSample(0, srcIdx) : 0.0f;
+                            }
 
-                            for (int k = transitionStart; k <= 1024; ++k) {
-                                float multiplier = 0.0f;
+                            fft.performRealOnlyForwardTransform(workPtr);
 
-                                // トランジション帯域内ならコサインカーブで滑らかにフェードアウト
-                                if (k < harmonicLimit) {
-                                    float fraction = (float)(k - transitionStart) / (float)(harmonicLimit - transitionStart);
-                                    multiplier = 0.5f * (1.0f + std::cos(fraction * juce::MathConstants<float>::pi));
-                                }
+                            if (lvl > 0) {
+                                int harmonicLimit = 1024 >> lvl;
+                                if (harmonicLimit < 2) harmonicLimit = 2;
 
-                                if (k == 1024) {
-                                    workPtr[1] *= multiplier; // Nyquist成分
-                                }
-                                else {
-                                    workPtr[2 * k] *= multiplier;     // Real成分
-                                    workPtr[2 * k + 1] *= multiplier; // Imag成分
+                                int transitionStart = std::max(1, (int)(harmonicLimit * 0.8f));
+
+                                for (int k = transitionStart; k <= 1024; ++k) {
+                                    float multiplier = 0.0f;
+                                    if (k < harmonicLimit) {
+                                        float fraction = (float)(k - transitionStart) / (float)(harmonicLimit - transitionStart);
+                                        multiplier = 0.5f * (1.0f + std::cos(fraction * juce::MathConstants<float>::pi));
+                                    }
+
+                                    if (k == 1024) {
+                                        workPtr[1] *= multiplier;
+                                    }
+                                    else {
+                                        workPtr[2 * k] *= multiplier;
+                                        workPtr[2 * k + 1] *= multiplier;
+                                    }
                                 }
                             }
-                        }
 
-                        workPtr[0] = 0.0f; // DCオフセットの完全消去
+                            workPtr[0] = 0.0f;
+                            fft.performRealOnlyInverseTransform(workPtr);
 
-                        fft.performRealOnlyInverseTransform(workPtr);
+                            float peak = 1e-9f;
+                            for (int i = 0; i < 2048; ++i) {
+                                peak = std::max(peak, std::abs(workPtr[i]));
+                            }
 
-                        float peak = 1e-9f;
-                        for (int i = 0; i < 2048; ++i) {
-                            peak = std::max(peak, std::abs(workPtr[i]));
-                        }
+                            float normalizeScale = 1.0f / peak;
 
-                        float normalizeScale = 1.0f / peak;
-
-                        auto* destPtr = newSet->levels[lvl].getWritePointer(0);
-                        for (int i = 0; i < 2048; ++i) {
-                            int dstIdx = f * 2048 + i;
-                            if (dstIdx < newSet->totalSamples) {
-                                destPtr[dstIdx] = juce::jlimit(-1.0f, 1.0f, workPtr[i] * normalizeScale);
+                            auto* destPtr = newSet->levels[lvl].getWritePointer(0);
+                            for (int i = 0; i < 2048; ++i) {
+                                int dstIdx = f * 2048 + i;
+                                if (dstIdx < newSet->totalSamples) {
+                                    destPtr[dstIdx] = juce::jlimit(-1.0f, 1.0f, workPtr[i] * normalizeScale);
+                                }
                             }
                         }
                     }
+                    else {
+                        newSet->levels[lvl].makeCopyOf(tempRaw);
+                    }
                 }
-                else {
-                    newSet->levels[lvl].makeCopyOf(tempRaw);
+
+                // 全ての計算が無事終わり、かつこの波形がまだ最新の要求であれば、差し替える
+                if (myJobId == loadJobId.load()) {
+                    currentWavetableSet = newSet;
                 }
             }
-            currentWavetableSet = newSet;
-        }
+            });
     }
 
-    // --- 以下、再生用エンジン (Phase 3のクロスフェード実装済み) ---
     void generateSingleCycle(std::array<float, 512>& displayBuffer) {
         WavetableSet::Ptr set = currentWavetableSet.get();
         if (set == nullptr || set->totalSamples == 0) { displayBuffer.fill(0.0f); return; }
@@ -202,7 +219,6 @@ public:
                 float step = increments[b].get(i);
                 float voiceFreq = std::max(1.0f, step * (float)sampleRate);
 
-                // Mipmapレベルのクロスフェード処理
                 float maxH = (float)sampleRate / (2.0f * voiceFreq);
                 int level0 = 0;
                 float hLimit = 1024.0f;
@@ -264,6 +280,11 @@ private:
     int unisonCount = 1;
 
     juce::AudioFormatManager formatManager;
+
+    // --- 追加：バックグラウンドロード用のスレッドとジョブ管理 ---
+    juce::ThreadPool backgroundPool{ 1 };
+    std::atomic<int> loadJobId{ 0 };
+
     juce::ReferenceCountedObjectPtr<WavetableSet> currentWavetableSet;
     std::array<SIMDFloat, MaxBlocks> phases, increments, panL, panR, amp;
 
