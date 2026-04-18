@@ -29,42 +29,45 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     modEnvGroup.setText("MOD ENVELOPE"); addAndMakeVisible(modEnvGroup);
     controlGroup.setText("PERFORMANCE"); addAndMakeVisible(controlGroup);
 
-    // Osc Params
+    // Osc Params Setup
     setupS(wtLevelSlider, wtLevelLabel, "Level");
     setupS(wtPosSlider, wtPosLabel, "Pos");
-    setupS(fmAmtSlider, fmAmtLabel, "FM Amt");
     setupS(syncSlider, syncLabel, "Sync");
+    setupS(oscPitchSlider, oscPitchLabel, "Pitch");
 
-    setupS(morphSlider, morphLabel, "Warp");
     setupS(uniCountSlider, uniCountLabel, "Unison");
     setupS(detuneSlider, detuneLabel, "Detune");
     setupS(widthSlider, widthLabel, "Width");
-
-    setupS(oscPitchSlider, oscPitchLabel, "Pitch");
-    setupS(pitchDecayAmtSlider, pitchDecayAmtLabel, "P.Decay");
-    setupS(pitchDecayTimeSlider, pitchDecayTimeLabel, "P.Time");
     setupS(driftSlider, driftLabel, "Drift");
 
-    // FM Wave Combo
-    addAndMakeVisible(fmWaveCombo);
-    fmWaveCombo.addItem("Sine", 1);
-    fmWaveCombo.addItem("Saw", 2);
-    fmWaveCombo.addItem("Pulse", 3);
-    fmWaveCombo.addItem("Noise", 4);
-    fmWaveCombo.setJustificationType(juce::Justification::centred);
-    addAndMakeVisible(fmWaveLabel);
-    fmWaveLabel.setText("FM Mod", juce::dontSendNotification);
-    fmWaveLabel.setJustificationType(juce::Justification::centred);
-    fmWaveLabel.setFont(12.0f);
+    setupS(pitchDecayAmtSlider, pitchDecayAmtLabel, "P.Decay");
+    setupS(pitchDecayTimeSlider, pitchDecayTimeLabel, "P.Time");
+    setupS(fmAmtSlider, fmAmtLabel, "FM Amt");
+
+    // ComboBox Setup Helper
+    auto setupCombo = [&](juce::ComboBox& c, juce::Label& l, const char* txt, juce::StringArray items) {
+        addAndMakeVisible(c);
+        c.addItemList(items, 1);
+        c.setJustificationType(juce::Justification::centred);
+        addAndMakeVisible(l);
+        l.setText(txt, juce::dontSendNotification);
+        l.setJustificationType(juce::Justification::centred);
+        l.setFont(12.0f);
+        };
+
+    setupCombo(fmWaveCombo, fmWaveLabel, "FM Mod", { "Sine", "Saw", "Pulse", "Triangle" });
+
+    // Dual Morph Setup
+    juce::StringArray morphTypes = { "None", "Bend +", "Bend -", "PWM", "Sync", "Mirror", "Flip", "Quantize", "Remap" };
+    setupCombo(morphAModeCombo, morphAModeLabel, "Morph A", morphTypes);
+    setupS(morphAAmtSlider, morphAAmtLabel, "Amt A");
+    setupCombo(morphBModeCombo, morphBModeLabel, "Morph B", morphTypes);
+    setupS(morphBAmtSlider, morphBAmtLabel, "Amt B");
 
     // Sub Osc Params
     addAndMakeVisible(subOnButton);
-    addAndMakeVisible(subWaveCombo);
-    subWaveCombo.addItem("Sine", 1);
-    subWaveCombo.addItem("Triangle", 2);
-    subWaveCombo.addItem("Pulse", 3);
-    subWaveCombo.addItem("Saw", 4);
-    subWaveCombo.setJustificationType(juce::Justification::centred);
+    setupCombo(subWaveCombo, subVolLabel /*dummy*/, "", { "Sine", "Triangle", "Pulse", "Saw" });
+    subVolLabel.setText("Wave", juce::dontSendNotification);
     setupS(subVolSlider, subVolLabel, "Level");
     setupS(subPitchSlider, subPitchLabel, "Pitch");
 
@@ -84,17 +87,23 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     // Attach Osc
     att(wtLevelSlider, "osc_level");
     att(wtPosSlider, "osc_pos");
-    att(fmAmtSlider, "osc_fm");
-    fmWaveAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(apvts, "osc_fm_wave", fmWaveCombo);
     att(syncSlider, "osc_sync");
-    att(morphSlider, "osc_morph");
+    att(oscPitchSlider, "osc_pitch");
+
     att(uniCountSlider, "osc_uni");
     att(detuneSlider, "osc_detune");
     att(widthSlider, "osc_width");
-    att(oscPitchSlider, "osc_pitch");
+    att(driftSlider, "osc_drift");
+
     att(pitchDecayAmtSlider, "osc_pdecay_amt");
     att(pitchDecayTimeSlider, "osc_pdecay_time");
-    att(driftSlider, "osc_drift");
+    fmWaveAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(apvts, "osc_fm_wave", fmWaveCombo);
+    att(fmAmtSlider, "osc_fm");
+
+    morphAModeAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(apvts, "osc_morph_a_mode", morphAModeCombo);
+    att(morphAAmtSlider, "osc_morph_a_amt");
+    morphBModeAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(apvts, "osc_morph_b_mode", morphBModeCombo);
+    att(morphBAmtSlider, "osc_morph_b_amt");
 
     // Attach Sub
     subOnAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(apvts, "sub_on", subOnButton);
@@ -118,7 +127,6 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
         };
 
     startTimerHz(30);
-    // 高さを拡大してフル4段レイアウトを吸収 (820px)
     setSize(1000, 820);
 }
 
@@ -137,31 +145,34 @@ void LiquidDreamAudioProcessorEditor::resized()
 {
     auto area = getLocalBounds().reduced(15);
 
-    // --- ノブ配置の標準化ラムダ (幅70px, 高さ70px [Label 20px + Slider 50px]) ---
     auto placeKnob = [](int x, int y, juce::Label& lbl, juce::Slider& sld) {
         lbl.setBounds(x, y, 70, 20);
         sld.setBounds(x, y + 20, 70, 50);
         };
 
+    auto placeCombo = [](int x, int y, juce::Label& lbl, juce::ComboBox& cmb) {
+        lbl.setBounds(x, y, 70, 20);
+        cmb.setBounds(x, y + 30, 70, 24);
+        };
+
     // --- 左側エリア ---
     auto leftArea = area.removeFromLeft(350);
-
     openBrowserButton.setBounds(leftArea.removeFromTop(35).reduced(2));
     leftArea.removeFromTop(5);
-
-    dualScope.setBounds(leftArea.removeFromTop(310));
+    dualScope.setBounds(leftArea.removeFromTop(370));
     leftArea.removeFromTop(10);
 
-    auto ctrlRect = leftArea.removeFromTop(120);
+    auto ctrlRect = leftArea.removeFromTop(90);
     controlGroup.setBounds(ctrlRect);
-    int cX = ctrlRect.getX(), cY = ctrlRect.getY() + 25;
+    int cX = ctrlRect.getX(), cY = ctrlRect.getY() + 15;
     placeKnob(cX + 15, cY, glideLabel, glideSlider);
     placeKnob(cX + 95, cY, pitchLabel, pitchSlider);
     placeKnob(cX + 175, cY, gainLabel, gainSlider);
 
-    auto modRect = leftArea.removeFromTop(120);
+    leftArea.removeFromTop(10);
+    auto modRect = leftArea.removeFromTop(90);
     modEnvGroup.setBounds(modRect);
-    int mX = modRect.getX(), mY = modRect.getY() + 25;
+    int mX = modRect.getX(), mY = modRect.getY() + 15;
     placeKnob(mX + 15, mY, modAtkLabel, modAtkSlider);
     placeKnob(mX + 95, mY, modDecLabel, modDecSlider);
     placeKnob(mX + 175, mY, modSusLabel, modSusSlider);
@@ -170,54 +181,54 @@ void LiquidDreamAudioProcessorEditor::resized()
     // --- 右側エリア ---
     area.removeFromLeft(15);
     auto rightArea = area;
-
     browser.setBounds(rightArea);
 
-    // 1. Wavetable Osc (340px - 4段 x 4列 配置)
-    auto oscRect = rightArea.removeFromTop(340);
+    // 1. Wavetable Osc (300px, 4x4 Grid)
+    auto oscRect = rightArea.removeFromTop(300);
     oscGroup.setBounds(oscRect);
-    int oX = oscRect.getX() + 10, oY = oscRect.getY() + 25;
+    int oX = oscRect.getX() + 10, oY = oscRect.getY() + 15;
 
-    // Row 1
+    // Row 1: Basic
     placeKnob(oX, oY, wtLevelLabel, wtLevelSlider);
     placeKnob(oX + 80, oY, wtPosLabel, wtPosSlider);
-    placeKnob(oX + 160, oY, morphLabel, morphSlider);
-    placeKnob(oX + 240, oY, syncLabel, syncSlider);
+    placeKnob(oX + 160, oY, syncLabel, syncSlider);
+    placeKnob(oX + 240, oY, oscPitchLabel, oscPitchSlider);
 
-    // Row 2
-    placeKnob(oX, oY + 80, uniCountLabel, uniCountSlider);
-    placeKnob(oX + 80, oY + 80, detuneLabel, detuneSlider);
-    placeKnob(oX + 160, oY + 80, widthLabel, widthSlider);
-    placeKnob(oX + 240, oY + 80, driftLabel, driftSlider);
+    // Row 2: Unison
+    placeKnob(oX, oY + 70, uniCountLabel, uniCountSlider);
+    placeKnob(oX + 80, oY + 70, detuneLabel, detuneSlider);
+    placeKnob(oX + 160, oY + 70, widthLabel, widthSlider);
+    placeKnob(oX + 240, oY + 70, driftLabel, driftSlider);
 
-    // Row 3
-    placeKnob(oX, oY + 160, oscPitchLabel, oscPitchSlider);
-    placeKnob(oX + 80, oY + 160, pitchDecayAmtLabel, pitchDecayAmtSlider);
-    placeKnob(oX + 160, oY + 160, pitchDecayTimeLabel, pitchDecayTimeSlider);
+    // Row 3: Pitch Decay & FM
+    placeKnob(oX, oY + 140, pitchDecayAmtLabel, pitchDecayAmtSlider);
+    placeKnob(oX + 80, oY + 140, pitchDecayTimeLabel, pitchDecayTimeSlider);
+    placeCombo(oX + 160, oY + 140, fmWaveLabel, fmWaveCombo);
+    placeKnob(oX + 240, oY + 140, fmAmtLabel, fmAmtSlider);
 
-    // Row 4 (FM Section)
-    fmWaveLabel.setBounds(oX, oY + 240, 70, 20);
-    fmWaveCombo.setBounds(oX, oY + 260, 70, 24);
-    placeKnob(oX + 80, oY + 240, fmAmtLabel, fmAmtSlider);
+    // Row 4: Dual Morph
+    placeCombo(oX, oY + 210, morphAModeLabel, morphAModeCombo);
+    placeKnob(oX + 80, oY + 210, morphAAmtLabel, morphAAmtSlider);
+    placeCombo(oX + 160, oY + 210, morphBModeLabel, morphBModeCombo);
+    placeKnob(oX + 240, oY + 210, morphBAmtLabel, morphBAmtSlider);
 
     rightArea.removeFromTop(10);
 
-    // 2. Sub Osc (100px)
-    auto subRect = rightArea.removeFromTop(100);
+    // 2. Sub Osc
+    auto subRect = rightArea.removeFromTop(90);
     subGroup.setBounds(subRect);
-    int sbX = subRect.getX() + 10, sbY = subRect.getY() + 25;
-
+    int sbX = subRect.getX() + 10, sbY = subRect.getY() + 15;
     subOnButton.setBounds(sbX, sbY + 20, 50, 24);
-    subWaveCombo.setBounds(sbX + 60, sbY + 20, 80, 24);
+    subWaveCombo.setBounds(sbX + 60, sbY + 25, 80, 24);
     placeKnob(sbX + 160, sbY, subVolLabel, subVolSlider);
     placeKnob(sbX + 240, sbY, subPitchLabel, subPitchSlider);
 
     rightArea.removeFromTop(10);
 
-    // 3. Shaper (100px)
-    auto shpRect = rightArea.removeFromTop(100);
+    // 3. Shaper
+    auto shpRect = rightArea.removeFromTop(90);
     shaperGroup.setBounds(shpRect);
-    int sX = shpRect.getX() + 10, sY = shpRect.getY() + 25;
+    int sX = shpRect.getX() + 10, sY = shpRect.getY() + 15;
     placeKnob(sX, sY, distDriveLabel, distDriveSlider);
     placeKnob(sX + 80, sY, shpAmtLabel, shpAmtSlider);
     placeKnob(sX + 160, sY, rateLabel, rateSlider);
@@ -225,10 +236,10 @@ void LiquidDreamAudioProcessorEditor::resized()
 
     rightArea.removeFromTop(10);
 
-    // 4. Filter (100px)
-    auto fltRect = rightArea.removeFromTop(100);
+    // 4. Filter
+    auto fltRect = rightArea.removeFromTop(90);
     filterGroup.setBounds(fltRect);
-    int fX = fltRect.getX() + 10, fY = fltRect.getY() + 25;
+    int fX = fltRect.getX() + 10, fY = fltRect.getY() + 15;
     placeKnob(fX, fY, cutoffLabel, cutoffSlider);
     placeKnob(fX + 80, fY, resLabel, resSlider);
     placeKnob(fX + 160, fY, fltEnvAmtLabel, fltEnvAmtSlider);
@@ -237,7 +248,7 @@ void LiquidDreamAudioProcessorEditor::resized()
 
     // 5. Amp Envelope
     ampEnvGroup.setBounds(rightArea);
-    int eX = rightArea.getX() + 10, eY = rightArea.getY() + 25;
+    int eX = rightArea.getX() + 10, eY = rightArea.getY() + 15;
     placeKnob(eX, eY, ampAtkLabel, ampAtkSlider);
     placeKnob(eX + 80, eY, ampDecLabel, ampDecSlider);
     placeKnob(eX + 160, eY, ampSusLabel, ampSusSlider);

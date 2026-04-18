@@ -60,9 +60,15 @@ private:
     std::atomic<float>* pPDecayAmt = nullptr;
     std::atomic<float>* pPDecayTime = nullptr;
     std::atomic<float>* pFm = nullptr;
-    std::atomic<float>* pFmWave = nullptr; // ’Ç‰Á: FM Waveform
+    std::atomic<float>* pFmWave = nullptr;
     std::atomic<float>* pSync = nullptr;
-    std::atomic<float>* pMorph = nullptr;
+
+    // Dual Morph Parameters
+    std::atomic<float>* pMorphAMode = nullptr;
+    std::atomic<float>* pMorphAAmt = nullptr;
+    std::atomic<float>* pMorphBMode = nullptr;
+    std::atomic<float>* pMorphBAmt = nullptr;
+
     std::atomic<float>* pUni = nullptr;
     std::atomic<float>* pDetune = nullptr;
     std::atomic<float>* pWidth = nullptr;
@@ -97,7 +103,8 @@ private:
     // --- Smoothed Values ---
     juce::SmoothedValue<float> smoothedWtLevel, smoothedWtPitch, smoothedPDecayAmt, smoothedPDecayTime;
     juce::SmoothedValue<float> smoothedCutoff, smoothedReso, smoothedFltEnvAmt, smoothedDrive, smoothedShpAmt, smoothedShpRate, smoothedShpBit, smoothedGain;
-    juce::SmoothedValue<float> smoothedWtPos, smoothedFm, smoothedSync, smoothedMorph, smoothedDrift, smoothedSubVol, smoothedSubPitch, smoothedWidth;
+    juce::SmoothedValue<float> smoothedWtPos, smoothedFm, smoothedSync, smoothedDrift, smoothedSubVol, smoothedSubPitch, smoothedWidth;
+    juce::SmoothedValue<float> smoothedMorphAAmt, smoothedMorphBAmt;
 
     float lastOscFreq = -1.0f;
 

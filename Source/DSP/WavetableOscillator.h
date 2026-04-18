@@ -122,19 +122,23 @@ public:
         float frameFrac = framePos - (float)frameIdx;
         int f0_base = frameIdx * set->frameSize;
         int f1_base = std::min(frameIdx + 1, set->numFrames - 1) * set->frameSize;
+
         for (int i = 0; i < 512; ++i) {
             float phase = i / 512.0f;
             float mod = 0.0f;
 
-            // Single cycle display用の簡易FM変調計算
             if (fmWaveform == 0) mod = std::sin(phase * 2.0f * juce::MathConstants<float>::pi);
             else if (fmWaveform == 1) mod = phase * 2.0f - 1.0f;
             else if (fmWaveform == 2) mod = phase < 0.5f ? 1.0f : -1.0f;
-            // Noise(3)は波形表示では揺れすぎるためサイン波で代用して視認性を保つ
-            else if (fmWaveform == 3) mod = std::sin(phase * 2.0f * juce::MathConstants<float>::pi);
+            else if (fmWaveform == 3) mod = 4.0f * std::abs(phase - 0.5f) - 1.0f;
 
             float syncPhase = std::fmod((phase + mod * fmAmount * 0.1f) * syncAmount, 1.0f);
             if (syncPhase < 0.0f) syncPhase += 1.0f;
+
+            // Phase Morphing (Slot A -> Slot B)
+            syncPhase = applyPhaseWarp(syncPhase, morphAMode, morphAAmount);
+            syncPhase = applyPhaseWarp(syncPhase, morphBMode, morphBAmount);
+
             float floatPos = syncPhase * set->frameSize;
             int pos = (int)floatPos;
             if (pos >= set->frameSize) pos -= set->frameSize;
@@ -142,10 +146,11 @@ public:
             float val0 = getHermiteSample(ptr, f0_base, set->frameSize, pos, frac);
             float val1 = getHermiteSample(ptr, f1_base, set->frameSize, pos, frac);
             float val = val0 * (1.0f - frameFrac) + val1 * frameFrac;
-            if (morphParam > 0.01f) {
-                val *= (1.0f + morphParam * 4.0f);
-                val = std::sin(val * juce::MathConstants<float>::halfPi);
-            }
+
+            // Amp Morphing (Slot A -> Slot B)
+            val = applyAmpWarp(val, morphAMode, morphAAmount);
+            val = applyAmpWarp(val, morphBMode, morphBAmount);
+
             displayBuffer[i] = val;
         }
     }
@@ -156,14 +161,17 @@ public:
     void setStereoWidth(float w) { stereoWidth = juce::jlimit(0.0f, 1.0f, w); recalculate(); }
     void setWavetablePosition(float pos) { wtPosition = pos; }
 
-    // FM関連
+    // FM & Sync
     void setFMAmount(float amt) { fmAmount = amt; }
     void setFMWaveform(int shape) { fmWaveform = juce::jlimit(0, 3, shape); }
-
     void setSyncAmount(float amt) { syncAmount = std::max(1.0f, amt); }
-    void setMorph(float m) { morphParam = m; }
     void setDriftAmount(float amt) { driftAmount = amt; }
 
+    // Dual Morph System
+    void setMorphA(int mode, float amt) { morphAMode = mode; morphAAmount = amt; }
+    void setMorphB(int mode, float amt) { morphBMode = mode; morphBAmount = amt; }
+
+    // WT Parameters
     void setWavetableLevel(float level) { wtLevel = level; }
     void setWavetablePitchOffset(float semitones) { wtPitchOffset = semitones; }
     void setPitchDecay(float amount, float timeMs) {
@@ -220,7 +228,6 @@ public:
             SIMDFloat p = phases[b];
             SIMDFloat modSignal(0.0f);
 
-            // 高速なインラインFM波形生成
             if (fmWaveform == 0) { // Sine
                 SIMDFloat z = p - half;
                 modSignal = (z * c1 - (z * z * z) * c2 + (z * z * z * z * z) * c3) * negOne;
@@ -229,16 +236,10 @@ public:
                 modSignal = p * 2.0f - 1.0f;
             }
             else if (fmWaveform == 2) { // Pulse
-                for (int i = 0; i < SimdWidth; ++i) {
-                    modSignal.set(i, p.get(i) < 0.5f ? 1.0f : -1.0f);
-                }
+                for (int i = 0; i < SimdWidth; ++i) modSignal.set(i, p.get(i) < 0.5f ? 1.0f : -1.0f);
             }
-            else if (fmWaveform == 3) { // Noise (LCG)
-                for (int i = 0; i < SimdWidth; ++i) {
-                    lcgState = 1664525 * lcgState + 1013904223;
-                    float noiseVal = ((float)lcgState / (float)0xFFFFFFFF) * 2.0f - 1.0f;
-                    modSignal.set(i, noiseVal);
-                }
+            else if (fmWaveform == 3) { // Triangle
+                for (int i = 0; i < SimdWidth; ++i) modSignal.set(i, 4.0f * std::abs(p.get(i) - 0.5f) - 1.0f);
             }
 
             SIMDFloat totalPhase = (p + modSignal * fmScaled) * sync;
@@ -266,15 +267,25 @@ public:
                 int level1 = level0 + 1;
                 const float* ptr0 = set->levels[level0].getReadPointer(0);
                 const float* ptr1 = set->levels[level1].getReadPointer(0);
-                float tp = totalPhase.get(i); tp -= std::floor(tp); if (tp < 0.0f) tp += 1.0f;
+
+                float tp = totalPhase.get(i);
+                tp -= std::floor(tp); if (tp < 0.0f) tp += 1.0f;
+
+                // --- 1. Phase Warping (Morph A -> Morph B) ---
+                tp = applyPhaseWarp(tp, morphAMode, morphAAmount);
+                tp = applyPhaseWarp(tp, morphBMode, morphBAmount);
+
                 float floatPos = tp * set->frameSize; int pos = (int)floatPos;
                 if (pos >= set->frameSize) pos -= set->frameSize; float frac = floatPos - (float)pos;
+
                 float val0 = getHermiteSample(ptr0, f0_base, set->frameSize, pos, frac) * (1.0f - frameFrac) + getHermiteSample(ptr0, f1_base, set->frameSize, pos, frac) * frameFrac;
                 float val1 = getHermiteSample(ptr1, f0_base, set->frameSize, pos, frac) * (1.0f - frameFrac) + getHermiteSample(ptr1, f1_base, set->frameSize, pos, frac) * frameFrac;
                 float val = val0 * (1.0f - levelFrac) + val1 * levelFrac;
-                if (morphParam > 0.01f) {
-                    val *= (1.0f + morphParam * 4.0f); val = std::sin(val * juce::MathConstants<float>::halfPi);
-                }
+
+                // --- 2. Amplitude Shaping (Morph A -> Morph B) ---
+                val = applyAmpWarp(val, morphAMode, morphAAmount);
+                val = applyAmpWarp(val, morphBMode, morphBAmount);
+
                 vAmp.set(i, val * amp[b].get(i));
                 float phaseInc = p.get(i) + step; if (phaseInc >= 1.0f) phaseInc -= 1.0f; nextP.set(i, phaseInc);
             }
@@ -306,19 +317,15 @@ public:
 private:
     double sampleRate = 44100.0;
     float baseFreq = 440.0f;
-    float detuneAmount = 0.0f, stereoWidth = 1.0f, wtPosition = 0.0f, fmAmount = 0.0f, syncAmount = 1.0f, morphParam = 0.0f, driftAmount = 0.0f;
+    float detuneAmount = 0.0f, stereoWidth = 1.0f, wtPosition = 0.0f, fmAmount = 0.0f, syncAmount = 1.0f, driftAmount = 0.0f;
     int unisonCount = 1;
-    int fmWaveform = 0; // 0: Sine, 1: Saw, 2: Pulse, 3: Noise
+    int fmWaveform = 0;
 
-    // LCG Noise State (スレッドセーフ・ノーアロケーション)
-    uint32_t lcgState = 123456789;
+    // Morph States
+    int morphAMode = 0; float morphAAmount = 0.0f;
+    int morphBMode = 0; float morphBAmount = 0.0f;
 
-    float wtLevel = 1.0f;
-    float wtPitchOffset = 0.0f;
-    float pitchDecayAmt = 0.0f;
-    float pitchDecayCoef = 0.0f;
-    float pitchEnvState = 0.0f;
-
+    float wtLevel = 1.0f, wtPitchOffset = 0.0f, pitchDecayAmt = 0.0f, pitchDecayCoef = 0.0f, pitchEnvState = 0.0f;
     bool subOn = true; int subWaveform = 0; float subVolume = 0.0f, subPitchOffset = -12.0f, subPhase = 0.0f, subLpfState = 0.0f;
     std::array<float, MaxVoices> driftPhase = { 0 }, driftRate = { 0 };
     juce::AudioFormatManager formatManager;
@@ -326,6 +333,40 @@ private:
     std::atomic<int> loadJobId{ 0 };
     juce::ReferenceCountedObjectPtr<WavetableSet> currentWavetableSet;
     std::array<SIMDFloat, MaxBlocks> phases, increments, panL, panR, amp;
+
+    // --- Morphing Algorithms ---
+    // Mode Indices: 0:None, 1:Bend+, 2:Bend-, 3:PWM, 4:HardSync, 5:Mirror, 6:Flip, 7:Quantize, 8:Remap
+    inline float applyPhaseWarp(float p, int mode, float amt) const {
+        if (mode == 1) return std::pow(p, std::exp(-amt * 2.0f)); // Bend+
+        if (mode == 2) return std::pow(p, std::exp(amt * 2.0f));  // Bend-
+        if (mode == 3) { // PWM
+            float pw = 0.01f + amt * 0.98f;
+            return (p < pw) ? (p / pw * 0.5f) : (0.5f + (p - pw) / (1.0f - pw) * 0.5f);
+        }
+        if (mode == 4) { // HardSync
+            return std::fmod(p * (1.0f + amt * 7.0f), 1.0f);
+        }
+        if (mode == 5) { // Mirror
+            float mirrored = (p < 0.5f) ? p * 2.0f : (1.0f - p) * 2.0f;
+            return p * (1.0f - amt) + mirrored * amt;
+        }
+        return p;
+    }
+
+    inline float applyAmpWarp(float v, int mode, float amt) const {
+        if (mode == 6) { // Flip
+            float flipped = std::abs(v);
+            return v * (1.0f - amt) + flipped * amt;
+        }
+        if (mode == 7) { // Quantize
+            float steps = std::pow(2.0f, 2.0f + (1.0f - amt) * 14.0f);
+            return std::round(v * steps) / steps;
+        }
+        if (mode == 8) { // Remap (Saturation/Fold)
+            return std::tanh(v * (1.0f + amt * 4.0f));
+        }
+        return v;
+    }
 
     static inline float hermite(float t, float y0, float y1, float y2, float y3) {
         float c0 = y1; float c1 = 0.5f * (y2 - y0); float c2 = y0 - 2.5f * y1 + 2.0f * y2 - 0.5f * y3; float c3 = 0.5f * (y3 - y0) + 1.5f * (y1 - y2);
