@@ -2,16 +2,12 @@
 #include "PluginEditor.h"
 
 //==============================================================================
-// 1. コンストラクタ (Constructor)
-// ここでパラメータのポインタをキャッシュし、初期設定を行います。
-//==============================================================================
 LiquidDreamAudioProcessor::LiquidDreamAudioProcessor()
     : AudioProcessor(BusesProperties().withOutput("Output", juce::AudioChannelSet::stereo(), true)),
     apvts(*this, nullptr, "PARAMS", createParameterLayout())
 {
     outputScopeData.fill(0.0f);
 
-    // APVTSからパラメータの生ポインタを取得してキャッシュ（オーディオスレッドでの文字列検索を回避）
     pWave = apvts.getRawParameterValue("osc_wave");
     pPos = apvts.getRawParameterValue("osc_pos");
     pOscPitch = apvts.getRawParameterValue("osc_pitch");
@@ -44,17 +40,10 @@ LiquidDreamAudioProcessor::LiquidDreamAudioProcessor()
     pFRel = apvts.getRawParameterValue("f_rel");
 }
 
-//==============================================================================
-// 2. デストラクタ (Destructor)
-// 未解決の外部シンボルエラーを防ぐため、実体が必要です。
-//==============================================================================
 LiquidDreamAudioProcessor::~LiquidDreamAudioProcessor()
 {
 }
 
-//==============================================================================
-// 3. パラメータレイアウトの定義
-//==============================================================================
 juce::AudioProcessorValueTreeState::ParameterLayout LiquidDreamAudioProcessor::createParameterLayout()
 {
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
@@ -95,9 +84,6 @@ juce::AudioProcessorValueTreeState::ParameterLayout LiquidDreamAudioProcessor::c
     return { params.begin(), params.end() };
 }
 
-//==============================================================================
-// 4. 再生準備 (prepareToPlay)
-//==============================================================================
 void LiquidDreamAudioProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
     oscillator.prepare(sampleRate);
@@ -107,7 +93,7 @@ void LiquidDreamAudioProcessor::prepareToPlay(double sampleRate, int samplesPerB
     ampEnv.setSampleRate(sampleRate);
     filterEnv.setSampleRate(sampleRate);
 
-    double smoothingTime = 0.02; // 20msのスムージング
+    double smoothingTime = 0.02;
     smoothedPitchMult.reset(sampleRate, smoothingTime);
     smoothedCutoff.reset(sampleRate, smoothingTime);
     smoothedReso.reset(sampleRate, smoothingTime);
@@ -118,7 +104,6 @@ void LiquidDreamAudioProcessor::prepareToPlay(double sampleRate, int samplesPerB
     smoothedShpBit.reset(sampleRate, smoothingTime);
     smoothedGain.reset(sampleRate, smoothingTime);
 
-    // 初期状態のスナップ（音の立ち上がりでのジャンプ防止）
     smoothedPitchMult.setCurrentAndTargetValue(std::pow(2.0f, pOscPitch->load(std::memory_order_relaxed) / 12.0f));
     smoothedCutoff.setCurrentAndTargetValue(pCutoff->load(std::memory_order_relaxed));
     smoothedReso.setCurrentAndTargetValue(pReso->load(std::memory_order_relaxed));
@@ -130,16 +115,13 @@ void LiquidDreamAudioProcessor::prepareToPlay(double sampleRate, int samplesPerB
     smoothedGain.setCurrentAndTargetValue(pGain->load(std::memory_order_relaxed));
 }
 
-//==============================================================================
-// 5. オーディオ処理ループ (processBlock)
-//==============================================================================
 void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
 {
     juce::ScopedNoDenormals noDenormals;
     buffer.clear();
     if (buffer.getNumChannels() < 2) return;
 
-    // --- ブロック単位のパラメータ更新 (CPU負荷削減) ---
+    // --- Block Rate Parameter Updates ---
     smoothedPitchMult.setTargetValue(std::pow(2.0f, pOscPitch->load(std::memory_order_relaxed) / 12.0f));
     smoothedCutoff.setTargetValue(pCutoff->load(std::memory_order_relaxed));
     smoothedReso.setTargetValue(pReso->load(std::memory_order_relaxed));
@@ -157,7 +139,6 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         lastWaveIdx = waveIdx;
     }
 
-    // --- MIDI処理 (MonoVoiceManagerの戻り値に従う) ---
     for (const auto metadata : midiMessages) {
         auto msg = metadata.getMessage();
         if (msg.isNoteOn()) {
@@ -175,7 +156,6 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         }
     }
 
-    // 非スムージング・パラメータの更新
     oscillator.setWavetablePosition(pPos->load(std::memory_order_relaxed));
     oscillator.setFMAmount(pFm->load(std::memory_order_relaxed));
     oscillator.setSyncAmount(pSync->load(std::memory_order_relaxed));
@@ -189,13 +169,11 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     filterEnv.setParameters(pFAtk->load(std::memory_order_relaxed), pFDec->load(std::memory_order_relaxed),
         pFSus->load(std::memory_order_relaxed), pFRel->load(std::memory_order_relaxed));
 
-    // --- サンプル単位のDSPループ ---
     auto* left = buffer.getWritePointer(0);
     auto* right = buffer.getWritePointer(1);
 
     for (int i = 0; i < buffer.getNumSamples(); ++i) {
 
-        // 補間されたパラメータ値の取得
         float curPitchMult = smoothedPitchMult.getNextValue();
         float curCutoff = smoothedCutoff.getNextValue();
         float curReso = smoothedReso.getNextValue();
@@ -218,33 +196,26 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
 
         float sL = oL, sR = oR;
 
-        // FILTER
+        // --- FILTER ---
         float modCutoff = curCutoff + (fVal * curFltEnvAmt * 10000.0f);
         filter.setParameters(juce::jlimit(20.0f, 20000.0f, modCutoff), curReso);
         sL = filter.processSample(sL);
         sR = filter.processSample(sR);
 
-        // SHAPER (Saturation & Bitcrush)
-        sL = std::tanh(sL * curDrive);
-        sR = std::tanh(sR * curDrive);
+        // --- DISTORTION & SHAPER (ADAA Integrated) ---
+        // Drive(tanh) と Shaper(sin) を ADAA で一括処理
+        shaper.processStereo(sL, sR, curDrive, curShpAmt, curShpRate, curShpBit, sL, sR);
 
-        if (curShpAmt > 0.01f) {
-            shaper.processStereo(sL, sR, curShpAmt, curShpRate, curShpBit, sL, sR);
-        }
-
-        // AMP & MASTER GAIN
+        // --- AMP & MASTER GAIN ---
         float finalGain = curGain * aVal;
         left[i] = sL * finalGain;
         right[i] = sR * finalGain;
 
-        // スコープへの書き込み
         outputScopeData[scopeWriteIndex] = (left[i] + right[i]) * 0.5f;
         scopeWriteIndex = (scopeWriteIndex + 1) % 512;
     }
 }
 
-//==============================================================================
-// 6. プラグイン・インスタンス生成のエントリポイント (必達)
 //==============================================================================
 juce::AudioProcessorEditor* LiquidDreamAudioProcessor::createEditor()
 {
