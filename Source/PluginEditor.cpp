@@ -31,6 +31,7 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     setupS(wtPosSlider, wtPosLabel, "Pos"); setupS(fmAmtSlider, fmAmtLabel, "FM");
     setupS(syncSlider, syncLabel, "Sync"); setupS(morphSlider, morphLabel, "Warp");
     setupS(uniCountSlider, uniCountLabel, "Unison"); setupS(detuneSlider, detuneLabel, "Detune");
+    setupS(oscPitchSlider, oscPitchLabel, "Pitch"); // ’Ç‰Á
 
     setupS(distDriveSlider, distDriveLabel, "Drive"); setupS(shpAmtSlider, shpAmtLabel, "Shaper");
     setupS(bitSlider, bitLabel, "Bits"); setupS(rateSlider, rateLabel, "Rate");
@@ -51,14 +52,14 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
         };
 
     att(wtPosSlider, "osc_pos"); att(fmAmtSlider, "osc_fm"); att(syncSlider, "osc_sync"); att(morphSlider, "osc_morph");
-    att(uniCountSlider, "osc_uni"); att(detuneSlider, "osc_detune");
+    att(uniCountSlider, "osc_uni"); att(detuneSlider, "osc_detune"); att(oscPitchSlider, "osc_pitch"); // ’Ç‰Á
+
     att(distDriveSlider, "dist_drive"); att(shpAmtSlider, "shp_amt"); att(bitSlider, "shp_bit"); att(rateSlider, "shp_rate");
     att(cutoffSlider, "flt_cutoff"); att(resSlider, "flt_res"); att(fltEnvAmtSlider, "flt_env_amt");
     att(ampAtkSlider, "a_atk"); att(ampDecSlider, "a_dec"); att(ampSusSlider, "a_sus"); att(ampRelSlider, "a_rel");
     att(modAtkSlider, "f_atk"); att(modDecSlider, "f_dec"); att(modSusSlider, "f_sus"); att(modRelSlider, "f_rel");
     att(glideSlider, "m_glide"); att(pitchSlider, "m_pb"); att(gainSlider, "m_gain");
 
-    // Add browser last so it stays on top
     addChildComponent(browser);
     browser.setVisible(false);
 
@@ -72,7 +73,6 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
 }
 
 LiquidDreamAudioProcessorEditor::~LiquidDreamAudioProcessorEditor() { setLookAndFeel(nullptr); }
-
 void LiquidDreamAudioProcessorEditor::paint(juce::Graphics& g) { g.fillAll(juce::Colour::fromString("FF1E1E1E")); }
 
 void LiquidDreamAudioProcessorEditor::timerCallback()
@@ -109,7 +109,6 @@ void LiquidDreamAudioProcessorEditor::resized()
     area.removeFromLeft(15);
     auto rightArea = area;
 
-    // Bind Browser exactly over the ENTIRE right parameter area
     browser.setBounds(rightArea);
 
     auto oscRect = rightArea.removeFromTop(200);
@@ -119,8 +118,10 @@ void LiquidDreamAudioProcessorEditor::resized()
     fmAmtLabel.setBounds(oX + 90, oY + 35, 70, 20); fmAmtSlider.setBounds(oX + 90, oY + 55, 70, 60);
     syncLabel.setBounds(oX + 170, oY + 35, 70, 20); syncSlider.setBounds(oX + 170, oY + 55, 70, 60);
     morphLabel.setBounds(oX + 250, oY + 35, 70, 20); morphSlider.setBounds(oX + 250, oY + 55, 70, 60);
+
     uniCountLabel.setBounds(oX + 10, oY + 120, 70, 20); uniCountSlider.setBounds(oX + 10, oY + 140, 70, 60);
     detuneLabel.setBounds(oX + 90, oY + 120, 70, 20); detuneSlider.setBounds(oX + 90, oY + 140, 70, 60);
+    oscPitchLabel.setBounds(oX + 170, oY + 120, 70, 20); oscPitchSlider.setBounds(oX + 170, oY + 140, 70, 60); // ’Ç‰Á
 
     rightArea.removeFromTop(10);
     auto shpRect = rightArea.removeFromTop(120);

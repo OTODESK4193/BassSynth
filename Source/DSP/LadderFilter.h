@@ -2,7 +2,7 @@
 #include <JuceHeader.h>
 #include <cmath>
 #include <numbers>
-#include <span>
+#include <algorithm>
 
 class LadderFilter
 {
@@ -12,6 +12,8 @@ public:
     void prepare(double sampleRate)
     {
         currentSampleRate = std::max(1.0, sampleRate);
+        // 10msの時定数で正確にスムージングするための係数を計算（SampleRate非依存）
+        driftAlpha = 1.0f - std::exp(-1.0f / (0.01f * (float)currentSampleRate));
         reset();
     }
 
@@ -29,18 +31,15 @@ public:
         }
         isBypassed = false;
 
-        // アナログコンデンサの遅れをシミュレート（ジッパーノイズ防止）
-        driftState += 0.1f * (cutoffHz - driftState);
+        // サンプルレートに依存しない滑らかな追従
+        driftState += driftAlpha * (cutoffHz - driftState);
         float actualCutoff = driftState;
 
         float wc = 2.0f * std::numbers::pi_v<float> *actualCutoff / (float)currentSampleRate;
         wc = std::clamp(wc, 0.0f, std::numbers::pi_v<float> *0.99f);
         g = std::tan(wc * 0.5f);
 
-        // レゾナンスのリミット
         k = 4.0f * std::clamp(resonance, 0.0f, 0.98f);
-
-        // 低域補償 (Bass Compensation): レゾナンスを上げても低音が痩せないようにする
         bassComp = 1.0f + (k * 0.75f);
     }
 
@@ -50,7 +49,6 @@ public:
 
         float x = input * bassComp;
 
-        // ZDFソルバー
         float G = g / (1.0f + g);
         float S1 = s1 / (1.0f + g);
         float S2 = s2 / (1.0f + g);
@@ -61,7 +59,7 @@ public:
         float D = 1.0f / (1.0f + k * G * G * G * G);
 
         float y4 = (G * G * G * G * x + S) * D;
-        float u = x - k * std::tanh(y4); // Moog特有のサチュレーション
+        float u = x - k * std::tanh(y4);
 
         float v1 = (g * u + s1) / (1.0f + g);
         float v2 = (g * v1 + s2) / (1.0f + g);
@@ -78,10 +76,8 @@ public:
 
 private:
     float s1 = 0.0f, s2 = 0.0f, s3 = 0.0f, s4 = 0.0f;
-    float driftState = 20000.0f;
+    float driftState = 20000.0f, driftAlpha = 0.1f;
     float g = 0.0f, k = 0.0f, bassComp = 1.0f;
     double currentSampleRate = 44100.0;
     bool isBypassed = false;
 };
-
-

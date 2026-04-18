@@ -24,8 +24,8 @@ private:
 
     juce::GroupComponent oscGroup, shaperGroup, filterGroup, ampEnvGroup, modEnvGroup, controlGroup;
 
-    juce::Slider wtPosSlider, fmAmtSlider, syncSlider, morphSlider, uniCountSlider, detuneSlider;
-    juce::Label  wtPosLabel, fmAmtLabel, syncLabel, morphLabel, uniCountLabel, detuneLabel;
+    juce::Slider wtPosSlider, fmAmtSlider, syncSlider, morphSlider, uniCountSlider, detuneSlider, oscPitchSlider;
+    juce::Label  wtPosLabel, fmAmtLabel, syncLabel, morphLabel, uniCountLabel, detuneLabel, oscPitchLabel;
 
     juce::Slider distDriveSlider, shpAmtSlider, bitSlider, rateSlider;
     juce::Label  distDriveLabel, shpAmtLabel, bitLabel, rateLabel;
