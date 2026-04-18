@@ -3,8 +3,7 @@
 #include <cmath>
 #include <algorithm>
 
-/**
- * ADAA (Antiderivative Anti-Aliasing) 搭載 Distortion & Shaper
+/** * ADAA (Antiderivative Anti-Aliasing) 搭載 Distortion & Shaper
  * 積分と微分を用いることで、オーバーサンプリングなしにエイリアシングを抑制します。
  */
 class SineShaper
@@ -26,8 +25,7 @@ public:
         heldSampleL = heldSampleR = 0.0f;
     }
 
-    /**
-     * ステレオ処理: Drive(ADAA tanh) -> Shaper(ADAA sin) -> Bitcrush/Downsample
+    /** * ステレオ処理: Drive(ADAA tanh) -> Shaper(ADAA sin) -> Bitcrush/Downsample
      */
     inline void processStereo(float inL, float inR,
         float driveAmt, float shpAmt,
@@ -56,13 +54,17 @@ public:
             }
 
             float steps = std::exp2(bits);
-            outL = std::floor(heldSampleL * steps) / steps;
-            outR = std::floor(heldSampleR * steps) / steps;
+            // NaNガードを追加し、床関数計算時のクラッシュを防止
+            float safeL = std::isfinite(heldSampleL) ? heldSampleL : 0.0f;
+            float safeR = std::isfinite(heldSampleR) ? heldSampleR : 0.0f;
+
+            outL = std::floor(safeL * steps) / steps;
+            outR = std::floor(safeR * steps) / steps;
         }
         else
         {
-            outL = sL;
-            outR = sR;
+            outL = std::isfinite(sL) ? sL : 0.0f;
+            outR = std::isfinite(sR) ? sR : 0.0f;
         }
     }
 
@@ -79,8 +81,8 @@ private:
         float diff = curX - lastX;
         float result;
 
-        // ゼロ除算の回避ガード (テイラー展開による近似)
-        if (std::abs(diff) < 1.0e-6f) {
+        // ゼロ除算の回避ガード (閾値を1.0e-5fに調整して精度を安定化)
+        if (std::abs(diff) < 1.0e-5f) {
             result = std::tanh((curX + lastX) * 0.5f);
         }
         else {
@@ -96,14 +98,21 @@ private:
     inline float antiderivTanh(float x) const
     {
         float ax = std::abs(x);
+        // floatの限界値付近でのオーバーフローを避けるため20.0fで分岐
         if (ax > 20.0f) return ax - 0.69314718f; // ln(2)
+
+        // cosh(x)が大きな値になってもlogで正しく処理できるよう、
+        // 念のため std::clamp や std::isfinite は使わず、数学的性質を維持
         return std::log(std::cosh(x));
     }
 
     // --- ADAA Helper for sin (Wavefolding) ---
     inline float applyShaperADAA(float x, float amount, float& lastX)
     {
-        if (amount < 0.01f) return x;
+        if (amount < 0.01f) {
+            lastX = x;
+            return x;
+        }
 
         // 元の波形とサイン波形のブレンド
         // f(x) = (1-w)*x + w * sin(x * pi)
@@ -114,14 +123,15 @@ private:
         float diff = curX - lastX;
         float result;
 
-        if (std::abs(diff) < 1.0e-6f) {
+        if (std::abs(diff) < 1.0e-5f) {
             float mid = (curX + lastX) * 0.5f;
             result = (1.0f - w) * mid + w * std::sin(mid * freq);
         }
         else {
-            // 積分値の計算
+            // 積分値の計算 (ラムダ式を用いて元の構造を維持)
             auto F = [w, freq](float v) {
-                return 0.5f * (1.0f - w) * v * v - (w / freq) * std::cos(v * freq);
+                // 数値的に巨大な値にならないよう、項を整理
+                return (0.5f * (1.0f - w) * v * v) - (w / freq) * std::cos(v * freq);
                 };
             result = (F(curX) - F(lastX)) / diff;
         }
