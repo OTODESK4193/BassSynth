@@ -55,9 +55,6 @@ public:
             newSet->numFrames = std::max(1, newSet->totalSamples / newSet->frameSize);
 
             juce::dsp::FFT fft(11); // 2048ポイント
-
-            // 【解決策1】SIMDアライメントが完全に保証されたJUCE標準バッファを使用
-            // Real-Only FFTは 2 * N のサイズを要求するため、2048 * 2 = 4096 を確保
             juce::AudioBuffer<float> workBuf(1, 4096);
 
             for (int lvl = 0; lvl < NumLevels; ++lvl) {
@@ -68,54 +65,55 @@ public:
                         workBuf.clear();
                         auto* workPtr = workBuf.getWritePointer(0);
 
-                        // 1. 元データをセット
                         for (int i = 0; i < 2048; ++i) {
                             int srcIdx = f * 2048 + i;
                             workPtr[i] = (srcIdx < newSet->totalSamples) ? tempRaw.getSample(0, srcIdx) : 0.0f;
                         }
 
-                        // 2. 実数専用フォワードFFT（メモリ安全）
                         fft.performRealOnlyForwardTransform(workPtr);
 
-                        // 3. 帯域制限（Nyquistと高周波のクリア）
+                        // --- 【Phase 2】窓関数（コサイン・ロールオフ）による純化 ---
                         if (lvl > 0) {
                             int harmonicLimit = 1024 >> lvl;
                             if (harmonicLimit < 2) harmonicLimit = 2;
 
-                            // JUCE Real-Only FFTの仕様：[0]がDC, [1]がNyquist, 以降はReal/Imagのペア
-                            for (int k = harmonicLimit; k <= 1024; ++k) {
+                            // 減衰を開始するポイント（限界の80%あたりから滑らかに落とす）
+                            int transitionStart = std::max(1, (int)(harmonicLimit * 0.8f));
+
+                            for (int k = transitionStart; k <= 1024; ++k) {
+                                float multiplier = 0.0f;
+
+                                // トランジション帯域内ならコサインカーブで滑らかにフェードアウト
+                                if (k < harmonicLimit) {
+                                    float fraction = (float)(k - transitionStart) / (float)(harmonicLimit - transitionStart);
+                                    multiplier = 0.5f * (1.0f + std::cos(fraction * juce::MathConstants<float>::pi));
+                                }
+
                                 if (k == 1024) {
-                                    workPtr[1] = 0.0f; // Nyquist成分
+                                    workPtr[1] *= multiplier; // Nyquist成分
                                 }
                                 else {
-                                    workPtr[2 * k] = 0.0f;     // Real成分
-                                    workPtr[2 * k + 1] = 0.0f; // Imag成分
+                                    workPtr[2 * k] *= multiplier;     // Real成分
+                                    workPtr[2 * k + 1] *= multiplier; // Imag成分
                                 }
                             }
                         }
 
-                        // 【絶対防衛】DCオフセットの完全消去
-                        workPtr[0] = 0.0f;
+                        workPtr[0] = 0.0f; // DCオフセットの完全消去
 
-                        // 4. 実数専用インバースFFT
                         fft.performRealOnlyInverseTransform(workPtr);
 
-                        // 5. 【解決策2】オート・ノーマライズ
-                        // 逆FFT後の波形の最大ピークを探す
-                        float peak = 1e-9f; // ゼロ除算防止
+                        float peak = 1e-9f;
                         for (int i = 0; i < 2048; ++i) {
                             peak = std::max(peak, std::abs(workPtr[i]));
                         }
 
-                        // ピークを1.0にするための倍率を計算
                         float normalizeScale = 1.0f / peak;
 
-                        // 6. スケーリングして安全に最終バッファへ書き込み
                         auto* destPtr = newSet->levels[lvl].getWritePointer(0);
                         for (int i = 0; i < 2048; ++i) {
                             int dstIdx = f * 2048 + i;
                             if (dstIdx < newSet->totalSamples) {
-                                // ここで必ず -1.0 〜 +1.0 の美しい波形に収まる
                                 destPtr[dstIdx] = juce::jlimit(-1.0f, 1.0f, workPtr[i] * normalizeScale);
                             }
                         }
@@ -129,6 +127,7 @@ public:
         }
     }
 
+    // --- 以下、再生用エンジン (Phase 3のクロスフェード実装済み) ---
     void generateSingleCycle(std::array<float, 512>& displayBuffer) {
         WavetableSet::Ptr set = currentWavetableSet.get();
         if (set == nullptr || set->totalSamples == 0) { displayBuffer.fill(0.0f); return; }
@@ -203,7 +202,7 @@ public:
                 float step = increments[b].get(i);
                 float voiceFreq = std::max(1.0f, step * (float)sampleRate);
 
-                // --- 【STEP 4】Mipmapの滑らかなクロスフェード ---
+                // Mipmapレベルのクロスフェード処理
                 float maxH = (float)sampleRate / (2.0f * voiceFreq);
                 int level0 = 0;
                 float hLimit = 1024.0f;
@@ -213,7 +212,6 @@ public:
                     hLimit *= 0.5f;
                 }
 
-                // 境界での小数割合（フェード量）を計算
                 float levelFrac = 0.0f;
                 if (hLimit > maxH) {
                     levelFrac = (hLimit - maxH) / (hLimit * 0.5f);
@@ -232,11 +230,9 @@ public:
                 int idx1 = juce::jlimit(0, set->totalSamples - 1, (frameIdx * set->frameSize) + samplePos);
                 int idx2 = juce::jlimit(0, set->totalSamples - 1, ((frameIdx + 1) * set->frameSize) + samplePos);
 
-                // 両方のレベルから値を読み出し
                 float val0 = ptr0[idx1] * (1.0f - frameFrac) + ptr0[idx2] * frameFrac;
                 float val1 = ptr1[idx1] * (1.0f - frameFrac) + ptr1[idx2] * frameFrac;
 
-                // レベル間を滑らかにブレンド（クロスフェード）
                 float val = val0 * (1.0f - levelFrac) + val1 * levelFrac;
 
                 if (morphParam > 0.01f) {
