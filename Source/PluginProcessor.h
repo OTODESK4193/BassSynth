@@ -1,6 +1,3 @@
-// ==============================================================================
-// Source/PluginProcessor.h
-// ==============================================================================
 #pragma once
 #include <JuceHeader.h>
 #include "DSP/WavetableOscillator.h"
@@ -63,6 +60,7 @@ private:
     std::atomic<float>* pPDecayAmt = nullptr;
     std::atomic<float>* pPDecayTime = nullptr;
     std::atomic<float>* pFm = nullptr;
+    std::atomic<float>* pFmWave = nullptr; // ’Ç‰Á: FM Waveform
     std::atomic<float>* pSync = nullptr;
     std::atomic<float>* pMorph = nullptr;
     std::atomic<float>* pUni = nullptr;

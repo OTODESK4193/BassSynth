@@ -1,6 +1,3 @@
-// ==============================================================================
-// Source/PluginProcessor.cpp
-// ==============================================================================
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 
@@ -10,14 +7,14 @@ LiquidDreamAudioProcessor::LiquidDreamAudioProcessor()
 {
     outputScopeData.fill(0.0f);
 
-    // --- OSC Parameters ---
     pWave = apvts.getRawParameterValue("osc_wave");
     pPos = apvts.getRawParameterValue("osc_pos");
-    pOscLevel = apvts.getRawParameterValue("osc_level"); // 新規: WT Level
+    pOscLevel = apvts.getRawParameterValue("osc_level");
     pOscPitch = apvts.getRawParameterValue("osc_pitch");
-    pPDecayAmt = apvts.getRawParameterValue("osc_pdecay_amt"); // 新規: Pitch Decay Amount
-    pPDecayTime = apvts.getRawParameterValue("osc_pdecay_time"); // 新規: Pitch Decay Time
+    pPDecayAmt = apvts.getRawParameterValue("osc_pdecay_amt");
+    pPDecayTime = apvts.getRawParameterValue("osc_pdecay_time");
     pFm = apvts.getRawParameterValue("osc_fm");
+    pFmWave = apvts.getRawParameterValue("osc_fm_wave"); // 追加
     pSync = apvts.getRawParameterValue("osc_sync");
     pMorph = apvts.getRawParameterValue("osc_morph");
     pUni = apvts.getRawParameterValue("osc_uni");
@@ -25,13 +22,11 @@ LiquidDreamAudioProcessor::LiquidDreamAudioProcessor()
     pWidth = apvts.getRawParameterValue("osc_width");
     pDrift = apvts.getRawParameterValue("osc_drift");
 
-    // --- Sub Parameters ---
     pSubOn = apvts.getRawParameterValue("sub_on");
     pSubWave = apvts.getRawParameterValue("sub_wave");
     pSubVol = apvts.getRawParameterValue("sub_vol");
     pSubPitch = apvts.getRawParameterValue("sub_pitch");
 
-    // --- Others ---
     pCutoff = apvts.getRawParameterValue("flt_cutoff");
     pReso = apvts.getRawParameterValue("flt_res");
     pFltEnvAmt = apvts.getRawParameterValue("flt_env_amt");
@@ -52,17 +47,17 @@ juce::AudioProcessorValueTreeState::ParameterLayout LiquidDreamAudioProcessor::c
 {
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
 
-    // OSC Params
     params.push_back(std::make_unique<juce::AudioParameterInt>("osc_wave", "Waveform", 0, EmbeddedWavetables::numTables - 1, 0));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("osc_level", "WT Level", 0.0f, 1.0f, 1.0f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("osc_pos", "Position", 0.0f, 1.0f, 0.0f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("osc_pitch", "WT Pitch", -24.0f, 24.0f, 0.0f));
-    params.push_back(std::make_unique<juce::AudioParameterFloat>("osc_pdecay_amt", "P.Decay", -24.0f, 24.0f, 0.0f)); // センター0
-    // Decay Time は対数カーブが使いやすいので NormalisableRange を使用
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("osc_pdecay_amt", "P.Decay", -24.0f, 24.0f, 0.0f));
     auto timeRange = juce::NormalisableRange<float>(1.0f, 2000.0f, 1.0f, 0.3f);
     params.push_back(std::make_unique<juce::AudioParameterFloat>("osc_pdecay_time", "P.Time", timeRange, 100.0f));
 
     params.push_back(std::make_unique<juce::AudioParameterFloat>("osc_fm", "FM Amt", 0.0f, 3.0f, 0.0f));
+    params.push_back(std::make_unique<juce::AudioParameterInt>("osc_fm_wave", "FM Wave", 0, 3, 0)); // 追加
+
     params.push_back(std::make_unique<juce::AudioParameterFloat>("osc_sync", "Sync", 1.0f, 4.0f, 1.0f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("osc_morph", "Warp", 0.0f, 1.0f, 0.0f));
     params.push_back(std::make_unique<juce::AudioParameterInt>("osc_uni", "Unison", 1, 12, 1));
@@ -70,13 +65,11 @@ juce::AudioProcessorValueTreeState::ParameterLayout LiquidDreamAudioProcessor::c
     params.push_back(std::make_unique<juce::AudioParameterFloat>("osc_width", "Width", 0.0f, 1.0f, 1.0f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("osc_drift", "Drift", 0.0f, 1.0f, 0.1f));
 
-    // Sub Params
     params.push_back(std::make_unique<juce::AudioParameterBool>("sub_on", "Sub On", true));
     params.push_back(std::make_unique<juce::AudioParameterInt>("sub_wave", "Sub Wave", 0, 3, 0));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("sub_vol", "Sub Vol", 0.0f, 1.0f, 0.0f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("sub_pitch", "Sub Pitch", -24.0f, 0.0f, -12.0f));
 
-    // Others
     params.push_back(std::make_unique<juce::AudioParameterFloat>("dist_drive", "Drive", 1.0f, 10.0f, 1.0f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("shp_amt", "Sine Shaper", 0.0f, 1.0f, 0.0f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("shp_bit", "Bit Depth", 1.0f, 24.0f, 24.0f));
@@ -186,6 +179,9 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     ampEnv.setParameters(pAAtk->load(std::memory_order_relaxed), pADec->load(std::memory_order_relaxed), pASus->load(std::memory_order_relaxed), pARel->load(std::memory_order_relaxed));
     filterEnv.setParameters(pFAtk->load(std::memory_order_relaxed), pFDec->load(std::memory_order_relaxed), pFSus->load(std::memory_order_relaxed), pFRel->load(std::memory_order_relaxed));
 
+    // State変数はサンプルループ外で一度だけ取得（不連続防止）
+    oscillator.setFMWaveform((int)pFmWave->load(std::memory_order_relaxed));
+
     auto* left = buffer.getWritePointer(0); auto* right = buffer.getWritePointer(1);
 
     for (int i = 0; i < buffer.getNumSamples(); ++i) {
@@ -195,7 +191,6 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         oscillator.setMorph(smoothedMorph.getNextValue());
         oscillator.setDriftAmount(smoothedDrift.getNextValue());
 
-        // --- 新規パラメータの適用 ---
         oscillator.setWavetableLevel(smoothedWtLevel.getNextValue());
         oscillator.setWavetablePitchOffset(smoothedWtPitch.getNextValue());
         oscillator.setPitchDecay(smoothedPDecayAmt.getNextValue(), smoothedPDecayTime.getNextValue());
@@ -207,7 +202,6 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         float cd = smoothedDrive.getNextValue(), csa = smoothedShpAmt.getNextValue(), csr = smoothedShpRate.getNextValue(), csb = smoothedShpBit.getNextValue(), cg = smoothedGain.getNextValue();
         float aVal = ampEnv.getNextSample(), fVal = filterEnv.getNextSample();
 
-        // 基準周波数は純粋なMIDIピッチ（Wavetableのピッチシフトは除外）
         float cf = voiceManager.getCurrentFrequency();
         if (cf < 1.0f) cf = 1.0f;
         if (std::abs(cf - lastOscFreq) > 0.01f) { oscillator.setFrequency(cf); lastOscFreq = cf; }

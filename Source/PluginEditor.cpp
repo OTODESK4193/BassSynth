@@ -1,6 +1,3 @@
-// ==============================================================================
-// Source/PluginEditor.cpp
-// ==============================================================================
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 
@@ -32,10 +29,10 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     modEnvGroup.setText("MOD ENVELOPE"); addAndMakeVisible(modEnvGroup);
     controlGroup.setText("PERFORMANCE"); addAndMakeVisible(controlGroup);
 
-    // Osc Params (12 Knobs total)
+    // Osc Params
     setupS(wtLevelSlider, wtLevelLabel, "Level");
     setupS(wtPosSlider, wtPosLabel, "Pos");
-    setupS(fmAmtSlider, fmAmtLabel, "FM");
+    setupS(fmAmtSlider, fmAmtLabel, "FM Amt");
     setupS(syncSlider, syncLabel, "Sync");
 
     setupS(morphSlider, morphLabel, "Warp");
@@ -44,9 +41,21 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     setupS(widthSlider, widthLabel, "Width");
 
     setupS(oscPitchSlider, oscPitchLabel, "Pitch");
-    setupS(pitchDecayAmtSlider, pitchDecayAmtLabel, "P.Decay"); // 新規追加
-    setupS(pitchDecayTimeSlider, pitchDecayTimeLabel, "P.Time"); // 新規追加
+    setupS(pitchDecayAmtSlider, pitchDecayAmtLabel, "P.Decay");
+    setupS(pitchDecayTimeSlider, pitchDecayTimeLabel, "P.Time");
     setupS(driftSlider, driftLabel, "Drift");
+
+    // FM Wave Combo
+    addAndMakeVisible(fmWaveCombo);
+    fmWaveCombo.addItem("Sine", 1);
+    fmWaveCombo.addItem("Saw", 2);
+    fmWaveCombo.addItem("Pulse", 3);
+    fmWaveCombo.addItem("Noise", 4);
+    fmWaveCombo.setJustificationType(juce::Justification::centred);
+    addAndMakeVisible(fmWaveLabel);
+    fmWaveLabel.setText("FM Mod", juce::dontSendNotification);
+    fmWaveLabel.setJustificationType(juce::Justification::centred);
+    fmWaveLabel.setFont(12.0f);
 
     // Sub Osc Params
     addAndMakeVisible(subOnButton);
@@ -76,14 +85,15 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     att(wtLevelSlider, "osc_level");
     att(wtPosSlider, "osc_pos");
     att(fmAmtSlider, "osc_fm");
+    fmWaveAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(apvts, "osc_fm_wave", fmWaveCombo);
     att(syncSlider, "osc_sync");
     att(morphSlider, "osc_morph");
     att(uniCountSlider, "osc_uni");
     att(detuneSlider, "osc_detune");
     att(widthSlider, "osc_width");
     att(oscPitchSlider, "osc_pitch");
-    att(pitchDecayAmtSlider, "osc_pdecay_amt"); // 追加
-    att(pitchDecayTimeSlider, "osc_pdecay_time"); // 追加
+    att(pitchDecayAmtSlider, "osc_pdecay_amt");
+    att(pitchDecayTimeSlider, "osc_pdecay_time");
     att(driftSlider, "osc_drift");
 
     // Attach Sub
@@ -108,8 +118,8 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
         };
 
     startTimerHz(30);
-    // 高さを少し増やしてWavetableエリアの拡張分（+60px）を吸収
-    setSize(1000, 760);
+    // 高さを拡大してフル4段レイアウトを吸収 (820px)
+    setSize(1000, 820);
 }
 
 LiquidDreamAudioProcessorEditor::~LiquidDreamAudioProcessorEditor() { setLookAndFeel(nullptr); }
@@ -127,99 +137,109 @@ void LiquidDreamAudioProcessorEditor::resized()
 {
     auto area = getLocalBounds().reduced(15);
 
-    // --- 左側エリア (Scope & Performance/Env) ---
+    // --- ノブ配置の標準化ラムダ (幅70px, 高さ70px [Label 20px + Slider 50px]) ---
+    auto placeKnob = [](int x, int y, juce::Label& lbl, juce::Slider& sld) {
+        lbl.setBounds(x, y, 70, 20);
+        sld.setBounds(x, y + 20, 70, 50);
+        };
+
+    // --- 左側エリア ---
     auto leftArea = area.removeFromLeft(350);
 
     openBrowserButton.setBounds(leftArea.removeFromTop(35).reduced(2));
     leftArea.removeFromTop(5);
 
-    // Scopeの高さはそのまま
     dualScope.setBounds(leftArea.removeFromTop(310));
     leftArea.removeFromTop(10);
 
     auto ctrlRect = leftArea.removeFromTop(120);
     controlGroup.setBounds(ctrlRect);
-    int cX = ctrlRect.getX(), cY = ctrlRect.getY();
-    glideLabel.setBounds(cX + 10, cY + 20, 70, 20); glideSlider.setBounds(cX + 10, cY + 40, 70, 65);
-    pitchLabel.setBounds(cX + 90, cY + 20, 70, 20); pitchSlider.setBounds(cX + 90, cY + 40, 70, 65);
-    gainLabel.setBounds(cX + 170, cY + 20, 70, 20); gainSlider.setBounds(cX + 170, cY + 40, 70, 65);
+    int cX = ctrlRect.getX(), cY = ctrlRect.getY() + 25;
+    placeKnob(cX + 15, cY, glideLabel, glideSlider);
+    placeKnob(cX + 95, cY, pitchLabel, pitchSlider);
+    placeKnob(cX + 175, cY, gainLabel, gainSlider);
 
     auto modRect = leftArea.removeFromTop(120);
     modEnvGroup.setBounds(modRect);
-    int mX = modRect.getX(), mY = modRect.getY();
-    modAtkLabel.setBounds(mX + 10, mY + 20, 60, 20); modAtkSlider.setBounds(mX + 10, mY + 40, 60, 65);
-    modDecLabel.setBounds(mX + 80, mY + 20, 60, 20); modDecSlider.setBounds(mX + 80, mY + 40, 60, 65);
-    modSusLabel.setBounds(mX + 150, mY + 20, 60, 20); modSusSlider.setBounds(mX + 150, mY + 40, 60, 65);
-    modRelLabel.setBounds(mX + 220, mY + 20, 60, 20); modRelSlider.setBounds(mX + 220, mY + 40, 60, 65);
+    int mX = modRect.getX(), mY = modRect.getY() + 25;
+    placeKnob(mX + 15, mY, modAtkLabel, modAtkSlider);
+    placeKnob(mX + 95, mY, modDecLabel, modDecSlider);
+    placeKnob(mX + 175, mY, modSusLabel, modSusSlider);
+    placeKnob(mX + 255, mY, modRelLabel, modRelSlider);
 
-    // --- 右側エリア (Osc, Sub, Shaper, Filter, AmpEnv) ---
+    // --- 右側エリア ---
     area.removeFromLeft(15);
     auto rightArea = area;
 
     browser.setBounds(rightArea);
 
-    // 1. Wavetable Osc (260px に拡大して3段配置)
-    auto oscRect = rightArea.removeFromTop(260);
+    // 1. Wavetable Osc (340px - 4段 x 4列 配置)
+    auto oscRect = rightArea.removeFromTop(340);
     oscGroup.setBounds(oscRect);
-    int oX = oscRect.getX(), oY = oscRect.getY();
+    int oX = oscRect.getX() + 10, oY = oscRect.getY() + 25;
 
-    // 1段目：Level, Pos, FM, Sync
-    wtLevelLabel.setBounds(oX + 10, oY + 20, 70, 20); wtLevelSlider.setBounds(oX + 10, oY + 40, 70, 60);
-    wtPosLabel.setBounds(oX + 90, oY + 20, 70, 20);   wtPosSlider.setBounds(oX + 90, oY + 40, 70, 60);
-    fmAmtLabel.setBounds(oX + 170, oY + 20, 70, 20);  fmAmtSlider.setBounds(oX + 170, oY + 40, 70, 60);
-    syncLabel.setBounds(oX + 250, oY + 20, 70, 20);   syncSlider.setBounds(oX + 250, oY + 40, 70, 60);
+    // Row 1
+    placeKnob(oX, oY, wtLevelLabel, wtLevelSlider);
+    placeKnob(oX + 80, oY, wtPosLabel, wtPosSlider);
+    placeKnob(oX + 160, oY, morphLabel, morphSlider);
+    placeKnob(oX + 240, oY, syncLabel, syncSlider);
 
-    // 2段目：Warp, Unison, Detune, Width
-    morphLabel.setBounds(oX + 10, oY + 100, 70, 20);    morphSlider.setBounds(oX + 10, oY + 120, 70, 60);
-    uniCountLabel.setBounds(oX + 90, oY + 100, 70, 20); uniCountSlider.setBounds(oX + 90, oY + 120, 70, 60);
-    detuneLabel.setBounds(oX + 170, oY + 100, 70, 20);  detuneSlider.setBounds(oX + 170, oY + 120, 70, 60);
-    widthLabel.setBounds(oX + 250, oY + 100, 70, 20);   widthSlider.setBounds(oX + 250, oY + 120, 70, 60);
+    // Row 2
+    placeKnob(oX, oY + 80, uniCountLabel, uniCountSlider);
+    placeKnob(oX + 80, oY + 80, detuneLabel, detuneSlider);
+    placeKnob(oX + 160, oY + 80, widthLabel, widthSlider);
+    placeKnob(oX + 240, oY + 80, driftLabel, driftSlider);
 
-    // 3段目：Pitch, P.Decay, P.Time, Drift
-    oscPitchLabel.setBounds(oX + 10, oY + 180, 70, 20);       oscPitchSlider.setBounds(oX + 10, oY + 200, 70, 60);
-    pitchDecayAmtLabel.setBounds(oX + 90, oY + 180, 70, 20);  pitchDecayAmtSlider.setBounds(oX + 90, oY + 200, 70, 60);
-    pitchDecayTimeLabel.setBounds(oX + 170, oY + 180, 70, 20); pitchDecayTimeSlider.setBounds(oX + 170, oY + 200, 70, 60);
-    driftLabel.setBounds(oX + 250, oY + 180, 70, 20);         driftSlider.setBounds(oX + 250, oY + 200, 70, 60);
+    // Row 3
+    placeKnob(oX, oY + 160, oscPitchLabel, oscPitchSlider);
+    placeKnob(oX + 80, oY + 160, pitchDecayAmtLabel, pitchDecayAmtSlider);
+    placeKnob(oX + 160, oY + 160, pitchDecayTimeLabel, pitchDecayTimeSlider);
+
+    // Row 4 (FM Section)
+    fmWaveLabel.setBounds(oX, oY + 240, 70, 20);
+    fmWaveCombo.setBounds(oX, oY + 260, 70, 24);
+    placeKnob(oX + 80, oY + 240, fmAmtLabel, fmAmtSlider);
 
     rightArea.removeFromTop(10);
 
-    // 2. Sub Osc (85px)
-    auto subRect = rightArea.removeFromTop(85);
+    // 2. Sub Osc (100px)
+    auto subRect = rightArea.removeFromTop(100);
     subGroup.setBounds(subRect);
-    int sbX = subRect.getX(), sbY = subRect.getY();
-    subOnButton.setBounds(sbX + 15, sbY + 35, 50, 24);
-    subWaveCombo.setBounds(sbX + 75, sbY + 35, 80, 24);
-    subVolLabel.setBounds(sbX + 170, sbY + 15, 70, 20); subVolSlider.setBounds(sbX + 170, sbY + 30, 70, 50);
-    subPitchLabel.setBounds(sbX + 250, sbY + 15, 70, 20); subPitchSlider.setBounds(sbX + 250, sbY + 30, 70, 50);
+    int sbX = subRect.getX() + 10, sbY = subRect.getY() + 25;
+
+    subOnButton.setBounds(sbX, sbY + 20, 50, 24);
+    subWaveCombo.setBounds(sbX + 60, sbY + 20, 80, 24);
+    placeKnob(sbX + 160, sbY, subVolLabel, subVolSlider);
+    placeKnob(sbX + 240, sbY, subPitchLabel, subPitchSlider);
 
     rightArea.removeFromTop(10);
 
-    // 3. Shaper (110px)
-    auto shpRect = rightArea.removeFromTop(110);
+    // 3. Shaper (100px)
+    auto shpRect = rightArea.removeFromTop(100);
     shaperGroup.setBounds(shpRect);
-    int sX = shpRect.getX(), sY = shpRect.getY();
-    shpAmtLabel.setBounds(sX + 10, sY + 20, 70, 20); shpAmtSlider.setBounds(sX + 10, sY + 40, 70, 60);
-    distDriveLabel.setBounds(sX + 90, sY + 20, 70, 20); distDriveSlider.setBounds(sX + 90, sY + 40, 70, 60);
-    bitLabel.setBounds(sX + 170, sY + 20, 70, 20); bitSlider.setBounds(sX + 170, sY + 40, 70, 60);
-    rateLabel.setBounds(sX + 250, sY + 20, 70, 20); rateSlider.setBounds(sX + 250, sY + 40, 70, 60);
+    int sX = shpRect.getX() + 10, sY = shpRect.getY() + 25;
+    placeKnob(sX, sY, distDriveLabel, distDriveSlider);
+    placeKnob(sX + 80, sY, shpAmtLabel, shpAmtSlider);
+    placeKnob(sX + 160, sY, rateLabel, rateSlider);
+    placeKnob(sX + 240, sY, bitLabel, bitSlider);
 
     rightArea.removeFromTop(10);
 
-    // 4. Filter (110px)
-    auto fltRect = rightArea.removeFromTop(110);
+    // 4. Filter (100px)
+    auto fltRect = rightArea.removeFromTop(100);
     filterGroup.setBounds(fltRect);
-    int fX = fltRect.getX(), fY = fltRect.getY();
-    cutoffLabel.setBounds(fX + 10, fY + 20, 70, 20); cutoffSlider.setBounds(fX + 10, fY + 40, 70, 60);
-    resLabel.setBounds(fX + 90, fY + 20, 70, 20); resSlider.setBounds(fX + 90, fY + 40, 70, 60);
-    fltEnvAmtLabel.setBounds(fX + 170, fY + 20, 70, 20); fltEnvAmtSlider.setBounds(fX + 170, fY + 40, 70, 60);
+    int fX = fltRect.getX() + 10, fY = fltRect.getY() + 25;
+    placeKnob(fX, fY, cutoffLabel, cutoffSlider);
+    placeKnob(fX + 80, fY, resLabel, resSlider);
+    placeKnob(fX + 160, fY, fltEnvAmtLabel, fltEnvAmtSlider);
 
     rightArea.removeFromTop(10);
 
-    // 5. Amp Envelope (Remaining Area)
+    // 5. Amp Envelope
     ampEnvGroup.setBounds(rightArea);
-    int eX = rightArea.getX(), eY = rightArea.getY();
-    ampAtkLabel.setBounds(eX + 10, eY + 20, 60, 20); ampAtkSlider.setBounds(eX + 10, eY + 40, 60, 60);
-    ampDecLabel.setBounds(eX + 80, eY + 20, 60, 20); ampDecSlider.setBounds(eX + 80, eY + 40, 60, 60);
-    ampSusLabel.setBounds(eX + 150, eY + 20, 60, 20); ampSusSlider.setBounds(eX + 150, eY + 40, 60, 60);
-    ampRelLabel.setBounds(eX + 220, eY + 20, 60, 20); ampRelSlider.setBounds(eX + 220, eY + 40, 60, 60);
+    int eX = rightArea.getX() + 10, eY = rightArea.getY() + 25;
+    placeKnob(eX, eY, ampAtkLabel, ampAtkSlider);
+    placeKnob(eX + 80, eY, ampDecLabel, ampDecSlider);
+    placeKnob(eX + 160, eY, ampSusLabel, ampSusSlider);
+    placeKnob(eX + 240, eY, ampRelLabel, ampRelSlider);
 }

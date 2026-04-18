@@ -1,6 +1,3 @@
-// ==============================================================================
-// Source/DSP/WavetableOscillator.h
-// ==============================================================================
 #pragma once
 #include <JuceHeader.h>
 #include <array>
@@ -127,8 +124,16 @@ public:
         int f1_base = std::min(frameIdx + 1, set->numFrames - 1) * set->frameSize;
         for (int i = 0; i < 512; ++i) {
             float phase = i / 512.0f;
-            float mod = std::sin(phase * 2.0f * juce::MathConstants<float>::pi) * fmAmount * 0.1f;
-            float syncPhase = std::fmod((phase + mod) * syncAmount, 1.0f);
+            float mod = 0.0f;
+
+            // Single cycle display用の簡易FM変調計算
+            if (fmWaveform == 0) mod = std::sin(phase * 2.0f * juce::MathConstants<float>::pi);
+            else if (fmWaveform == 1) mod = phase * 2.0f - 1.0f;
+            else if (fmWaveform == 2) mod = phase < 0.5f ? 1.0f : -1.0f;
+            // Noise(3)は波形表示では揺れすぎるためサイン波で代用して視認性を保つ
+            else if (fmWaveform == 3) mod = std::sin(phase * 2.0f * juce::MathConstants<float>::pi);
+
+            float syncPhase = std::fmod((phase + mod * fmAmount * 0.1f) * syncAmount, 1.0f);
             if (syncPhase < 0.0f) syncPhase += 1.0f;
             float floatPos = syncPhase * set->frameSize;
             int pos = (int)floatPos;
@@ -145,18 +150,20 @@ public:
         }
     }
 
-    // baseFreqには「ピッチベンド・グライドを含んだ純粋なノート周波数」のみを渡す
     void setFrequency(float freqHz) { baseFreq = freqHz; recalculate(); }
     void setUnisonCount(int c) { unisonCount = juce::jlimit(1, MaxVoices, c); recalculate(); }
     void setUnisonDetune(float d) { detuneAmount = d; recalculate(); }
     void setStereoWidth(float w) { stereoWidth = juce::jlimit(0.0f, 1.0f, w); recalculate(); }
     void setWavetablePosition(float pos) { wtPosition = pos; }
+
+    // FM関連
     void setFMAmount(float amt) { fmAmount = amt; }
+    void setFMWaveform(int shape) { fmWaveform = juce::jlimit(0, 3, shape); }
+
     void setSyncAmount(float amt) { syncAmount = std::max(1.0f, amt); }
     void setMorph(float m) { morphParam = m; }
     void setDriftAmount(float amt) { driftAmount = amt; }
 
-    // Wavetable専用の独立レベルとピッチパラメータ
     void setWavetableLevel(float level) { wtLevel = level; }
     void setWavetablePitchOffset(float semitones) { wtPitchOffset = semitones; }
     void setPitchDecay(float amount, float timeMs) {
@@ -182,7 +189,7 @@ public:
             phases[b] = initialPhase;
         }
         subPhase = 0.0f;
-        pitchEnvState = 1.0f; // Note OnでPitch Envelopeをリセット
+        pitchEnvState = 1.0f;
         for (int i = 0; i < MaxVoices; ++i) driftPhase[i] = random.nextFloat();
     }
 
@@ -191,11 +198,9 @@ public:
         WavetableSet::Ptr set = currentWavetableSet.get();
         if (set == nullptr || set->totalSamples == 0) return;
 
-        // Pitch Envelopeの更新（毎サンプル）
         pitchEnvState *= pitchDecayCoef;
         if (pitchEnvState < 0.0001f) pitchEnvState = 0.0f;
 
-        // Wavetable専用の動的ピッチ乗数を計算（Pitchオフセット + Decayエンベロープ）
         float currentWtPitch = wtPitchOffset + (pitchDecayAmt * pitchEnvState);
         float dynamicPitchMult = std::pow(2.0f, currentWtPitch / 12.0f);
 
@@ -213,9 +218,30 @@ public:
 
         for (int b = 0; b < numBlocks; ++b) {
             SIMDFloat p = phases[b];
-            SIMDFloat z = p - half;
-            SIMDFloat fmSin = (z * c1 - (z * z * z) * c2 + (z * z * z * z * z) * c3) * negOne;
-            SIMDFloat totalPhase = (p + fmSin * fmScaled) * sync;
+            SIMDFloat modSignal(0.0f);
+
+            // 高速なインラインFM波形生成
+            if (fmWaveform == 0) { // Sine
+                SIMDFloat z = p - half;
+                modSignal = (z * c1 - (z * z * z) * c2 + (z * z * z * z * z) * c3) * negOne;
+            }
+            else if (fmWaveform == 1) { // Saw
+                modSignal = p * 2.0f - 1.0f;
+            }
+            else if (fmWaveform == 2) { // Pulse
+                for (int i = 0; i < SimdWidth; ++i) {
+                    modSignal.set(i, p.get(i) < 0.5f ? 1.0f : -1.0f);
+                }
+            }
+            else if (fmWaveform == 3) { // Noise (LCG)
+                for (int i = 0; i < SimdWidth; ++i) {
+                    lcgState = 1664525 * lcgState + 1013904223;
+                    float noiseVal = ((float)lcgState / (float)0xFFFFFFFF) * 2.0f - 1.0f;
+                    modSignal.set(i, noiseVal);
+                }
+            }
+
+            SIMDFloat totalPhase = (p + modSignal * fmScaled) * sync;
             SIMDFloat vAmp(0.0f), nextP(0.0f);
 
             for (int i = 0; i < SimdWidth; ++i) {
@@ -227,7 +253,6 @@ public:
                 if (driftPhase[voiceIdx] >= 1.0f) driftPhase[voiceIdx] -= 1.0f;
                 float currentDriftMod = std::sin(driftPhase[voiceIdx] * juce::MathConstants<float>::twoPi) * driftAmount * 0.01f;
 
-                // 動的ピッチ乗数をステップ値に適用
                 float step = increments[b].get(i) * dynamicPitchMult * (1.0f + currentDriftMod);
                 float voiceFreq = std::max(1.0f, step * (float)sampleRate);
 
@@ -256,13 +281,11 @@ public:
             outL_simd += vAmp * panL[b]; outR_simd += vAmp * panR[b]; phases[b] = nextP;
         }
 
-        // Wavetableレベルの適用
         for (int i = 0; i < SimdWidth; ++i) {
             outL += outL_simd.get(i) * wtLevel;
             outR += outR_simd.get(i) * wtLevel;
         }
 
-        // Sub Osc処理（Wavetableのピッチやレベルとは完全に独立して計算）
         if (subOn && subVolume > 0.001f) {
             float subFreq = std::max(1.0f, baseFreq * std::pow(2.0f, subPitchOffset / 12.0f));
             subPhase += subFreq / (float)sampleRate;
@@ -285,8 +308,11 @@ private:
     float baseFreq = 440.0f;
     float detuneAmount = 0.0f, stereoWidth = 1.0f, wtPosition = 0.0f, fmAmount = 0.0f, syncAmount = 1.0f, morphParam = 0.0f, driftAmount = 0.0f;
     int unisonCount = 1;
+    int fmWaveform = 0; // 0: Sine, 1: Saw, 2: Pulse, 3: Noise
 
-    // WT専用パラメータ
+    // LCG Noise State (スレッドセーフ・ノーアロケーション)
+    uint32_t lcgState = 123456789;
+
     float wtLevel = 1.0f;
     float wtPitchOffset = 0.0f;
     float pitchDecayAmt = 0.0f;
@@ -324,8 +350,6 @@ private:
                 if (voiceIdx < unisonCount) {
                     float bias = (unisonCount == 1) ? 0.0f : (2.0f * voiceIdx / (float)(unisonCount - 1) - 1.0f);
                     float pitchBias = bias * bias * bias;
-                    // ここでは「Unisonデチューンによる固定のオフセット」のみをステップに乗せる。
-                    // ベースの音程やピッチエンベロープなどの動的な値は processBlock(getSampleStereo) 側で毎サンプル掛ける。
                     float step = (float)((baseFreq * std::pow(2.0f, (pitchBias * detuneAmount * 0.5f) / 12.0f)) / sampleRate);
 
                     float targetAngle = (bias + 1.0f) * centerAngle;

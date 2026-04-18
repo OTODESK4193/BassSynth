@@ -1,6 +1,3 @@
-// ==============================================================================
-// Source/PluginEditor.h
-// ==============================================================================
 #pragma once
 #include <JuceHeader.h>
 #include "PluginProcessor.h"
@@ -38,6 +35,9 @@ private:
     juce::Slider oscPitchSlider, pitchDecayAmtSlider, pitchDecayTimeSlider;
     juce::Label  oscPitchLabel, pitchDecayAmtLabel, pitchDecayTimeLabel;
 
+    juce::ComboBox fmWaveCombo; // ’Ç‰Á: FM Waveform
+    juce::Label    fmWaveLabel;
+
     // --- Sub Osc Parameters ---
     juce::ToggleButton subOnButton{ "ON" };
     juce::ComboBox subWaveCombo;
@@ -64,6 +64,7 @@ private:
     std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>> attachments;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> subOnAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> subWaveAttachment;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> fmWaveAttachment; // ’Ç‰Á
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(LiquidDreamAudioProcessorEditor)
 };
