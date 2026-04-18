@@ -1,3 +1,6 @@
+// ==============================================================================
+// Source/PluginProcessor.h
+// ==============================================================================
 #pragma once
 #include <JuceHeader.h>
 #include "DSP/WavetableOscillator.h"
@@ -55,13 +58,16 @@ private:
     // --- OSC Parameters ---
     std::atomic<float>* pWave = nullptr;
     std::atomic<float>* pPos = nullptr;
+    std::atomic<float>* pOscLevel = nullptr;
+    std::atomic<float>* pOscPitch = nullptr;
+    std::atomic<float>* pPDecayAmt = nullptr;
+    std::atomic<float>* pPDecayTime = nullptr;
     std::atomic<float>* pFm = nullptr;
     std::atomic<float>* pSync = nullptr;
     std::atomic<float>* pMorph = nullptr;
     std::atomic<float>* pUni = nullptr;
     std::atomic<float>* pDetune = nullptr;
-    std::atomic<float>* pWidth = nullptr; // í«â¡ÅFUnison Width
-    std::atomic<float>* pOscPitch = nullptr;
+    std::atomic<float>* pWidth = nullptr;
     std::atomic<float>* pDrift = nullptr;
 
     // --- Sub Parameters ---
@@ -91,8 +97,9 @@ private:
     std::atomic<float>* pFRel = nullptr;
 
     // --- Smoothed Values ---
-    juce::SmoothedValue<float> smoothedPitchMult, smoothedCutoff, smoothedReso, smoothedFltEnvAmt, smoothedDrive, smoothedShpAmt, smoothedShpRate, smoothedShpBit, smoothedGain;
-    juce::SmoothedValue<float> smoothedWtPos, smoothedFm, smoothedSync, smoothedMorph, smoothedDrift, smoothedSubVol, smoothedSubPitch, smoothedWidth; // í«â¡ÅFsmoothedWidth
+    juce::SmoothedValue<float> smoothedWtLevel, smoothedWtPitch, smoothedPDecayAmt, smoothedPDecayTime;
+    juce::SmoothedValue<float> smoothedCutoff, smoothedReso, smoothedFltEnvAmt, smoothedDrive, smoothedShpAmt, smoothedShpRate, smoothedShpBit, smoothedGain;
+    juce::SmoothedValue<float> smoothedWtPos, smoothedFm, smoothedSync, smoothedMorph, smoothedDrift, smoothedSubVol, smoothedSubPitch, smoothedWidth;
 
     float lastOscFreq = -1.0f;
 

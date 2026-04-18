@@ -1,3 +1,6 @@
+// ==============================================================================
+// Source/PluginEditor.h
+// ==============================================================================
 #pragma once
 #include <JuceHeader.h>
 #include "PluginProcessor.h"
@@ -26,10 +29,14 @@ private:
     juce::GroupComponent oscGroup, subGroup, shaperGroup, filterGroup, ampEnvGroup, modEnvGroup, controlGroup;
 
     // --- Osc Parameters ---
-    // widthSlider ‚ð’Ç‰Á
-    juce::Slider wtPosSlider, fmAmtSlider, syncSlider, morphSlider, uniCountSlider, detuneSlider, widthSlider, oscPitchSlider, driftSlider;
-    // widthLabel ‚ð’Ç‰Á
-    juce::Label  wtPosLabel, fmAmtLabel, syncLabel, morphLabel, uniCountLabel, detuneLabel, widthLabel, oscPitchLabel, driftLabel;
+    juce::Slider wtLevelSlider, wtPosSlider, fmAmtSlider, syncSlider, morphSlider;
+    juce::Label  wtLevelLabel, wtPosLabel, fmAmtLabel, syncLabel, morphLabel;
+
+    juce::Slider uniCountSlider, detuneSlider, widthSlider, driftSlider;
+    juce::Label  uniCountLabel, detuneLabel, widthLabel, driftLabel;
+
+    juce::Slider oscPitchSlider, pitchDecayAmtSlider, pitchDecayTimeSlider;
+    juce::Label  oscPitchLabel, pitchDecayAmtLabel, pitchDecayTimeLabel;
 
     // --- Sub Osc Parameters ---
     juce::ToggleButton subOnButton{ "ON" };

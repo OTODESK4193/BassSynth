@@ -1,3 +1,6 @@
+// ==============================================================================
+// Source/PluginEditor.cpp
+// ==============================================================================
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 
@@ -29,12 +32,20 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     modEnvGroup.setText("MOD ENVELOPE"); addAndMakeVisible(modEnvGroup);
     controlGroup.setText("PERFORMANCE"); addAndMakeVisible(controlGroup);
 
-    // Osc Params
-    setupS(wtPosSlider, wtPosLabel, "Pos"); setupS(fmAmtSlider, fmAmtLabel, "FM");
-    setupS(syncSlider, syncLabel, "Sync"); setupS(morphSlider, morphLabel, "Warp");
-    setupS(uniCountSlider, uniCountLabel, "Unison"); setupS(detuneSlider, detuneLabel, "Detune");
-    setupS(widthSlider, widthLabel, "Width"); // Unison Widthノブ追加
+    // Osc Params (12 Knobs total)
+    setupS(wtLevelSlider, wtLevelLabel, "Level");
+    setupS(wtPosSlider, wtPosLabel, "Pos");
+    setupS(fmAmtSlider, fmAmtLabel, "FM");
+    setupS(syncSlider, syncLabel, "Sync");
+
+    setupS(morphSlider, morphLabel, "Warp");
+    setupS(uniCountSlider, uniCountLabel, "Unison");
+    setupS(detuneSlider, detuneLabel, "Detune");
+    setupS(widthSlider, widthLabel, "Width");
+
     setupS(oscPitchSlider, oscPitchLabel, "Pitch");
+    setupS(pitchDecayAmtSlider, pitchDecayAmtLabel, "P.Decay"); // 新規追加
+    setupS(pitchDecayTimeSlider, pitchDecayTimeLabel, "P.Time"); // 新規追加
     setupS(driftSlider, driftLabel, "Drift");
 
     // Sub Osc Params
@@ -62,10 +73,17 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
         };
 
     // Attach Osc
-    att(wtPosSlider, "osc_pos"); att(fmAmtSlider, "osc_fm"); att(syncSlider, "osc_sync"); att(morphSlider, "osc_morph");
-    att(uniCountSlider, "osc_uni"); att(detuneSlider, "osc_detune");
-    att(widthSlider, "osc_width"); // Unison Widthバインド
+    att(wtLevelSlider, "osc_level");
+    att(wtPosSlider, "osc_pos");
+    att(fmAmtSlider, "osc_fm");
+    att(syncSlider, "osc_sync");
+    att(morphSlider, "osc_morph");
+    att(uniCountSlider, "osc_uni");
+    att(detuneSlider, "osc_detune");
+    att(widthSlider, "osc_width");
     att(oscPitchSlider, "osc_pitch");
+    att(pitchDecayAmtSlider, "osc_pdecay_amt"); // 追加
+    att(pitchDecayTimeSlider, "osc_pdecay_time"); // 追加
     att(driftSlider, "osc_drift");
 
     // Attach Sub
@@ -90,7 +108,8 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
         };
 
     startTimerHz(30);
-    setSize(1000, 700);
+    // 高さを少し増やしてWavetableエリアの拡張分（+60px）を吸収
+    setSize(1000, 760);
 }
 
 LiquidDreamAudioProcessorEditor::~LiquidDreamAudioProcessorEditor() { setLookAndFeel(nullptr); }
@@ -114,13 +133,13 @@ void LiquidDreamAudioProcessorEditor::resized()
     openBrowserButton.setBounds(leftArea.removeFromTop(35).reduced(2));
     leftArea.removeFromTop(5);
 
+    // Scopeの高さはそのまま
     dualScope.setBounds(leftArea.removeFromTop(310));
     leftArea.removeFromTop(10);
 
     auto ctrlRect = leftArea.removeFromTop(120);
     controlGroup.setBounds(ctrlRect);
     int cX = ctrlRect.getX(), cY = ctrlRect.getY();
-    // Y座標の余白調整：タイトルの下(cY+20)から開始
     glideLabel.setBounds(cX + 10, cY + 20, 70, 20); glideSlider.setBounds(cX + 10, cY + 40, 70, 65);
     pitchLabel.setBounds(cX + 90, cY + 20, 70, 20); pitchSlider.setBounds(cX + 90, cY + 40, 70, 65);
     gainLabel.setBounds(cX + 170, cY + 20, 70, 20); gainSlider.setBounds(cX + 170, cY + 40, 70, 65);
@@ -139,22 +158,28 @@ void LiquidDreamAudioProcessorEditor::resized()
 
     browser.setBounds(rightArea);
 
-    // 1. Wavetable Osc (200px)
-    auto oscRect = rightArea.removeFromTop(200);
+    // 1. Wavetable Osc (260px に拡大して3段配置)
+    auto oscRect = rightArea.removeFromTop(260);
     oscGroup.setBounds(oscRect);
     int oX = oscRect.getX(), oY = oscRect.getY();
-    // 1段目：タイトル直下(oY+20)に配置
-    wtPosLabel.setBounds(oX + 10, oY + 20, 70, 20); wtPosSlider.setBounds(oX + 10, oY + 40, 70, 60);
-    fmAmtLabel.setBounds(oX + 90, oY + 20, 70, 20); fmAmtSlider.setBounds(oX + 90, oY + 40, 70, 60);
-    syncLabel.setBounds(oX + 170, oY + 20, 70, 20); syncSlider.setBounds(oX + 170, oY + 40, 70, 60);
-    morphLabel.setBounds(oX + 250, oY + 20, 70, 20); morphSlider.setBounds(oX + 250, oY + 40, 70, 60);
 
-    // 2段目：中央(oY+100)に配置
-    uniCountLabel.setBounds(oX + 10, oY + 100, 70, 20); uniCountSlider.setBounds(oX + 10, oY + 120, 70, 60);
-    detuneLabel.setBounds(oX + 90, oY + 100, 70, 20); detuneSlider.setBounds(oX + 90, oY + 120, 70, 60);
-    widthLabel.setBounds(oX + 170, oY + 100, 70, 20); widthSlider.setBounds(oX + 170, oY + 120, 70, 60); // Width
-    oscPitchLabel.setBounds(oX + 250, oY + 100, 70, 20); oscPitchSlider.setBounds(oX + 250, oY + 120, 70, 60);
-    driftLabel.setBounds(oX + 330, oY + 100, 70, 20); driftSlider.setBounds(oX + 330, oY + 120, 70, 60);
+    // 1段目：Level, Pos, FM, Sync
+    wtLevelLabel.setBounds(oX + 10, oY + 20, 70, 20); wtLevelSlider.setBounds(oX + 10, oY + 40, 70, 60);
+    wtPosLabel.setBounds(oX + 90, oY + 20, 70, 20);   wtPosSlider.setBounds(oX + 90, oY + 40, 70, 60);
+    fmAmtLabel.setBounds(oX + 170, oY + 20, 70, 20);  fmAmtSlider.setBounds(oX + 170, oY + 40, 70, 60);
+    syncLabel.setBounds(oX + 250, oY + 20, 70, 20);   syncSlider.setBounds(oX + 250, oY + 40, 70, 60);
+
+    // 2段目：Warp, Unison, Detune, Width
+    morphLabel.setBounds(oX + 10, oY + 100, 70, 20);    morphSlider.setBounds(oX + 10, oY + 120, 70, 60);
+    uniCountLabel.setBounds(oX + 90, oY + 100, 70, 20); uniCountSlider.setBounds(oX + 90, oY + 120, 70, 60);
+    detuneLabel.setBounds(oX + 170, oY + 100, 70, 20);  detuneSlider.setBounds(oX + 170, oY + 120, 70, 60);
+    widthLabel.setBounds(oX + 250, oY + 100, 70, 20);   widthSlider.setBounds(oX + 250, oY + 120, 70, 60);
+
+    // 3段目：Pitch, P.Decay, P.Time, Drift
+    oscPitchLabel.setBounds(oX + 10, oY + 180, 70, 20);       oscPitchSlider.setBounds(oX + 10, oY + 200, 70, 60);
+    pitchDecayAmtLabel.setBounds(oX + 90, oY + 180, 70, 20);  pitchDecayAmtSlider.setBounds(oX + 90, oY + 200, 70, 60);
+    pitchDecayTimeLabel.setBounds(oX + 170, oY + 180, 70, 20); pitchDecayTimeSlider.setBounds(oX + 170, oY + 200, 70, 60);
+    driftLabel.setBounds(oX + 250, oY + 180, 70, 20);         driftSlider.setBounds(oX + 250, oY + 200, 70, 60);
 
     rightArea.removeFromTop(10);
 
