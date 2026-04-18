@@ -52,5 +52,45 @@ private:
     std::array<float, 512> outputScopeData;
     int scopeWriteIndex = 0;
 
+    // --- Cached Parameter Pointers (For Lock-Free & String-Free Access) ---
+    std::atomic<float>* pWave = nullptr;
+    std::atomic<float>* pPos = nullptr;
+    std::atomic<float>* pFm = nullptr;
+    std::atomic<float>* pSync = nullptr;
+    std::atomic<float>* pMorph = nullptr;
+    std::atomic<float>* pUni = nullptr;
+    std::atomic<float>* pDetune = nullptr;
+
+    std::atomic<float>* pGlide = nullptr;
+
+    std::atomic<float>* pAAtk = nullptr;
+    std::atomic<float>* pADec = nullptr;
+    std::atomic<float>* pASus = nullptr;
+    std::atomic<float>* pARel = nullptr;
+
+    std::atomic<float>* pFAtk = nullptr;
+    std::atomic<float>* pFDec = nullptr;
+    std::atomic<float>* pFSus = nullptr;
+    std::atomic<float>* pFRel = nullptr;
+
+    std::atomic<float>* pCutoff = nullptr;
+    std::atomic<float>* pReso = nullptr;
+    std::atomic<float>* pFltEnvAmt = nullptr;
+    std::atomic<float>* pDrive = nullptr;
+    std::atomic<float>* pShpAmt = nullptr;
+    std::atomic<float>* pShpRate = nullptr;
+    std::atomic<float>* pShpBit = nullptr;
+    std::atomic<float>* pGain = nullptr;
+
+    // --- Smoothed Values for Audio-Rate Modulation ---
+    juce::SmoothedValue<float> smoothedCutoff;
+    juce::SmoothedValue<float> smoothedReso;
+    juce::SmoothedValue<float> smoothedFltEnvAmt;
+    juce::SmoothedValue<float> smoothedDrive;
+    juce::SmoothedValue<float> smoothedShpAmt;
+    juce::SmoothedValue<float> smoothedShpRate;
+    juce::SmoothedValue<float> smoothedShpBit;
+    juce::SmoothedValue<float> smoothedGain;
+
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(LiquidDreamAudioProcessor)
 };

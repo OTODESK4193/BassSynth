@@ -6,6 +6,37 @@ LiquidDreamAudioProcessor::LiquidDreamAudioProcessor()
     apvts(*this, nullptr, "PARAMS", createParameterLayout())
 {
     outputScopeData.fill(0.0f);
+
+    // --- Cached Parameter Pointers (For Lock-Free & String-Free Access) ---
+    pWave = apvts.getRawParameterValue("osc_wave");
+    pPos = apvts.getRawParameterValue("osc_pos");
+    pFm = apvts.getRawParameterValue("osc_fm");
+    pSync = apvts.getRawParameterValue("osc_sync");
+    pMorph = apvts.getRawParameterValue("osc_morph");
+    pUni = apvts.getRawParameterValue("osc_uni");
+    pDetune = apvts.getRawParameterValue("osc_detune");
+
+    pCutoff = apvts.getRawParameterValue("flt_cutoff");
+    pReso = apvts.getRawParameterValue("flt_res");
+    pFltEnvAmt = apvts.getRawParameterValue("flt_env_amt");
+
+    pDrive = apvts.getRawParameterValue("dist_drive");
+    pShpAmt = apvts.getRawParameterValue("shp_amt");
+    pShpRate = apvts.getRawParameterValue("shp_rate");
+    pShpBit = apvts.getRawParameterValue("shp_bit");
+
+    pGain = apvts.getRawParameterValue("m_gain");
+    pGlide = apvts.getRawParameterValue("m_glide");
+
+    pAAtk = apvts.getRawParameterValue("a_atk");
+    pADec = apvts.getRawParameterValue("a_dec");
+    pASus = apvts.getRawParameterValue("a_sus");
+    pARel = apvts.getRawParameterValue("a_rel");
+
+    pFAtk = apvts.getRawParameterValue("f_atk");
+    pFDec = apvts.getRawParameterValue("f_dec");
+    pFSus = apvts.getRawParameterValue("f_sus");
+    pFRel = apvts.getRawParameterValue("f_rel");
 }
 
 LiquidDreamAudioProcessor::~LiquidDreamAudioProcessor() {}
@@ -57,6 +88,27 @@ void LiquidDreamAudioProcessor::prepareToPlay(double sampleRate, int samplesPerB
     voiceManager.setSampleRate(sampleRate);
     ampEnv.setSampleRate(sampleRate);
     filterEnv.setSampleRate(sampleRate);
+
+    // Setup Smoothing (20ms for zipper-free parameter changes)
+    double smoothingTime = 0.02;
+    smoothedCutoff.reset(sampleRate, smoothingTime);
+    smoothedReso.reset(sampleRate, smoothingTime);
+    smoothedFltEnvAmt.reset(sampleRate, smoothingTime);
+    smoothedDrive.reset(sampleRate, smoothingTime);
+    smoothedShpAmt.reset(sampleRate, smoothingTime);
+    smoothedShpRate.reset(sampleRate, smoothingTime);
+    smoothedShpBit.reset(sampleRate, smoothingTime);
+    smoothedGain.reset(sampleRate, smoothingTime);
+
+    // Initialize state to avoid initial jumps
+    smoothedCutoff.setCurrentAndTargetValue(pCutoff->load(std::memory_order_relaxed));
+    smoothedReso.setCurrentAndTargetValue(pReso->load(std::memory_order_relaxed));
+    smoothedFltEnvAmt.setCurrentAndTargetValue(pFltEnvAmt->load(std::memory_order_relaxed));
+    smoothedDrive.setCurrentAndTargetValue(pDrive->load(std::memory_order_relaxed));
+    smoothedShpAmt.setCurrentAndTargetValue(pShpAmt->load(std::memory_order_relaxed));
+    smoothedShpRate.setCurrentAndTargetValue(pShpRate->load(std::memory_order_relaxed));
+    smoothedShpBit.setCurrentAndTargetValue(pShpBit->load(std::memory_order_relaxed));
+    smoothedGain.setCurrentAndTargetValue(pGain->load(std::memory_order_relaxed));
 }
 
 void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
@@ -65,43 +117,78 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     buffer.clear();
     if (buffer.getNumChannels() < 2) return;
 
-    int waveIdx = (int)*apvts.getRawParameterValue("osc_wave");
+    // --- 1. Block Rate Parameter Updates ---
+    smoothedCutoff.setTargetValue(pCutoff->load(std::memory_order_relaxed));
+    smoothedReso.setTargetValue(pReso->load(std::memory_order_relaxed));
+    smoothedFltEnvAmt.setTargetValue(pFltEnvAmt->load(std::memory_order_relaxed));
+    smoothedDrive.setTargetValue(pDrive->load(std::memory_order_relaxed));
+    smoothedShpAmt.setTargetValue(pShpAmt->load(std::memory_order_relaxed));
+    smoothedShpRate.setTargetValue(pShpRate->load(std::memory_order_relaxed));
+    smoothedShpBit.setTargetValue(pShpBit->load(std::memory_order_relaxed));
+    smoothedGain.setTargetValue(pGain->load(std::memory_order_relaxed));
+
+    int waveIdx = (int)pWave->load(std::memory_order_relaxed);
     static int lastWaveIdx = -1;
     if (waveIdx != lastWaveIdx && waveIdx >= 0 && waveIdx < EmbeddedWavetables::numTables) {
         oscillator.loadWavetableFile(EmbeddedWavetables::allNames[waveIdx]);
         lastWaveIdx = waveIdx;
     }
 
+    // --- 2. MIDI Processing (FIXED: Respecting VoiceManager's Logic) ---
     for (const auto metadata : midiMessages) {
         auto msg = metadata.getMessage();
         if (msg.isNoteOn()) {
-            voiceManager.noteOn(msg.getNoteNumber(), msg.getVelocity());
-            oscillator.resetPhase();
-            ampEnv.noteOn();
-            filterEnv.noteOn();
+            // マネージャーが「新しいノートとしてトリガーせよ」と判断した時のみ発音
+            if (voiceManager.noteOn(msg.getNoteNumber(), msg.getVelocity())) {
+                oscillator.resetPhase();
+                ampEnv.noteOn();
+                filterEnv.noteOn();
+            }
         }
         else if (msg.isNoteOff()) {
-            voiceManager.noteOff(msg.getNoteNumber());
-            ampEnv.noteOff();
-            filterEnv.noteOff();
+            // マネージャーが「完全に指が離れた」と判断した時のみリリース
+            if (voiceManager.noteOff(msg.getNoteNumber())) {
+                ampEnv.noteOff();
+                filterEnv.noteOff();
+            }
         }
     }
 
-    oscillator.setWavetablePosition(*apvts.getRawParameterValue("osc_pos"));
-    oscillator.setFMAmount(*apvts.getRawParameterValue("osc_fm"));
-    oscillator.setSyncAmount(*apvts.getRawParameterValue("osc_sync"));
-    oscillator.setMorph(*apvts.getRawParameterValue("osc_morph"));
-    oscillator.setUnisonCount((int)*apvts.getRawParameterValue("osc_uni"));
-    oscillator.setUnisonDetune(*apvts.getRawParameterValue("osc_detune"));
+    oscillator.setWavetablePosition(pPos->load(std::memory_order_relaxed));
+    oscillator.setFMAmount(pFm->load(std::memory_order_relaxed));
+    oscillator.setSyncAmount(pSync->load(std::memory_order_relaxed));
+    oscillator.setMorph(pMorph->load(std::memory_order_relaxed));
+    oscillator.setUnisonCount((int)pUni->load(std::memory_order_relaxed));
+    oscillator.setUnisonDetune(pDetune->load(std::memory_order_relaxed));
 
-    voiceManager.setGlideTime(*apvts.getRawParameterValue("m_glide"));
-    ampEnv.setParameters(*apvts.getRawParameterValue("a_atk"), *apvts.getRawParameterValue("a_dec"), *apvts.getRawParameterValue("a_sus"), *apvts.getRawParameterValue("a_rel"));
-    filterEnv.setParameters(*apvts.getRawParameterValue("f_atk"), *apvts.getRawParameterValue("f_dec"), *apvts.getRawParameterValue("f_sus"), *apvts.getRawParameterValue("f_rel"));
+    voiceManager.setGlideTime(pGlide->load(std::memory_order_relaxed));
 
+    ampEnv.setParameters(pAAtk->load(std::memory_order_relaxed),
+        pADec->load(std::memory_order_relaxed),
+        pASus->load(std::memory_order_relaxed),
+        pARel->load(std::memory_order_relaxed));
+
+    filterEnv.setParameters(pFAtk->load(std::memory_order_relaxed),
+        pFDec->load(std::memory_order_relaxed),
+        pFSus->load(std::memory_order_relaxed),
+        pFRel->load(std::memory_order_relaxed));
+
+    // --- 3. Audio Processing Loop ---
     auto* left = buffer.getWritePointer(0);
     auto* right = buffer.getWritePointer(1);
 
     for (int i = 0; i < buffer.getNumSamples(); ++i) {
+
+        // Audio-rate parameter interpolation
+        float curCutoff = smoothedCutoff.getNextValue();
+        float curReso = smoothedReso.getNextValue();
+        float curFltEnvAmt = smoothedFltEnvAmt.getNextValue();
+        float curDrive = smoothedDrive.getNextValue();
+        float curShpAmt = smoothedShpAmt.getNextValue();
+        float curShpRate = smoothedShpRate.getNextValue();
+        float curShpBit = smoothedShpBit.getNextValue();
+        float curGain = smoothedGain.getNextValue();
+
         float aVal = ampEnv.getNextSample();
         float fVal = filterEnv.getNextSample();
 
@@ -114,26 +201,24 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
 
         float sL = oL, sR = oR;
 
-        // --- FILTER SAFEGUARD ---
-        float cutoff = *apvts.getRawParameterValue("flt_cutoff") + (fVal * (*apvts.getRawParameterValue("flt_env_amt")) * 10000.0f);
-        filter.setParameters(juce::jlimit(20.0f, 20000.0f, cutoff), *apvts.getRawParameterValue("flt_res"));
+        // --- FILTER ---
+        float modCutoff = curCutoff + (fVal * curFltEnvAmt * 10000.0f);
+        filter.setParameters(juce::jlimit(20.0f, 20000.0f, modCutoff), curReso);
         sL = filter.processSample(sL);
         sR = filter.processSample(sR);
 
-        // --- SHAPER SAFEGUARD ---
-        float drive = *apvts.getRawParameterValue("dist_drive");
-        sL = std::tanh(sL * drive);
-        sR = std::tanh(sR * drive);
+        // --- SHAPER ---
+        sL = std::tanh(sL * curDrive);
+        sR = std::tanh(sR * curDrive);
 
-        float shpAmt = *apvts.getRawParameterValue("shp_amt");
-        if (shpAmt > 0.01f) {
-            shaper.processStereo(sL, sR, shpAmt, *apvts.getRawParameterValue("shp_rate"), *apvts.getRawParameterValue("shp_bit"), sL, sR);
+        if (curShpAmt > 0.01f) {
+            shaper.processStereo(sL, sR, curShpAmt, curShpRate, curShpBit, sL, sR);
         }
 
-        // --- AMP SAFEGUARD ---
-        float gain = *apvts.getRawParameterValue("m_gain") * aVal;
-        left[i] = sL * gain;
-        right[i] = sR * gain;
+        // --- AMP ---
+        float finalGain = curGain * aVal;
+        left[i] = sL * finalGain;
+        right[i] = sR * finalGain;
 
         outputScopeData[scopeWriteIndex] = (left[i] + right[i]) * 0.5f;
         scopeWriteIndex = (scopeWriteIndex + 1) % 512;
