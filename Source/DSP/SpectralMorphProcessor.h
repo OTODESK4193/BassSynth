@@ -9,7 +9,7 @@
 
 /**
  * @class SpectralMorphProcessor
- * @brief リアルタイムSTFTを用いた周波数領域モーフィングエンジン（2次元コントロール対応）
+ * @brief リアルタイムSTFTを用いた周波数領域モーフィングエンジン（高解像度・アンチエイリアス対応版）
  */
 class SpectralMorphProcessor
 {
@@ -31,9 +31,9 @@ public:
         outputFifoL.fill(0.0f); outputFifoR.fill(0.0f);
         fftWorkspaceL.fill(0.0f); fftWorkspaceR.fill(0.0f);
         fifoWritePos = 0;
+        hopCounter = 0;
     }
 
-    // Spectral Morph Index: 8=Smear, 9=Vocode, 10=Stretch, 11=SpecCut, 12=Shepard, 13=Comb
     void process(juce::AudioBuffer<float>& buffer, int modeA, float amtA, float shiftA, int modeB, float amtB, float shiftB)
     {
         bool isSpectralA = (modeA >= 8 && modeA <= 13) && (std::abs(amtA) > 0.001f);
@@ -63,12 +63,12 @@ public:
             if (hopCounter >= hopSize)
             {
                 hopCounter = 0;
+                // STFTのフレーム境界でのみパラメータを取得（フレーム間ティアリングノイズの防止）
                 processSTFTFrame(modeA, amtA, shiftA, modeB, amtB, shiftB);
             }
         }
     }
 
-    // GUI描画用の軽量1周期FFT関数（無条件ノーマライズ付き）
     void processSingleCycleForDisplay(std::array<float, 512>& buffer, int modeA, float amtA, float shiftA, int modeB, float amtB, float shiftB)
     {
         bool isSpectralA = (modeA >= 8 && modeA <= 13) && (std::abs(amtA) > 0.001f);
@@ -101,7 +101,7 @@ public:
             for (size_t i = 0; i < 512; ++i) buffer[i] = displayWorkspace[i];
         }
 
-        // --- 無条件のピークノーマライズ (Bend等のオーバーシュート防止) ---
+        // GUI描画時のみ：無条件のピークノーマライズ
         float peak = 1e-9f;
         for (size_t i = 0; i < 512; ++i) {
             peak = std::max(peak, std::abs(buffer[i]));
@@ -207,35 +207,45 @@ private:
 
     void applyMorphToMagnitude(float* mag, float* tMag, int mode, float amount, float shift, size_t numBins)
     {
-        if (mode == 8) // Smear -> Shift: Focus Band (中心帯域)
+        if (mode == 8) // Smear -> Fractional Interpolation化
         {
-            int radius = (int)(std::abs(amount) * 15.0f) + 1;
-            float centerK = (shift + 1.0f) * 0.5f * (float)numBins; // -1~1 to 0~numBins
+            float floatRadius = std::abs(amount) * 15.0f + 0.001f;
+            int r0 = (int)floatRadius;
+            int r1 = r0 + 1;
+            float rFrac = floatRadius - r0;
+            float centerK = (shift + 1.0f) * 0.5f * (float)numBins;
 
             for (size_t k = 1; k < numBins; ++k) {
-                // 中心から離れるほどブラー強度を減衰させるインテリジェント・ブラー
                 float distance = std::abs((float)k - centerK) / (float)numBins;
-                int localRadius = (int)((1.0f - distance) * radius);
+                float localRadiusF = std::max(0.0f, (1.0f - distance) * floatRadius);
+                int lr0 = (int)localRadiusF;
+                int lr1 = lr0 + 1;
+                float lrFrac = localRadiusF - lr0;
 
-                if (localRadius < 1) {
+                if (localRadiusF < 0.5f) {
                     tMag[k] = mag[k];
                     continue;
                 }
-                float sum = 0.0f;
-                int count = 0;
-                for (int r = -localRadius; r <= localRadius; ++r) {
+
+                float sum0 = 0.0f, sum1 = 0.0f;
+                int count0 = 0, count1 = 0;
+
+                for (int r = -lr1; r <= lr1; ++r) {
                     size_t idx = (size_t)std::clamp((int)k + r, 1, (int)numBins - 1);
-                    sum += mag[idx];
-                    count++;
+                    float val = mag[idx];
+                    sum1 += val; count1++;
+                    if (std::abs(r) <= lr0) { sum0 += val; count0++; }
                 }
-                tMag[k] = sum / (float)count;
+                float val0 = sum0 / (float)std::max(1, count0);
+                float val1 = sum1 / (float)std::max(1, count1);
+                tMag[k] = val0 * (1.0f - lrFrac) + val1 * lrFrac; // 小数補間でジッパーノイズ消去
             }
             for (size_t k = 1; k < numBins; ++k) mag[k] = tMag[k];
         }
-        else if (mode == 9) // Vocode -> Shift: Formant Shift (母音変化)
+        else if (mode == 9) // Vocode 
         {
             float formants[4] = { 0.1f, 0.3f, 0.6f, 0.8f };
-            float s = shift * 0.4f; // フォルマント全体をスライド
+            float s = shift * 0.4f;
 
             for (size_t k = 1; k < numBins; ++k) {
                 float env = 0.0f;
@@ -248,10 +258,10 @@ private:
                 mag[k] = mag[k] * (1.0f - std::abs(amount)) + targetMag * std::abs(amount);
             }
         }
-        else if (mode == 10) // Stretch -> Shift: Center Bin (ストレッチ基準点)
+        else if (mode == 10) // Stretch
         {
             float stretch = (amount >= 0.0f) ? (1.0f + amount * 2.0f) : (1.0f / (1.0f + std::abs(amount) * 2.0f));
-            float center = (shift + 1.0f) * 0.5f * (float)numBins; // 基準となるビン位置
+            float center = (shift + 1.0f) * 0.5f * (float)numBins;
 
             for (size_t k = 1; k < numBins; ++k) {
                 float srcK = center + ((float)k - center) / stretch;
@@ -264,48 +274,49 @@ private:
             }
             for (size_t k = 1; k < numBins; ++k) mag[k] = tMag[k];
         }
-        else if (mode == 11) // SpecCut -> Shift: Resonance (境界の強調)
+        else if (mode == 11) // SpecCut -> Fractional Edge (Anti-Aliasing)
         {
-            int cutBin = (int)(std::abs(amount) * numBins);
+            float cutFloat = std::abs(amount) * (float)numBins;
             bool isHighCut = (amount > 0.0f);
-            float reso = std::max(0.0f, shift) * 4.0f; // プラス方向でのみレゾナンス付加
+            float reso = std::max(0.0f, shift) * 4.0f;
+            float rollOffWidth = 8.0f; // 滑らかにカットするビン幅
 
             for (size_t k = 1; k < numBins; ++k) {
-                if (isHighCut) {
-                    if ((int)k > (int)numBins - cutBin) mag[k] = 0.0f;
-                    else if (reso > 0.0f && (int)k > (int)numBins - cutBin - 20) {
-                        float rEnv = 1.0f - ((float)(numBins - cutBin - k) / 20.0f);
-                        mag[k] *= (1.0f + rEnv * reso);
-                    }
+                float dist = isHighCut ? ((float)k - ((float)numBins - cutFloat)) : (cutFloat - (float)k);
+
+                // カットのエッジを滑らかにする (Anti-aliasing)
+                float gain = 1.0f;
+                if (dist > 0.0f) {
+                    if (dist > rollOffWidth) gain = 0.0f;
+                    else gain = 0.5f * (1.0f + std::cos(juce::MathConstants<float>::pi * (dist / rollOffWidth)));
                 }
-                else {
-                    if ((int)k < cutBin) mag[k] = 0.0f;
-                    else if (reso > 0.0f && (int)k < cutBin + 20) {
-                        float rEnv = 1.0f - ((float)(k - cutBin) / 20.0f);
-                        mag[k] *= (1.0f + rEnv * reso);
-                    }
+
+                mag[k] *= gain;
+
+                // レゾナンス（境界付近の強調）
+                if (reso > 0.0f && dist <= 0.0f && dist > -20.0f) {
+                    float rEnv = 1.0f - (std::abs(dist) / 20.0f);
+                    mag[k] *= (1.0f + rEnv * reso);
                 }
             }
         }
-        else if (mode == 12) // Shepard -> Shift: Window Center (音量窓の中心)
+        else if (mode == 12) // Shepard
         {
-            float wCenter = (shift + 1.0f) * 0.5f; // 0.0 ~ 1.0
+            float wCenter = (shift + 1.0f) * 0.5f;
 
             for (size_t k = 1; k < numBins; ++k) {
                 float logPos = std::log2f((float)k) / std::log2f((float)(numBins - 1));
                 float shifted = std::fmod(logPos + (amount * 5.0f), 1.0f);
                 if (shifted < 0.0f) shifted += 1.0f;
 
-                // Shiftによるウィンドウカーブの適用
-                float window = std::exp(-std::pow((logPos - wCenter) * 4.0f, 2.0f));
-
-                mag[k] *= std::sin(shifted * juce::MathConstants<float>::pi) * window * 1.5f;
+                float windowEnv = std::exp(-std::pow((logPos - wCenter) * 4.0f, 2.0f));
+                mag[k] *= std::sin(shifted * juce::MathConstants<float>::pi) * windowEnv * 1.5f;
             }
         }
-        else if (mode == 13) // Comb -> Shift: Phase Offset (フェイザーうねり)
+        else if (mode == 13) // Comb
         {
             float density = 2.0f + std::abs(amount) * 30.0f;
-            float pOffset = shift * juce::MathConstants<float>::twoPi; // 位相シフト
+            float pOffset = shift * juce::MathConstants<float>::twoPi;
 
             for (size_t k = 1; k < numBins; ++k) {
                 float combMultiplier = 0.5f + 0.5f * std::cos((float)k * density * juce::MathConstants<float>::pi / (float)numBins + pOffset);

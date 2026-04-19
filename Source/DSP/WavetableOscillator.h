@@ -154,9 +154,9 @@ public:
             float currentPhase = std::fmod(phase + mod * fmAmount * 0.1f, 1.0f);
             if (currentPhase < 0.0f) currentPhase += 1.0f;
 
-            // Time Phase Morphing (0 to 7) with Shift
-            currentPhase = applyPhaseWarp(currentPhase, morphAMode, morphAAmount, morphAShift);
-            currentPhase = applyPhaseWarp(currentPhase, morphBMode, morphBAmount, morphBShift);
+            float syncFadeA = 1.0f, syncFadeB = 1.0f;
+            currentPhase = applyPhaseWarp(currentPhase, morphAMode, morphAAmount, morphAShift, syncFadeA);
+            currentPhase = applyPhaseWarp(currentPhase, morphBMode, morphBAmount, morphBShift, syncFadeB);
 
             float floatPos = currentPhase * set->frameSize;
             int pos = (int)floatPos;
@@ -166,7 +166,8 @@ public:
             float val1 = getHermiteSample(ptr, f1_base, set->frameSize, pos, frac);
             float val = val0 * (1.0f - frameFrac) + val1 * frameFrac;
 
-            // Time Amp Morphing (0 to 7) with Shift
+            val *= (syncFadeA * syncFadeB);
+
             val = applyAmpWarp(val, morphAMode, morphAAmount, morphAShift);
             val = applyAmpWarp(val, morphBMode, morphBAmount, morphBShift);
 
@@ -184,7 +185,6 @@ public:
     void setFMWaveform(int shape) { fmWaveform = juce::jlimit(0, 3, shape); }
     void setDriftAmount(float amt) { driftAmount = amt; }
 
-    // Dual Morph System (Amount and Shift)
     void setMorphA(int mode, float amt, float shift) { morphAMode = mode; morphAAmount = amt; morphAShift = shift; }
     void setMorphB(int mode, float amt, float shift) { morphBMode = mode; morphBAmount = amt; morphBShift = shift; }
 
@@ -275,9 +275,10 @@ public:
                 float tp = totalPhase.get(i);
                 tp -= std::floor(tp); if (tp < 0.0f) tp += 1.0f;
 
-                // --- 1. Phase Warping (Morph A -> Morph B) ---
-                tp = applyPhaseWarp(tp, morphAMode, morphAAmount, morphAShift);
-                tp = applyPhaseWarp(tp, morphBMode, morphBAmount, morphBShift);
+                // --- Phase Warping (Morph A -> Morph B) ---
+                float syncFadeA = 1.0f, syncFadeB = 1.0f;
+                tp = applyPhaseWarp(tp, morphAMode, morphAAmount, morphAShift, syncFadeA);
+                tp = applyPhaseWarp(tp, morphBMode, morphBAmount, morphBShift, syncFadeB);
 
                 float floatPos = tp * set->frameSize; int pos = (int)floatPos;
                 if (pos >= set->frameSize) pos -= set->frameSize; float frac = floatPos - (float)pos;
@@ -286,7 +287,10 @@ public:
                 float val1 = getHermiteSample(ptr1, f0_base, set->frameSize, pos, frac) * (1.0f - frameFrac) + getHermiteSample(ptr1, f1_base, set->frameSize, pos, frac) * frameFrac;
                 float val = val0 * (1.0f - levelFrac) + val1 * levelFrac;
 
-                // --- 2. Amplitude Shaping (Morph A -> Morph B) ---
+                // 帯域制限の代わりにSync時のフェーズ境界をウィンドウで滑らかに減衰（クリックノイズ回避）
+                val *= (syncFadeA * syncFadeB);
+
+                // --- Amplitude Shaping (Morph A -> Morph B) ---
                 val = applyAmpWarp(val, morphAMode, morphAAmount, morphAShift);
                 val = applyAmpWarp(val, morphBMode, morphBAmount, morphBShift);
 
@@ -337,27 +341,34 @@ private:
     juce::ReferenceCountedObjectPtr<WavetableSet> currentWavetableSet;
     std::array<SIMDFloat, MaxBlocks> phases, increments, panL, panR, amp;
 
-    // --- Time Domain Morphing Algorithms with Shift (0 to 7) ---
-    inline float applyPhaseWarp(float p, int mode, float amt, float shift) const {
+    // --- Time Domain Morphing (0 to 7) ---
+    inline float applyPhaseWarp(float p, int mode, float amt, float shift, float& syncFadeOut) const {
         if (mode == 1) { // Bend (+/-) -> Shift: Symmetry
-            float sym = 0.5f + shift * 0.49f;
-            float b = std::exp(-amt * 2.0f);
-            if (p < sym) return sym * std::pow(p / sym, b);
-            else return sym + (1.0f - sym) * (1.0f - std::pow((1.0f - p) / (1.0f - sym), b));
+            float sym = std::clamp(0.5f + shift * 0.49f, 0.01f, 0.99f); // 極限値を安全圏にクランプ
+            float b = std::exp(-std::clamp(amt, -0.99f, 0.99f) * 2.0f);
+            if (p < sym) return sym * std::pow(std::max(0.0001f, p / sym), b);
+            else return sym + (1.0f - sym) * (1.0f - std::pow(std::max(0.0001f, (1.0f - p) / (1.0f - sym)), b));
         }
         if (mode == 2) { // PWM -> Shift: Pulse Center
-            float center = 0.5f + shift * 0.4f;
-            float pw = 0.01f + (amt * 0.5f + 0.5f) * 0.98f;
+            float center = std::clamp(0.5f + shift * 0.4f, 0.1f, 0.9f);
+            float pw = std::clamp(0.01f + (amt * 0.5f + 0.5f) * 0.98f, 0.01f, 0.99f);
             float pShift = std::fmod(p + (0.5f - center) + 1.0f, 1.0f);
             float warped = (pShift < pw) ? (pShift / pw * 0.5f) : (0.5f + (pShift - pw) / (1.0f - pw) * 0.5f);
             return std::fmod(warped + (center - 0.5f) + 1.0f, 1.0f);
         }
         if (mode == 3) { // Sync -> Shift: Phase Offset
-            float synced = std::fmod((p + shift * 0.5f) * (1.0f + std::abs(amt) * 7.0f), 1.0f);
+            float ratio = 1.0f + std::abs(amt) * 7.0f;
+            float synced = std::fmod((p + shift * 0.5f) * ratio, 1.0f);
+
+            // Sync特有の不連続クリックノイズを防ぐため、波形の境界に到達直前にウィンドウを適用（簡易アンチエイリアス）
+            float fadeWidth = 0.03f;
+            if (synced > 1.0f - fadeWidth) syncFadeOut *= (1.0f - synced) / fadeWidth;
+            else if (synced < fadeWidth) syncFadeOut *= synced / fadeWidth;
+
             return std::fmod(synced - shift * 0.5f + 1.0f, 1.0f);
         }
         if (mode == 4) { // Mirror -> Shift: Mirror Point
-            float point = 0.5f + shift * 0.4f;
+            float point = std::clamp(0.5f + shift * 0.4f, 0.1f, 0.9f);
             float mirrored = (p < point) ? p * (0.5f / point) : 1.0f - (p - point) * (0.5f / (1.0f - point));
             if (amt < 0.0f) mirrored = (p > point) ? (p - point) * (0.5f / (1.0f - point)) : 1.0f - p * (0.5f / point);
             return p * (1.0f - std::abs(amt)) + mirrored * std::abs(amt);
@@ -366,14 +377,38 @@ private:
     }
 
     inline float applyAmpWarp(float v, int mode, float amt, float shift) const {
-        if (mode == 5) { // Flip -> Shift: Threshold
+        if (mode == 5) { // Flip -> Shift: Threshold (Soft-Knee対応)
             float thresh = shift;
-            float flipped = (v > thresh) ? thresh - (v - thresh) : thresh + (thresh - v);
-            return v * (1.0f - std::abs(amt)) + flipped * std::abs(amt);
+            float delta = 0.05f; // ソフトニーの幅
+            float out = 0.0f;
+
+            if (v > thresh + delta) out = thresh - (v - thresh);
+            else if (v < thresh - delta) out = thresh + (thresh - v);
+            else {
+                // 不連続角をなくすための二次曲線補間（C1連続性）
+                float t = (v - (thresh - delta)) / (2.0f * delta);
+                float y0 = thresh + delta;
+                float y1 = thresh - delta;
+                float smoothT = t * t * (3.0f - 2.0f * t);
+                out = y0 + smoothT * (y1 - y0);
+            }
+            return v * (1.0f - std::abs(amt)) + out * std::abs(amt);
         }
-        if (mode == 6) { // Quantize -> Shift: Offset
+        if (mode == 6) { // Quantize -> Shift: Offset (階段エッジの平滑化)
             float steps = std::pow(2.0f, 2.0f + (1.0f - std::abs(amt)) * 14.0f);
-            return (std::round((v + shift) * steps) / steps) - shift;
+            float scaled = (v + shift) * steps;
+            float base = std::floor(scaled);
+            float frac = scaled - base;
+
+            // 階段の角を滑らかにする
+            float edge = 0.1f;
+            float smoothFrac = 0.0f;
+            if (frac > 1.0f - edge) {
+                float t = (frac - (1.0f - edge)) / edge;
+                smoothFrac = t * t * (3.0f - 2.0f * t);
+            }
+            float out = (base + smoothFrac) / steps - shift;
+            return v * (1.0f - std::abs(amt)) + out * std::abs(amt);
         }
         if (mode == 7) { // Remap (Saturation/Fold) -> Shift: Asymmetry
             float driven = (v + shift * 0.5f) * (1.0f + std::abs(amt) * 4.0f);

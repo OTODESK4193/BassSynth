@@ -40,10 +40,8 @@ public:
     float* getOutputScopePtr() { return outputScopeData.data(); }
 
     void getStaticWaveform(std::array<float, 512>& buffer) {
-        // 1. オシレーターから時間領域Morph適用済みの基本波形を取得
         oscillator.generateSingleCycle(buffer);
 
-        // 2. 現在のSpectral Morphのパラメータを取得
         int mA = (int)pMorphAMode->load(std::memory_order_relaxed);
         float aA = pMorphAAmt->load(std::memory_order_relaxed);
         float sA = pMorphAShift->load(std::memory_order_relaxed);
@@ -51,7 +49,6 @@ public:
         float aB = pMorphBAmt->load(std::memory_order_relaxed);
         float sB = pMorphBShift->load(std::memory_order_relaxed);
 
-        // 3. Spectral MorphingをGUI用の波形に適用（ピークノーマライズ付き）
         spectralMorph.processSingleCycleForDisplay(buffer, mA, aA, sA, mB, aB, sB);
     }
 
@@ -125,6 +122,8 @@ private:
     juce::SmoothedValue<float> smoothedMorphAAmt, smoothedMorphAShift, smoothedMorphBAmt, smoothedMorphBShift;
 
     float lastOscFreq = -1.0f;
+    int lastModeA = -1;
+    int lastModeB = -1;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(LiquidDreamAudioProcessor)
 };
