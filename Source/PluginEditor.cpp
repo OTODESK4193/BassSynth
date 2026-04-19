@@ -1,4 +1,4 @@
-// ==============================================================================
+Ôªø// ==============================================================================
 // Source/PluginEditor.cpp
 // ==============================================================================
 #include "PluginProcessor.h"
@@ -35,7 +35,6 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     // Osc Params Setup
     setupS(wtLevelSlider, wtLevelLabel, "Level");
     setupS(wtPosSlider, wtPosLabel, "Pos");
-    setupS(syncSlider, syncLabel, "Sync");
     setupS(oscPitchSlider, oscPitchLabel, "Pitch");
 
     setupS(uniCountSlider, uniCountLabel, "Unison");
@@ -60,10 +59,10 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
 
     setupCombo(fmWaveCombo, fmWaveLabel, "FM Mod", { "Sine", "Saw", "Pulse", "Triangle" });
 
-    // Dual Morph Setup (SpectralånÇä‹ÇﬁëS14éÌóﬁÇ…ägí£)
+    // Dual Morph Setup (Time: 0„Äú7, Spectral: 8„Äú13 „Å´Áµ±‰∏Ä)
     juce::StringArray morphTypes = {
-        "None", "Bend +", "Bend -", "PWM", "Sync", "Mirror", "Flip", "Quantize", "Remap",
-        "Smear", "Vocode", "Stretch", "SpecCut", "Shepard"
+        "None", "Bend (+/-)", "PWM", "Sync", "Mirror", "Flip", "Quantize", "Remap",
+        "Smear", "Vocode", "Stretch", "SpecCut", "Shepard", "Comb"
     };
     setupCombo(morphAModeCombo, morphAModeLabel, "Morph A", morphTypes);
     setupS(morphAAmtSlider, morphAAmtLabel, "Amt A");
@@ -90,10 +89,9 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
         attachments.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, id, s));
         };
 
-    // Attach Osc
+    // Attach Osc (Sync„ÅÆÂâäÈô§„ÇíÂèçÊò†)
     att(wtLevelSlider, "osc_level");
     att(wtPosSlider, "osc_pos");
-    att(syncSlider, "osc_sync");
     att(oscPitchSlider, "osc_pitch");
 
     att(uniCountSlider, "osc_uni");
@@ -161,7 +159,7 @@ void LiquidDreamAudioProcessorEditor::resized()
         cmb.setBounds(x, y + 30, 70, 24);
         };
 
-    // --- ç∂ë§ÉGÉäÉA ---
+    // --- Â∑¶ÂÅ¥„Ç®„É™„Ç¢ ---
     auto leftArea = area.removeFromLeft(350);
     openBrowserButton.setBounds(leftArea.removeFromTop(35).reduced(2));
     leftArea.removeFromTop(5);
@@ -184,35 +182,35 @@ void LiquidDreamAudioProcessorEditor::resized()
     placeKnob(mX + 175, mY, modSusLabel, modSusSlider);
     placeKnob(mX + 255, mY, modRelLabel, modRelSlider);
 
-    // --- âEë§ÉGÉäÉA ---
+    // --- Âè≥ÂÅ¥„Ç®„É™„Ç¢ ---
     area.removeFromLeft(15);
     auto rightArea = area;
     browser.setBounds(rightArea);
 
-    // 1. Wavetable Osc (300px, 4x4 Grid)
+    // 1. Wavetable Osc (300px, 4x4 Grid „É¨„Ç§„Ç¢„Ç¶„ÉàË™øÊï¥)
     auto oscRect = rightArea.removeFromTop(300);
     oscGroup.setBounds(oscRect);
     int oX = oscRect.getX() + 10, oY = oscRect.getY() + 15;
 
-    // Row 1: Basic
+    // Row 1: Basic & Pitch
     placeKnob(oX, oY, wtLevelLabel, wtLevelSlider);
     placeKnob(oX + 80, oY, wtPosLabel, wtPosSlider);
-    placeKnob(oX + 160, oY, syncLabel, syncSlider);
-    placeKnob(oX + 240, oY, oscPitchLabel, oscPitchSlider);
+    placeKnob(oX + 160, oY, oscPitchLabel, oscPitchSlider);
+    placeKnob(oX + 240, oY, driftLabel, driftSlider);
 
-    // Row 2: Unison
+    // Row 2: Unison & FM Wave
     placeKnob(oX, oY + 70, uniCountLabel, uniCountSlider);
     placeKnob(oX + 80, oY + 70, detuneLabel, detuneSlider);
     placeKnob(oX + 160, oY + 70, widthLabel, widthSlider);
-    placeKnob(oX + 240, oY + 70, driftLabel, driftSlider);
+    placeCombo(oX + 240, oY + 70, fmWaveLabel, fmWaveCombo);
 
-    // Row 3: Pitch Decay & FM
-    placeKnob(oX, oY + 140, pitchDecayAmtLabel, pitchDecayAmtSlider);
-    placeKnob(oX + 80, oY + 140, pitchDecayTimeLabel, pitchDecayTimeSlider);
-    placeCombo(oX + 160, oY + 140, fmWaveLabel, fmWaveCombo);
-    placeKnob(oX + 240, oY + 140, fmAmtLabel, fmAmtSlider);
+    // Row 3: FM Amt & Pitch Mod
+    placeKnob(oX, oY + 140, fmAmtLabel, fmAmtSlider);
+    placeKnob(oX + 80, oY + 140, pitchDecayAmtLabel, pitchDecayAmtSlider);
+    placeKnob(oX + 160, oY + 140, pitchDecayTimeLabel, pitchDecayTimeSlider);
+    // (oX + 240 „ÅØÁ©∫„Åç„Çπ„Éö„Éº„Çπ)
 
-    // Row 4: Dual Morph
+    // Row 4: Dual Morph (14Á®ÆÁµ±Âêà)
     placeCombo(oX, oY + 210, morphAModeLabel, morphAModeCombo);
     placeKnob(oX + 80, oY + 210, morphAAmtLabel, morphAAmtSlider);
     placeCombo(oX + 160, oY + 210, morphBModeLabel, morphBModeCombo);

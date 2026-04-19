@@ -49,7 +49,7 @@ public:
         int mB = (int)pMorphBMode->load(std::memory_order_relaxed);
         float aB = pMorphBAmt->load(std::memory_order_relaxed);
 
-        // 3. Spectral MorphingをGUI用の波形に適用
+        // 3. Spectral MorphingをGUI用の波形に適用（ピークノーマライズ付き）
         spectralMorph.processSingleCycleForDisplay(buffer, mA, aA, mB, aB);
     }
 
@@ -76,9 +76,8 @@ private:
     std::atomic<float>* pPDecayTime = nullptr;
     std::atomic<float>* pFm = nullptr;
     std::atomic<float>* pFmWave = nullptr;
-    std::atomic<float>* pSync = nullptr;
 
-    // Dual Morph Parameters
+    // Dual Morph Parameters (Sync統合により独立したSyncは削除)
     std::atomic<float>* pMorphAMode = nullptr;
     std::atomic<float>* pMorphAAmt = nullptr;
     std::atomic<float>* pMorphBMode = nullptr;
@@ -118,7 +117,7 @@ private:
     // --- Smoothed Values ---
     juce::SmoothedValue<float> smoothedWtLevel, smoothedWtPitch, smoothedPDecayAmt, smoothedPDecayTime;
     juce::SmoothedValue<float> smoothedCutoff, smoothedReso, smoothedFltEnvAmt, smoothedDrive, smoothedShpAmt, smoothedShpRate, smoothedShpBit, smoothedGain;
-    juce::SmoothedValue<float> smoothedWtPos, smoothedFm, smoothedSync, smoothedDrift, smoothedSubVol, smoothedSubPitch, smoothedWidth;
+    juce::SmoothedValue<float> smoothedWtPos, smoothedFm, smoothedDrift, smoothedSubVol, smoothedSubPitch, smoothedWidth;
     juce::SmoothedValue<float> smoothedMorphAAmt, smoothedMorphBAmt;
 
     float lastOscFreq = -1.0f;

@@ -1,3 +1,6 @@
+// ==============================================================================
+// Source/PluginEditor.h
+// ==============================================================================
 #pragma once
 #include <JuceHeader.h>
 #include "PluginProcessor.h"
@@ -26,8 +29,8 @@ private:
     juce::GroupComponent oscGroup, subGroup, shaperGroup, filterGroup, ampEnvGroup, modEnvGroup, controlGroup;
 
     // --- Osc Parameters ---
-    juce::Slider wtLevelSlider, wtPosSlider, syncSlider, oscPitchSlider;
-    juce::Label  wtLevelLabel, wtPosLabel, syncLabel, oscPitchLabel;
+    juce::Slider wtLevelSlider, wtPosSlider, oscPitchSlider;
+    juce::Label  wtLevelLabel, wtPosLabel, oscPitchLabel;
 
     juce::Slider uniCountSlider, detuneSlider, widthSlider, driftSlider;
     juce::Label  uniCountLabel, detuneLabel, widthLabel, driftLabel;

@@ -18,7 +18,6 @@ LiquidDreamAudioProcessor::LiquidDreamAudioProcessor()
     pPDecayTime = apvts.getRawParameterValue("osc_pdecay_time");
     pFm = apvts.getRawParameterValue("osc_fm");
     pFmWave = apvts.getRawParameterValue("osc_fm_wave");
-    pSync = apvts.getRawParameterValue("osc_sync");
 
     pMorphAMode = apvts.getRawParameterValue("osc_morph_a_mode");
     pMorphAAmt = apvts.getRawParameterValue("osc_morph_a_amt");
@@ -65,9 +64,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout LiquidDreamAudioProcessor::c
 
     params.push_back(std::make_unique<juce::AudioParameterFloat>("osc_fm", "FM Amt", 0.0f, 3.0f, 0.0f));
     params.push_back(std::make_unique<juce::AudioParameterInt>("osc_fm_wave", "FM Wave", 0, 3, 0));
-    params.push_back(std::make_unique<juce::AudioParameterFloat>("osc_sync", "Sync", 1.0f, 4.0f, 1.0f));
 
-    // Dual Morph System Params (拡張: 最大値を13に設定しSpectralモードを包含)
+    // Dual Morph System Params (0〜13へ拡張, Amountは双方向 -1.0〜1.0)
     params.push_back(std::make_unique<juce::AudioParameterInt>("osc_morph_a_mode", "Morph A", 0, 13, 0));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("osc_morph_a_amt", "Amount A", -1.0f, 1.0f, 0.0f));
     params.push_back(std::make_unique<juce::AudioParameterInt>("osc_morph_b_mode", "Morph B", 0, 13, 0));
@@ -110,7 +108,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout LiquidDreamAudioProcessor::c
 void LiquidDreamAudioProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
     oscillator.prepare(sampleRate);
-    spectralMorph.prepare(sampleRate, samplesPerBlock); // STFTパイプラインの初期化
+    spectralMorph.prepare(sampleRate, samplesPerBlock);
     filter.prepare(sampleRate);
     shaper.prepare(sampleRate);
     voiceManager.setSampleRate(sampleRate); ampEnv.setSampleRate(sampleRate); filterEnv.setSampleRate(sampleRate);
@@ -121,9 +119,8 @@ void LiquidDreamAudioProcessor::prepareToPlay(double sampleRate, int samplesPerB
     smoothedCutoff.reset(sampleRate, st); smoothedReso.reset(sampleRate, st);
     smoothedFltEnvAmt.reset(sampleRate, st); smoothedDrive.reset(sampleRate, st); smoothedShpAmt.reset(sampleRate, st);
     smoothedShpRate.reset(sampleRate, st); smoothedShpBit.reset(sampleRate, st); smoothedGain.reset(sampleRate, st);
-    smoothedWtPos.reset(sampleRate, st); smoothedFm.reset(sampleRate, st); smoothedSync.reset(sampleRate, st);
-    smoothedDrift.reset(sampleRate, st); smoothedSubVol.reset(sampleRate, st);
-    smoothedSubPitch.reset(sampleRate, st); smoothedWidth.reset(sampleRate, st);
+    smoothedWtPos.reset(sampleRate, st); smoothedFm.reset(sampleRate, st); smoothedDrift.reset(sampleRate, st);
+    smoothedSubVol.reset(sampleRate, st); smoothedSubPitch.reset(sampleRate, st); smoothedWidth.reset(sampleRate, st);
     smoothedMorphAAmt.reset(sampleRate, st); smoothedMorphBAmt.reset(sampleRate, st);
 
     smoothedWtLevel.setCurrentAndTargetValue(pOscLevel->load(std::memory_order_relaxed));
@@ -140,7 +137,6 @@ void LiquidDreamAudioProcessor::prepareToPlay(double sampleRate, int samplesPerB
     smoothedGain.setCurrentAndTargetValue(pGain->load(std::memory_order_relaxed));
     smoothedWtPos.setCurrentAndTargetValue(pPos->load(std::memory_order_relaxed));
     smoothedFm.setCurrentAndTargetValue(pFm->load(std::memory_order_relaxed));
-    smoothedSync.setCurrentAndTargetValue(pSync->load(std::memory_order_relaxed));
     smoothedDrift.setCurrentAndTargetValue(pDrift->load(std::memory_order_relaxed));
     smoothedSubVol.setCurrentAndTargetValue(pSubVol->load(std::memory_order_relaxed));
     smoothedSubPitch.setCurrentAndTargetValue(pSubPitch->load(std::memory_order_relaxed));
@@ -164,7 +160,6 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     smoothedShpAmt.setTargetValue(pShpAmt->load(std::memory_order_relaxed)); smoothedShpRate.setTargetValue(pShpRate->load(std::memory_order_relaxed));
     smoothedShpBit.setTargetValue(pShpBit->load(std::memory_order_relaxed)); smoothedGain.setTargetValue(pGain->load(std::memory_order_relaxed));
     smoothedWtPos.setTargetValue(pPos->load(std::memory_order_relaxed)); smoothedFm.setTargetValue(pFm->load(std::memory_order_relaxed));
-    smoothedSync.setTargetValue(pSync->load(std::memory_order_relaxed));
     smoothedDrift.setTargetValue(pDrift->load(std::memory_order_relaxed)); smoothedSubVol.setTargetValue(pSubVol->load(std::memory_order_relaxed));
     smoothedSubPitch.setTargetValue(pSubPitch->load(std::memory_order_relaxed)); smoothedWidth.setTargetValue(pWidth->load(std::memory_order_relaxed));
     smoothedMorphAAmt.setTargetValue(pMorphAAmt->load(std::memory_order_relaxed));
@@ -201,17 +196,12 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
 
     oscillator.setFMWaveform((int)pFmWave->load(std::memory_order_relaxed));
 
-    // 時間領域のMorph処理はオシレーター内部に指示
-    oscillator.setMorphA((int)pMorphAMode->load(std::memory_order_relaxed), smoothedMorphAAmt.getNextValue());
-    oscillator.setMorphB((int)pMorphBMode->load(std::memory_order_relaxed), smoothedMorphBAmt.getNextValue());
-
     auto* left = buffer.getWritePointer(0); auto* right = buffer.getWritePointer(1);
 
     // 1. オシレーターの生成 (時間領域Morph適用済み)
     for (int i = 0; i < buffer.getNumSamples(); ++i) {
         oscillator.setWavetablePosition(smoothedWtPos.getNextValue());
         oscillator.setFMAmount(smoothedFm.getNextValue());
-        oscillator.setSyncAmount(smoothedSync.getNextValue());
         oscillator.setDriftAmount(smoothedDrift.getNextValue());
 
         // サンプル精度でのアップデート
@@ -239,7 +229,6 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     int mB = (int)pMorphBMode->load(std::memory_order_relaxed);
     float aB = pMorphBAmt->load(std::memory_order_relaxed);
 
-    // バッファ全体をSpectral Processorに通す
     spectralMorph.process(buffer, mA, aA, mB, aB);
 
     // 3. 後段DSP (Filter, Shaper, AmpEnv)

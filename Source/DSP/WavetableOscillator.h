@@ -1,3 +1,6 @@
+// ==============================================================================
+// Source/DSP/WavetableOscillator.h
+// ==============================================================================
 #pragma once
 #include <JuceHeader.h>
 #include <array>
@@ -53,62 +56,82 @@ public:
 
     void loadWavetableFile(juce::String fileName) {
         const int myJobId = ++loadJobId;
-        backgroundPool.addJob([this, fileName, myJobId]() {
-            juce::File file = juce::File(EmbeddedWavetables::wavetablesDir).getChildFile(fileName);
-            if (!file.existsAsFile()) return;
-            std::unique_ptr<juce::AudioFormatReader> reader(formatManager.createReaderFor(file));
-            if (reader != nullptr) {
-                WavetableSet::Ptr newSet = new WavetableSet();
-                juce::AudioBuffer<float> tempRaw;
-                tempRaw.setSize(1, (int)reader->lengthInSamples);
-                reader->read(&tempRaw, 0, (int)reader->lengthInSamples, 0, true, false);
-                newSet->totalSamples = tempRaw.getNumSamples();
-                newSet->frameSize = (newSet->totalSamples >= 2048) ? 2048 : newSet->totalSamples;
-                newSet->numFrames = std::max(1, newSet->totalSamples / newSet->frameSize);
-                juce::dsp::FFT fft(11);
-                juce::AudioBuffer<float> workBuf(1, 4096);
-                for (int lvl = 0; lvl < NumLevels; ++lvl) {
-                    if (myJobId != loadJobId.load()) return;
-                    newSet->levels[lvl].setSize(1, newSet->totalSamples);
-                    if (newSet->frameSize == 2048) {
-                        for (int f = 0; f < newSet->numFrames; ++f) {
-                            if (myJobId != loadJobId.load()) return;
-                            workBuf.clear();
-                            auto* workPtr = workBuf.getWritePointer(0);
-                            for (int i = 0; i < 2048; ++i) {
-                                int srcIdx = f * 2048 + i;
-                                workPtr[i] = (srcIdx < newSet->totalSamples) ? tempRaw.getSample(0, srcIdx) : 0.0f;
+
+        // メインスレッド（または即座に）レベル0だけを読み込み、UIと音出しを最優先で可能にする
+        juce::File file = juce::File(EmbeddedWavetables::wavetablesDir).getChildFile(fileName);
+        if (!file.existsAsFile()) return;
+
+        std::unique_ptr<juce::AudioFormatReader> reader(formatManager.createReaderFor(file));
+        if (reader == nullptr) return;
+
+        WavetableSet::Ptr newSet = new WavetableSet();
+        juce::AudioBuffer<float> tempRaw;
+        tempRaw.setSize(1, (int)reader->lengthInSamples);
+        reader->read(&tempRaw, 0, (int)reader->lengthInSamples, 0, true, false);
+
+        newSet->totalSamples = tempRaw.getNumSamples();
+        newSet->frameSize = (newSet->totalSamples >= 2048) ? 2048 : newSet->totalSamples;
+        newSet->numFrames = std::max(1, newSet->totalSamples / newSet->frameSize);
+
+        // レベル0（オリジナル波形）は全レベルに一旦コピーして即座に再生可能にする
+        for (int lvl = 0; lvl < NumLevels; ++lvl) {
+            newSet->levels[lvl].makeCopyOf(tempRaw);
+        }
+
+        // 即座に差し替え（ゼロレイテンシロード）
+        currentWavetableSet = newSet;
+
+        // バックグラウンドでエイリアシング防止用のMipmap（レベル1〜9）を計算する
+        backgroundPool.addJob([this, myJobId, newSet, tempRaw]() {
+            juce::dsp::FFT fft(11);
+            juce::AudioBuffer<float> workBuf(1, 4096);
+
+            for (int lvl = 1; lvl < NumLevels; ++lvl) {
+                if (myJobId != loadJobId.load()) return; // 新しいリクエストが来たらキャンセル
+
+                if (newSet->frameSize == 2048) {
+                    for (int f = 0; f < newSet->numFrames; ++f) {
+                        if (myJobId != loadJobId.load()) return;
+
+                        workBuf.clear();
+                        auto* workPtr = workBuf.getWritePointer(0);
+                        for (int i = 0; i < 2048; ++i) {
+                            int srcIdx = f * 2048 + i;
+                            workPtr[i] = (srcIdx < newSet->totalSamples) ? tempRaw.getSample(0, srcIdx) : 0.0f;
+                        }
+
+                        fft.performRealOnlyForwardTransform(workPtr);
+
+                        int harmonicLimit = 1024 >> lvl;
+                        if (harmonicLimit < 2) harmonicLimit = 2;
+                        int transitionStart = std::max(1, (int)(harmonicLimit * 0.8f));
+
+                        for (int k = transitionStart; k <= 1024; ++k) {
+                            float multiplier = 0.0f;
+                            if (k < harmonicLimit) {
+                                float fraction = (float)(k - transitionStart) / (float)(harmonicLimit - transitionStart);
+                                multiplier = 0.5f * (1.0f + std::cos(fraction * juce::MathConstants<float>::pi));
                             }
-                            fft.performRealOnlyForwardTransform(workPtr);
-                            if (lvl > 0) {
-                                int harmonicLimit = 1024 >> lvl;
-                                if (harmonicLimit < 2) harmonicLimit = 2;
-                                int transitionStart = std::max(1, (int)(harmonicLimit * 0.8f));
-                                for (int k = transitionStart; k <= 1024; ++k) {
-                                    float multiplier = 0.0f;
-                                    if (k < harmonicLimit) {
-                                        float fraction = (float)(k - transitionStart) / (float)(harmonicLimit - transitionStart);
-                                        multiplier = 0.5f * (1.0f + std::cos(fraction * juce::MathConstants<float>::pi));
-                                    }
-                                    if (k == 1024) workPtr[1] *= multiplier;
-                                    else { workPtr[2 * k] *= multiplier; workPtr[2 * k + 1] *= multiplier; }
-                                }
-                            }
-                            workPtr[0] = 0.0f;
-                            fft.performRealOnlyInverseTransform(workPtr);
-                            float peak = 1e-9f;
-                            for (int i = 0; i < 2048; ++i) peak = std::max(peak, std::abs(workPtr[i]));
-                            float normalizeScale = 1.0f / peak;
-                            auto* destPtr = newSet->levels[lvl].getWritePointer(0);
-                            for (int i = 0; i < 2048; ++i) {
-                                int dstIdx = f * 2048 + i;
-                                if (dstIdx < newSet->totalSamples) destPtr[dstIdx] = juce::jlimit(-1.0f, 1.0f, workPtr[i] * normalizeScale);
+                            if (k == 1024) workPtr[1] *= multiplier;
+                            else { workPtr[2 * k] *= multiplier; workPtr[2 * k + 1] *= multiplier; }
+                        }
+                        workPtr[0] = 0.0f;
+
+                        fft.performRealOnlyInverseTransform(workPtr);
+
+                        float peak = 1e-9f;
+                        for (int i = 0; i < 2048; ++i) peak = std::max(peak, std::abs(workPtr[i]));
+                        float normalizeScale = 1.0f / peak;
+
+                        auto* destPtr = newSet->levels[lvl].getWritePointer(0);
+                        for (int i = 0; i < 2048; ++i) {
+                            int dstIdx = f * 2048 + i;
+                            if (dstIdx < newSet->totalSamples) {
+                                destPtr[dstIdx] = juce::jlimit(-1.0f, 1.0f, workPtr[i] * normalizeScale);
                             }
                         }
                     }
-                    else { newSet->levels[lvl].makeCopyOf(tempRaw); }
                 }
-                if (myJobId == loadJobId.load()) currentWavetableSet = newSet;
             }
             });
     }
@@ -132,14 +155,14 @@ public:
             else if (fmWaveform == 2) mod = phase < 0.5f ? 1.0f : -1.0f;
             else if (fmWaveform == 3) mod = 4.0f * std::abs(phase - 0.5f) - 1.0f;
 
-            float syncPhase = std::fmod((phase + mod * fmAmount * 0.1f) * syncAmount, 1.0f);
-            if (syncPhase < 0.0f) syncPhase += 1.0f;
+            float currentPhase = std::fmod(phase + mod * fmAmount * 0.1f, 1.0f);
+            if (currentPhase < 0.0f) currentPhase += 1.0f;
 
-            // Phase Morphing (Slot A -> Slot B)
-            syncPhase = applyPhaseWarp(syncPhase, morphAMode, morphAAmount);
-            syncPhase = applyPhaseWarp(syncPhase, morphBMode, morphBAmount);
+            // Time Phase Morphing (0 to 7)
+            currentPhase = applyPhaseWarp(currentPhase, morphAMode, morphAAmount);
+            currentPhase = applyPhaseWarp(currentPhase, morphBMode, morphBAmount);
 
-            float floatPos = syncPhase * set->frameSize;
+            float floatPos = currentPhase * set->frameSize;
             int pos = (int)floatPos;
             if (pos >= set->frameSize) pos -= set->frameSize;
             float frac = floatPos - (float)pos;
@@ -147,7 +170,7 @@ public:
             float val1 = getHermiteSample(ptr, f1_base, set->frameSize, pos, frac);
             float val = val0 * (1.0f - frameFrac) + val1 * frameFrac;
 
-            // Amp Morphing (Slot A -> Slot B)
+            // Time Amp Morphing (0 to 7)
             val = applyAmpWarp(val, morphAMode, morphAAmount);
             val = applyAmpWarp(val, morphBMode, morphBAmount);
 
@@ -161,27 +184,20 @@ public:
     void setStereoWidth(float w) { stereoWidth = juce::jlimit(0.0f, 1.0f, w); recalculate(); }
     void setWavetablePosition(float pos) { wtPosition = pos; }
 
-    // FM & Sync
     void setFMAmount(float amt) { fmAmount = amt; }
     void setFMWaveform(int shape) { fmWaveform = juce::jlimit(0, 3, shape); }
-    void setSyncAmount(float amt) { syncAmount = std::max(1.0f, amt); }
     void setDriftAmount(float amt) { driftAmount = amt; }
 
     // Dual Morph System
     void setMorphA(int mode, float amt) { morphAMode = mode; morphAAmount = amt; }
     void setMorphB(int mode, float amt) { morphBMode = mode; morphBAmount = amt; }
 
-    // WT Parameters
     void setWavetableLevel(float level) { wtLevel = level; }
     void setWavetablePitchOffset(float semitones) { wtPitchOffset = semitones; }
     void setPitchDecay(float amount, float timeMs) {
         pitchDecayAmt = amount;
-        if (timeMs <= 0.001f) {
-            pitchDecayCoef = 0.0f;
-        }
-        else {
-            pitchDecayCoef = std::exp(-std::log(1000.0f) / (timeMs * 0.001f * (float)sampleRate));
-        }
+        if (timeMs <= 0.001f) pitchDecayCoef = 0.0f;
+        else pitchDecayCoef = std::exp(-std::log(1000.0f) / (timeMs * 0.001f * (float)sampleRate));
     }
 
     void setSubOn(bool on) { subOn = on; }
@@ -213,7 +229,6 @@ public:
         float dynamicPitchMult = std::pow(2.0f, currentWtPitch / 12.0f);
 
         SIMDFloat fmScaled(fmAmount * 0.1f);
-        SIMDFloat sync(syncAmount);
         float framePos = wtPosition * (float)std::max(0, set->numFrames - 1);
         int frameIdx = (int)framePos;
         float frameFrac = framePos - (float)frameIdx;
@@ -228,21 +243,15 @@ public:
             SIMDFloat p = phases[b];
             SIMDFloat modSignal(0.0f);
 
-            if (fmWaveform == 0) { // Sine
+            if (fmWaveform == 0) {
                 SIMDFloat z = p - half;
                 modSignal = (z * c1 - (z * z * z) * c2 + (z * z * z * z * z) * c3) * negOne;
             }
-            else if (fmWaveform == 1) { // Saw
-                modSignal = p * 2.0f - 1.0f;
-            }
-            else if (fmWaveform == 2) { // Pulse
-                for (int i = 0; i < SimdWidth; ++i) modSignal.set(i, p.get(i) < 0.5f ? 1.0f : -1.0f);
-            }
-            else if (fmWaveform == 3) { // Triangle
-                for (int i = 0; i < SimdWidth; ++i) modSignal.set(i, 4.0f * std::abs(p.get(i) - 0.5f) - 1.0f);
-            }
+            else if (fmWaveform == 1) { modSignal = p * 2.0f - 1.0f; }
+            else if (fmWaveform == 2) { for (int i = 0; i < SimdWidth; ++i) modSignal.set(i, p.get(i) < 0.5f ? 1.0f : -1.0f); }
+            else if (fmWaveform == 3) { for (int i = 0; i < SimdWidth; ++i) modSignal.set(i, 4.0f * std::abs(p.get(i) - 0.5f) - 1.0f); }
 
-            SIMDFloat totalPhase = (p + modSignal * fmScaled) * sync;
+            SIMDFloat totalPhase = p + modSignal * fmScaled;
             SIMDFloat vAmp(0.0f), nextP(0.0f);
 
             for (int i = 0; i < SimdWidth; ++i) {
@@ -261,8 +270,7 @@ public:
                 int level0 = 0; float hLimit = 1024.0f;
                 while (level0 < NumLevels - 2 && (hLimit * 0.5f) > maxH) { level0++; hLimit *= 0.5f; }
                 float levelFrac = 0.0f; if (hLimit > maxH) {
-                    levelFrac = (hLimit - maxH) / (hLimit * 0.5f);
-                    levelFrac = juce::jlimit(0.0f, 1.0f, levelFrac);
+                    levelFrac = juce::jlimit(0.0f, 1.0f, (hLimit - maxH) / (hLimit * 0.5f));
                 }
                 int level1 = level0 + 1;
                 const float* ptr0 = set->levels[level0].getReadPointer(0);
@@ -317,11 +325,10 @@ public:
 private:
     double sampleRate = 44100.0;
     float baseFreq = 440.0f;
-    float detuneAmount = 0.0f, stereoWidth = 1.0f, wtPosition = 0.0f, fmAmount = 0.0f, syncAmount = 1.0f, driftAmount = 0.0f;
+    float detuneAmount = 0.0f, stereoWidth = 1.0f, wtPosition = 0.0f, fmAmount = 0.0f, driftAmount = 0.0f;
     int unisonCount = 1;
     int fmWaveform = 0;
 
-    // Morph States
     int morphAMode = 0; float morphAAmount = 0.0f;
     int morphBMode = 0; float morphBAmount = 0.0f;
 
@@ -334,36 +341,33 @@ private:
     juce::ReferenceCountedObjectPtr<WavetableSet> currentWavetableSet;
     std::array<SIMDFloat, MaxBlocks> phases, increments, panL, panR, amp;
 
-    // --- Morphing Algorithms ---
-    // Mode Indices: 0:None, 1:Bend+, 2:Bend-, 3:PWM, 4:HardSync, 5:Mirror, 6:Flip, 7:Quantize, 8:Remap
+    // --- Time Domain Morphing Algorithms (0 to 7) ---
     inline float applyPhaseWarp(float p, int mode, float amt) const {
-        if (mode == 1) return std::pow(p, std::exp(-amt * 2.0f)); // Bend+
-        if (mode == 2) return std::pow(p, std::exp(amt * 2.0f));  // Bend-
-        if (mode == 3) { // PWM
-            float pw = 0.01f + amt * 0.98f;
+        if (mode == 1) return std::pow(p, std::exp(-amt * 2.0f)); // Bend (+/-)
+        if (mode == 2) { // PWM
+            float pw = 0.01f + (amt * 0.5f + 0.5f) * 0.98f;
             return (p < pw) ? (p / pw * 0.5f) : (0.5f + (p - pw) / (1.0f - pw) * 0.5f);
         }
-        if (mode == 4) { // HardSync
-            return std::fmod(p * (1.0f + amt * 7.0f), 1.0f);
-        }
-        if (mode == 5) { // Mirror
+        if (mode == 3) return std::fmod(p * (1.0f + std::abs(amt) * 7.0f), 1.0f); // Sync
+        if (mode == 4) { // Mirror
             float mirrored = (p < 0.5f) ? p * 2.0f : (1.0f - p) * 2.0f;
-            return p * (1.0f - amt) + mirrored * amt;
+            if (amt < 0.0f) mirrored = (p > 0.5f) ? (p - 0.5f) * 2.0f : (0.5f - p) * 2.0f;
+            return p * (1.0f - std::abs(amt)) + mirrored * std::abs(amt);
         }
         return p;
     }
 
     inline float applyAmpWarp(float v, int mode, float amt) const {
-        if (mode == 6) { // Flip
-            float flipped = std::abs(v);
-            return v * (1.0f - amt) + flipped * amt;
+        if (mode == 5) { // Flip
+            float flipped = amt > 0.0f ? std::abs(v) : -std::abs(v);
+            return v * (1.0f - std::abs(amt)) + flipped * std::abs(amt);
         }
-        if (mode == 7) { // Quantize
-            float steps = std::pow(2.0f, 2.0f + (1.0f - amt) * 14.0f);
+        if (mode == 6) { // Quantize
+            float steps = std::pow(2.0f, 2.0f + (1.0f - std::abs(amt)) * 14.0f);
             return std::round(v * steps) / steps;
         }
-        if (mode == 8) { // Remap (Saturation/Fold)
-            return std::tanh(v * (1.0f + amt * 4.0f));
+        if (mode == 7) { // Remap (Saturation/Fold)
+            return amt >= 0.0f ? std::tanh(v * (1.0f + amt * 4.0f)) : std::sin(v * (1.0f + std::abs(amt) * 3.0f) * juce::MathConstants<float>::halfPi);
         }
         return v;
     }
@@ -395,9 +399,7 @@ private:
 
                     float targetAngle = (bias + 1.0f) * centerAngle;
                     float actualWidth = stereoWidth;
-                    if (baseFreq < 150.0f) {
-                        actualWidth *= juce::jlimit(0.0f, 1.0f, baseFreq / 150.0f);
-                    }
+                    if (baseFreq < 150.0f) actualWidth *= juce::jlimit(0.0f, 1.0f, baseFreq / 150.0f);
                     float angle = centerAngle + (targetAngle - centerAngle) * actualWidth;
 
                     pL.set(i, std::cos(angle)); pR.set(i, std::sin(angle)); a.set(i, norm); inc.set(i, step);

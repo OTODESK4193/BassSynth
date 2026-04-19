@@ -10,9 +10,6 @@
 /**
  * @class SpectralMorphProcessor
  * @brief リアルタイムSTFT（短時間フーリエ変換）を用いた周波数領域モーフィングエンジン
- * * オーディオスレッド内で完結するよう、動的メモリ確保（new/malloc）を一切排除し、
- * 固定長配列（std::array）によるリングバッファとオーバーラップアド（OLA）を用いて実装されています。
- * 位相キャンセレーションを防ぐため、極座標系（振幅・位相）に変換して処理を行います。
  */
 class SpectralMorphProcessor
 {
@@ -36,12 +33,11 @@ public:
         fifoWritePos = 0;
     }
 
-    // Morph Index: 9=Smear, 10=Vocode, 11=Stretch, 12=SpecCut, 13=Shepard
+    // Spectral Morph Index: 8=Smear, 9=Vocode, 10=Stretch, 11=SpecCut, 12=Shepard, 13=Comb
     void process(juce::AudioBuffer<float>& buffer, int modeA, float amtA, int modeB, float amtB)
     {
-        // どちらのモードもSpectral(9〜13)でなければ何もしない（バイパス）
-        bool isSpectralA = (modeA >= 9 && modeA <= 13) && (std::abs(amtA) > 0.001f);
-        bool isSpectralB = (modeB >= 9 && modeB <= 13) && (std::abs(amtB) > 0.001f);
+        bool isSpectralA = (modeA >= 8 && modeA <= 13) && (std::abs(amtA) > 0.001f);
+        bool isSpectralB = (modeB >= 8 && modeB <= 13) && (std::abs(amtB) > 0.001f);
 
         if (!isSpectralA && !isSpectralB) return;
 
@@ -51,22 +47,18 @@ public:
 
         for (int i = 0; i < numSamples; ++i)
         {
-            // リングバッファに入力サンプルを書き込む
             inputFifoL[(size_t)fifoWritePos] = channelDataL[i];
             inputFifoR[(size_t)fifoWritePos] = channelDataR[i];
 
-            // 出力バッファからサンプルを読み出し、元のバッファを上書き（レイテンシ分遅れます）
             channelDataL[i] = outputFifoL[(size_t)fifoWritePos];
             channelDataR[i] = outputFifoR[(size_t)fifoWritePos];
 
-            // 出力したらその位置をクリア（オーバーラップ加算のため）
             outputFifoL[(size_t)fifoWritePos] = 0.0f;
             outputFifoR[(size_t)fifoWritePos] = 0.0f;
 
             fifoWritePos++;
             if (fifoWritePos >= fifoSize) fifoWritePos = 0;
 
-            // ホップサイズに達したらFFT処理を実行
             hopCounter++;
             if (hopCounter >= hopSize)
             {
@@ -76,26 +68,18 @@ public:
         }
     }
 
-    // --- GUI描画用の軽量1周期FFT関数 ---
     void processSingleCycleForDisplay(std::array<float, 512>& buffer, int modeA, float amtA, int modeB, float amtB)
     {
-        bool isSpectralA = (modeA >= 9 && modeA <= 13) && (std::abs(amtA) > 0.001f);
-        bool isSpectralB = (modeB >= 9 && modeB <= 13) && (std::abs(amtB) > 0.001f);
+        bool isSpectralA = (modeA >= 8 && modeA <= 13) && (std::abs(amtA) > 0.001f);
+        bool isSpectralB = (modeB >= 8 && modeB <= 13) && (std::abs(amtB) > 0.001f);
 
         if (!isSpectralA && !isSpectralB) return;
 
-        // 1. 直近のデータをワークスペースにコピー (窓関数なし)
-        for (size_t i = 0; i < 512; ++i) {
-            displayWorkspace[i] = buffer[i];
-        }
-        for (size_t i = 512; i < 1024; ++i) {
-            displayWorkspace[i] = 0.0f;
-        }
+        for (size_t i = 0; i < 512; ++i) displayWorkspace[i] = buffer[i];
+        for (size_t i = 512; i < 1024; ++i) displayWorkspace[i] = 0.0f;
 
-        // 2. FFT
         displayFFT.performRealOnlyForwardTransform(displayWorkspace.data());
 
-        // 3. 極座標変換
         size_t numBins = 256;
         for (size_t k = 1; k < numBins; ++k) {
             std::complex<float> c(displayWorkspace[k * 2], displayWorkspace[k * 2 + 1]);
@@ -103,41 +87,29 @@ public:
             displayPhase[k] = std::arg(c);
         }
 
-        // 4. Morph適用 (汎用化した関数を使用)
         if (isSpectralA) applyMorphToMagnitude(displayMag.data(), displayTempMag.data(), modeA, amtA, numBins);
         if (isSpectralB) applyMorphToMagnitude(displayMag.data(), displayTempMag.data(), modeB, amtB, numBins);
 
-        // 5. 直交座標再構築
         for (size_t k = 1; k < numBins; ++k) {
             std::complex<float> c = std::polar(displayMag[k], displayPhase[k]);
             displayWorkspace[k * 2] = c.real();
             displayWorkspace[k * 2 + 1] = c.imag();
         }
 
-        // 6. 逆FFT
         displayFFT.performRealOnlyInverseTransform(displayWorkspace.data());
 
-        // 7. ピークノーマライズ（はみ出し防止）して元のバッファに戻す
         float peak = 1e-9f;
-        // まず最大振幅を探す
-        for (size_t i = 0; i < 512; ++i) {
-            peak = std::max(peak, std::abs(displayWorkspace[i]));
-        }
-
-        // 常に-1.0〜1.0の枠内に美しく収まるようにスケーリング係数を計算
+        for (size_t i = 0; i < 512; ++i) peak = std::max(peak, std::abs(displayWorkspace[i]));
         float scale = 1.0f / peak;
 
-        for (size_t i = 0; i < 512; ++i) {
-            buffer[i] = displayWorkspace[i] * scale;
-        }
+        for (size_t i = 0; i < 512; ++i) buffer[i] = displayWorkspace[i] * scale;
     }
 
 private:
-    // --- Audio Thread STFT Variables ---
     static constexpr int fftOrder = 11;
     static constexpr size_t fftSize = 1 << fftOrder; // 2048
     static constexpr int hopSize = 512;              // 4x Overlap
-    static constexpr int fifoSize = 4096;            // リングバッファ長
+    static constexpr int fifoSize = 4096;
 
     juce::dsp::FFT forwardFFT;
     juce::dsp::FFT inverseFFT;
@@ -151,7 +123,6 @@ private:
     int fifoWritePos = 0;
     int hopCounter = 0;
 
-    // --- GUI Display FFT Variables ---
     juce::dsp::FFT displayFFT{ 9 }; // 512 = 2^9
     std::array<float, 1024> displayWorkspace{};
     std::array<float, 256> displayMag{}, displayPhase{}, displayTempMag{};
@@ -191,11 +162,11 @@ private:
             phaseR[k] = std::arg(cR);
         }
 
-        if (modeA >= 9 && modeA <= 13) {
+        if (modeA >= 8 && modeA <= 13) {
             applyMorphToMagnitude(magL.data(), tempMag.data(), modeA, amtA, numBins);
             applyMorphToMagnitude(magR.data(), tempMag.data(), modeA, amtA, numBins);
         }
-        if (modeB >= 9 && modeB <= 13) {
+        if (modeB >= 8 && modeB <= 13) {
             applyMorphToMagnitude(magL.data(), tempMag.data(), modeB, amtB, numBins);
             applyMorphToMagnitude(magR.data(), tempMag.data(), modeB, amtB, numBins);
         }
@@ -229,7 +200,7 @@ private:
 
     void applyMorphToMagnitude(float* mag, float* tMag, int mode, float amount, size_t numBins)
     {
-        if (mode == 9) // Smear
+        if (mode == 8) // Smear
         {
             int radius = (int)(std::abs(amount) * 15.0f) + 1;
             for (size_t k = 1; k < numBins; ++k) {
@@ -244,7 +215,7 @@ private:
             }
             for (size_t k = 1; k < numBins; ++k) mag[k] = tMag[k];
         }
-        else if (mode == 10) // Vocode
+        else if (mode == 9) // Vocode
         {
             float formants[4] = { 0.1f, 0.3f, 0.6f, 0.8f };
             for (size_t k = 1; k < numBins; ++k) {
@@ -257,7 +228,7 @@ private:
                 mag[k] = mag[k] * (1.0f - std::abs(amount)) + targetMag * std::abs(amount);
             }
         }
-        else if (mode == 11) // Stretch
+        else if (mode == 10) // Stretch
         {
             float stretch = (amount >= 0.0f) ? (1.0f + amount * 2.0f) : (1.0f / (1.0f + std::abs(amount) * 2.0f));
             for (size_t k = 1; k < numBins; ++k) {
@@ -271,7 +242,7 @@ private:
             }
             for (size_t k = 1; k < numBins; ++k) mag[k] = tMag[k];
         }
-        else if (mode == 12) // SpecCut
+        else if (mode == 11) // SpecCut
         {
             int cutBin = (int)(std::abs(amount) * numBins);
             bool isHighCut = (amount > 0.0f);
@@ -279,13 +250,21 @@ private:
                 if (isHighCut ? ((int)k > (int)numBins - cutBin) : ((int)k < cutBin)) mag[k] = 0.0f;
             }
         }
-        else if (mode == 13) // Shepard
+        else if (mode == 12) // Shepard
         {
             for (size_t k = 1; k < numBins; ++k) {
                 float logPos = std::log2f((float)k) / std::log2f((float)(numBins - 1));
                 float shifted = std::fmod(logPos + (amount * 5.0f), 1.0f);
                 if (shifted < 0.0f) shifted += 1.0f;
                 mag[k] *= std::sin(shifted * juce::MathConstants<float>::pi);
+            }
+        }
+        else if (mode == 13) // Comb (Spectral Comb Filter)
+        {
+            float density = 2.0f + std::abs(amount) * 30.0f;
+            for (size_t k = 1; k < numBins; ++k) {
+                float combMultiplier = 0.5f + 0.5f * std::cos((float)k * density * juce::MathConstants<float>::pi / (float)numBins);
+                mag[k] *= combMultiplier;
             }
         }
     }
