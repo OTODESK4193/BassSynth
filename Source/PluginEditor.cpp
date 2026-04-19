@@ -1,3 +1,6 @@
+// ==============================================================================
+// Source/PluginEditor.cpp
+// ==============================================================================
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 
@@ -57,8 +60,11 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
 
     setupCombo(fmWaveCombo, fmWaveLabel, "FM Mod", { "Sine", "Saw", "Pulse", "Triangle" });
 
-    // Dual Morph Setup
-    juce::StringArray morphTypes = { "None", "Bend +", "Bend -", "PWM", "Sync", "Mirror", "Flip", "Quantize", "Remap" };
+    // Dual Morph Setup (SpectralŒn‚ðŠÜ‚Þ‘S14Ží—Þ‚ÉŠg’£)
+    juce::StringArray morphTypes = {
+        "None", "Bend +", "Bend -", "PWM", "Sync", "Mirror", "Flip", "Quantize", "Remap",
+        "Smear", "Vocode", "Stretch", "SpecCut", "Shepard"
+    };
     setupCombo(morphAModeCombo, morphAModeLabel, "Morph A", morphTypes);
     setupS(morphAAmtSlider, morphAAmtLabel, "Amt A");
     setupCombo(morphBModeCombo, morphBModeLabel, "Morph B", morphTypes);

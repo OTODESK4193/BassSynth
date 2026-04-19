@@ -1,6 +1,10 @@
+// ==============================================================================
+// Source/PluginProcessor.h
+// ==============================================================================
 #pragma once
 #include <JuceHeader.h>
 #include "DSP/WavetableOscillator.h"
+#include "DSP/SpectralMorphProcessor.h"
 #include "DSP/LadderFilter.h"
 #include "DSP/SineShaper.h"
 #include "Logic/MonoVoiceManager.h"
@@ -44,6 +48,7 @@ private:
     juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
     WavetableOscillator oscillator;
+    SpectralMorphProcessor spectralMorph; // <--- 新規追加
     LadderFilter filter;
     SineShaper shaper;
     MonoVoiceManager voiceManager;

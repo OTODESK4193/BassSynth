@@ -60,7 +60,7 @@ target_sources(BassSynth PRIVATE
     # Logic Group
     Source/Logic/MonoVoiceManager.h
     Source/Logic/AdsrEnvelope.h
-)
+ "Source/DSP/SpectralMorphProcessor.h")
 
 # 6. インクルードパス
 target_include_directories(BassSynth PRIVATE

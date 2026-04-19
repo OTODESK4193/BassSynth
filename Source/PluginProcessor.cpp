@@ -1,3 +1,6 @@
+// ==============================================================================
+// Source/PluginProcessor.cpp
+// ==============================================================================
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 
@@ -64,12 +67,11 @@ juce::AudioProcessorValueTreeState::ParameterLayout LiquidDreamAudioProcessor::c
     params.push_back(std::make_unique<juce::AudioParameterInt>("osc_fm_wave", "FM Wave", 0, 3, 0));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("osc_sync", "Sync", 1.0f, 4.0f, 1.0f));
 
-    // Dual Morph System Params
-    // 0:None, 1:Bend+, 2:Bend-, 3:PWM, 4:HardSync, 5:Mirror, 6:Flip, 7:Quantize, 8:Remap
-    params.push_back(std::make_unique<juce::AudioParameterInt>("osc_morph_a_mode", "Morph A", 0, 8, 0));
-    params.push_back(std::make_unique<juce::AudioParameterFloat>("osc_morph_a_amt", "Amount A", 0.0f, 1.0f, 0.0f));
-    params.push_back(std::make_unique<juce::AudioParameterInt>("osc_morph_b_mode", "Morph B", 0, 8, 0));
-    params.push_back(std::make_unique<juce::AudioParameterFloat>("osc_morph_b_amt", "Amount B", 0.0f, 1.0f, 0.0f));
+    // Dual Morph System Params (拡張: 最大値を13に設定しSpectralモードを包含)
+    params.push_back(std::make_unique<juce::AudioParameterInt>("osc_morph_a_mode", "Morph A", 0, 13, 0));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("osc_morph_a_amt", "Amount A", -1.0f, 1.0f, 0.0f));
+    params.push_back(std::make_unique<juce::AudioParameterInt>("osc_morph_b_mode", "Morph B", 0, 13, 0));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("osc_morph_b_amt", "Amount B", -1.0f, 1.0f, 0.0f));
 
     params.push_back(std::make_unique<juce::AudioParameterInt>("osc_uni", "Unison", 1, 12, 1));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("osc_detune", "Detune", 0.0f, 1.0f, 0.2f));
@@ -107,7 +109,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout LiquidDreamAudioProcessor::c
 
 void LiquidDreamAudioProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
-    oscillator.prepare(sampleRate); filter.prepare(sampleRate); shaper.prepare(sampleRate);
+    oscillator.prepare(sampleRate);
+    spectralMorph.prepare(sampleRate, samplesPerBlock); // STFTパイプラインの初期化
+    filter.prepare(sampleRate);
+    shaper.prepare(sampleRate);
     voiceManager.setSampleRate(sampleRate); ampEnv.setSampleRate(sampleRate); filterEnv.setSampleRate(sampleRate);
 
     double st = 0.02;
@@ -196,19 +201,20 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
 
     oscillator.setFMWaveform((int)pFmWave->load(std::memory_order_relaxed));
 
-    // Morph Mode Update
+    // 時間領域のMorph処理はオシレーター内部に指示
     oscillator.setMorphA((int)pMorphAMode->load(std::memory_order_relaxed), smoothedMorphAAmt.getNextValue());
     oscillator.setMorphB((int)pMorphBMode->load(std::memory_order_relaxed), smoothedMorphBAmt.getNextValue());
 
     auto* left = buffer.getWritePointer(0); auto* right = buffer.getWritePointer(1);
 
+    // 1. オシレーターの生成 (時間領域Morph適用済み)
     for (int i = 0; i < buffer.getNumSamples(); ++i) {
         oscillator.setWavetablePosition(smoothedWtPos.getNextValue());
         oscillator.setFMAmount(smoothedFm.getNextValue());
         oscillator.setSyncAmount(smoothedSync.getNextValue());
         oscillator.setDriftAmount(smoothedDrift.getNextValue());
 
-        // Sample accurate morph amount updates
+        // サンプル精度でのアップデート
         oscillator.setMorphA((int)pMorphAMode->load(std::memory_order_relaxed), smoothedMorphAAmt.getNextValue());
         oscillator.setMorphB((int)pMorphBMode->load(std::memory_order_relaxed), smoothedMorphBAmt.getNextValue());
 
@@ -219,16 +225,30 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         oscillator.setSubVolume(smoothedSubVol.getNextValue());
         oscillator.setSubPitchOffset(smoothedSubPitch.getNextValue());
 
-        float cc = smoothedCutoff.getNextValue(), cr = smoothedReso.getNextValue(), ce = smoothedFltEnvAmt.getNextValue();
-        float cd = smoothedDrive.getNextValue(), csa = smoothedShpAmt.getNextValue(), csr = smoothedShpRate.getNextValue(), csb = smoothedShpBit.getNextValue(), cg = smoothedGain.getNextValue();
-        float aVal = ampEnv.getNextSample(), fVal = filterEnv.getNextSample();
-
         float cf = voiceManager.getCurrentFrequency();
         if (cf < 1.0f) cf = 1.0f;
         if (std::abs(cf - lastOscFreq) > 0.01f) { oscillator.setFrequency(cf); lastOscFreq = cf; }
 
         float oL = 0.0f, oR = 0.0f; oscillator.getSampleStereo(oL, oR);
-        float sL = oL, sR = oR, mc = cc + (fVal * ce * 10000.0f);
+        left[i] = oL; right[i] = oR;
+    }
+
+    // 2. スペクトルモーフィングの適用 (オーディオスレッドSTFTパイプライン)
+    int mA = (int)pMorphAMode->load(std::memory_order_relaxed);
+    float aA = pMorphAAmt->load(std::memory_order_relaxed);
+    int mB = (int)pMorphBMode->load(std::memory_order_relaxed);
+    float aB = pMorphBAmt->load(std::memory_order_relaxed);
+
+    // バッファ全体をSpectral Processorに通す
+    spectralMorph.process(buffer, mA, aA, mB, aB);
+
+    // 3. 後段DSP (Filter, Shaper, AmpEnv)
+    for (int i = 0; i < buffer.getNumSamples(); ++i) {
+        float cc = smoothedCutoff.getNextValue(), cr = smoothedReso.getNextValue(), ce = smoothedFltEnvAmt.getNextValue();
+        float cd = smoothedDrive.getNextValue(), csa = smoothedShpAmt.getNextValue(), csr = smoothedShpRate.getNextValue(), csb = smoothedShpBit.getNextValue(), cg = smoothedGain.getNextValue();
+        float aVal = ampEnv.getNextSample(), fVal = filterEnv.getNextSample();
+
+        float sL = left[i], sR = right[i], mc = cc + (fVal * ce * 10000.0f);
 
         filter.setParameters(juce::jlimit(20.0f, 20000.0f, mc), cr);
         sL = filter.processSample(sL); sR = filter.processSample(sR);
@@ -237,6 +257,7 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
 
         float fg = cg * aVal;
         left[i] = sL * fg; right[i] = sR * fg;
+
         outputScopeData[scopeWriteIndex] = (left[i] + right[i]) * 0.5f;
         scopeWriteIndex = (scopeWriteIndex + 1) % 512;
     }
