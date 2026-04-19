@@ -45,7 +45,6 @@ public:
             driftRate[i] = speedHz;
         }
 
-        // 起動時にデフォルトの「Basic Shapes」を生成
         createDefaultBasicShapes();
         resetPhase();
     }
@@ -57,7 +56,6 @@ public:
 
     void prepare(double sr) { sampleRate = std::max(1.0, sr); }
 
-    // 数式によるBasic Shapes（Sine -> Triangle -> Saw -> Square）の生成
     void createDefaultBasicShapes() {
         const int myJobId = ++loadJobId;
         WavetableSet::Ptr newSet = new WavetableSet();
@@ -70,13 +68,9 @@ public:
 
         for (int i = 0; i < 2048; ++i) {
             float phase = i / 2048.0f;
-            // Frame 0: Sine
             writePtr[i] = std::sin(phase * juce::MathConstants<float>::twoPi);
-            // Frame 1: Triangle
             writePtr[2048 + i] = 2.0f * std::abs(2.0f * (phase - std::floor(phase + 0.5f))) - 1.0f;
-            // Frame 2: Sawtooth
             writePtr[4096 + i] = 2.0f * (phase - std::floor(phase + 0.5f));
-            // Frame 3: Square
             writePtr[6144 + i] = phase < 0.5f ? 1.0f : -1.0f;
         }
 
@@ -180,8 +174,7 @@ public:
         int f1_base = std::min(frameIdx + 1, set->numFrames - 1) * set->frameSize;
 
         for (int i = 0; i < 512; ++i) {
-            float masterPhase = i / 512.0f;
-            float phase = masterPhase;
+            float phase = i / 512.0f;
             float mod = 0.0f;
 
             if (fmWaveform == 0) mod = std::sin(phase * 2.0f * juce::MathConstants<float>::pi);
@@ -210,8 +203,6 @@ public:
             val = applyAmpWarp(val, morphAMode, morphAAmount, morphAShift);
             val = applyAmpWarp(val, morphBMode, morphBAmount, morphBShift);
             val = applyAmpWarp(val, morphCMode, morphCAmount, morphCShift);
-
-            val = applyEdgeTaper(val, masterPhase);
 
             displayBuffer[i] = val;
         }
@@ -316,7 +307,6 @@ public:
                 const float* ptr0 = set->levels[level0].getReadPointer(0);
                 const float* ptr1 = set->levels[level1].getReadPointer(0);
 
-                float masterPhase = p.get(i);
                 float tp = totalPhase.get(i);
                 tp -= std::floor(tp); if (tp < 0.0f) tp += 1.0f;
 
@@ -337,8 +327,6 @@ public:
                 val = applyAmpWarp(val, morphAMode, morphAAmount, morphAShift);
                 val = applyAmpWarp(val, morphBMode, morphBAmount, morphBShift);
                 val = applyAmpWarp(val, morphCMode, morphCAmount, morphCShift);
-
-                val = applyEdgeTaper(val, masterPhase);
 
                 if (!oscOn) val = 0.0f;
 
@@ -390,20 +378,6 @@ private:
     std::atomic<int> loadJobId{ 0 };
     juce::ReferenceCountedObjectPtr<WavetableSet> currentWavetableSet;
     std::array<SIMDFloat, MaxBlocks> phases, increments, panL, panR, amp;
-
-    inline float applyEdgeTaper(float val, float phase) const {
-        constexpr float taperWidth = 0.015f;
-        float fade = 1.0f;
-        if (phase < taperWidth) {
-            float t = phase / taperWidth;
-            fade = t * t * (3.0f - 2.0f * t);
-        }
-        else if (phase > 1.0f - taperWidth) {
-            float t = (1.0f - phase) / taperWidth;
-            fade = t * t * (3.0f - 2.0f * t);
-        }
-        return val * fade;
-    }
 
     inline float applyPhaseWarp(float p, int mode, float amt, float shift, float& syncFadeOut) const {
         if (mode == 1) {

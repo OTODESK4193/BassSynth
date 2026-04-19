@@ -74,7 +74,9 @@ private:
     juce::Slider modAtkSlider, modDecSlider, modSusSlider, modRelSlider;
     juce::Label  modAtkLabel, modDecLabel, modSusLabel, modRelLabel;
 
-    juce::TextButton legatoButton{ "LEGATO" }; // 消灯式トグルボタン
+    // 【変更】ToggleButtonにしてON/OFFの点灯視認性を向上
+    juce::ToggleButton legatoButton{ "LEGATO" };
+
     juce::Slider glideSlider, pitchSlider, gainSlider;
     juce::Label  glideLabel, pitchLabel, gainLabel;
 

@@ -71,6 +71,9 @@ private:
     std::array<float, 512> outputScopeData;
     int scopeWriteIndex = 0;
 
+    // 【NEW】エンベロープ値の一時保存用専用バッファ（自己変調バグ回避用）
+    juce::AudioBuffer<float> tempEnvBuffer;
+
     // --- OSC Parameters ---
     std::atomic<float>* pOscOn = nullptr;
     std::atomic<float>* pWave = nullptr;
@@ -116,7 +119,7 @@ private:
     std::atomic<float>* pShpBit = nullptr;
     std::atomic<float>* pGain = nullptr;
     std::atomic<float>* pGlide = nullptr;
-    std::atomic<float>* pLegato = nullptr; // 追加
+    std::atomic<float>* pLegato = nullptr;
 
     std::atomic<float>* pAAtk = nullptr;
     std::atomic<float>* pADec = nullptr;

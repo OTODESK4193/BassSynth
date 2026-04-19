@@ -94,9 +94,8 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     setupS(modAtkSlider, modAtkLabel, "A"); setupS(modDecSlider, modDecLabel, "D"); setupS(modSusSlider, modSusLabel, "S"); setupS(modRelSlider, modRelLabel, "R");
     setupS(glideSlider, glideLabel, "Glide"); setupS(pitchSlider, pitchLabel, "Pitch"); setupS(gainSlider, gainLabel, "Gain");
 
-    // Legato Button (消灯式トグル設定)
+    // Legato Button
     addAndMakeVisible(legatoButton);
-    legatoButton.setClickingTogglesState(true);
 
     auto& apvts = audioProcessor.getAPVTS();
     auto att = [&](juce::Slider& s, const juce::String& id) {
@@ -203,11 +202,11 @@ void LiquidDreamAudioProcessorEditor::resized()
     dualScope.setBounds(leftArea.removeFromTop(370));
     leftArea.removeFromTop(10);
 
-    // Performance (Legatoボタン追加)
+    // Performance
     auto ctrlRect = leftArea.removeFromTop(100);
     controlGroup.setBounds(ctrlRect);
     int cX = ctrlRect.getX(), cY = ctrlRect.getY() + 15;
-    legatoButton.setBounds(cX + 10, cY + 20, 65, 24);
+    legatoButton.setBounds(cX + 10, cY + 20, 75, 24); // 幅を75にして見やすく
     placeKnob(cX + 80, cY, glideLabel, glideSlider);
     placeKnob(cX + 160, cY, pitchLabel, pitchSlider);
     placeKnob(cX + 240, cY, gainLabel, gainSlider);
