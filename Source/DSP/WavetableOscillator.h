@@ -116,7 +116,7 @@ public:
                     workBuf.clear();
                     auto* workPtr = workBuf.getWritePointer(0);
                     for (int i = 0; i < 2048; ++i) {
-                        int srcIdx = (int)(f * 2048) + i; // キャスト追加
+                        int srcIdx = (int)(f * 2048) + i;
                         workPtr[i] = (srcIdx < newSet->totalSamples) ? tempRaw.getSample(0, srcIdx) : 0.0f;
                     }
                     fft.performRealOnlyForwardTransform(workPtr);
@@ -138,7 +138,7 @@ public:
                     float normalizeScale = 1.0f / peak;
                     auto* destPtr = newSet->levels[lvl].getWritePointer(0);
                     for (int i = 0; i < 2048; ++i) {
-                        int dstIdx = (int)(f * 2048) + i; // キャスト追加
+                        int dstIdx = (int)(f * 2048) + i;
                         if (dstIdx < newSet->totalSamples) destPtr[dstIdx] = juce::jlimit(-1.0f, 1.0f, workPtr[i] * normalizeScale);
                     }
                 }
@@ -154,7 +154,6 @@ public:
         int frameIdx = (int)framePos;
         float frameFrac = framePos - (float)frameIdx;
 
-        // オーバーフロー警告回避のための明示的キャスト
         int f0_base = (int)(frameIdx * set->frameSize);
         int f1_base = (int)(std::min(frameIdx + 1, set->numFrames - 1) * set->frameSize);
 
@@ -219,8 +218,9 @@ public:
         for (int i = 0; i < MaxVoices; ++i) driftPhase[i] = random.nextFloat();
     }
 
-    void getSampleStereo(float& outL, float& outR) {
-        outL = 0.0f; outR = 0.0f;
+    // 【変更】SUBの出力を分離して返すように変更
+    void getSampleStereo(float& outL, float& outR, float& subL, float& subR) {
+        outL = 0.0f; outR = 0.0f; subL = 0.0f; subR = 0.0f;
         WavetableSet::Ptr set = currentWavetableSet.get();
         if (set == nullptr || set->totalSamples == 0) return;
 
@@ -231,7 +231,6 @@ public:
         int frameIdx = (int)framePos;
         float frameFrac = framePos - (float)frameIdx;
 
-        // オーバーフロー警告回避
         int f0_base = (int)(frameIdx * set->frameSize);
         int f1_base = (int)(std::min(frameIdx + 1, set->numFrames - 1) * set->frameSize);
 
@@ -305,7 +304,9 @@ public:
             case 3: rs = 2.0f * subPhase - 1.0f; break;
             }
             subLpfState += (juce::MathConstants<float>::twoPi * 250.0f / (float)sampleRate) * (rs - subLpfState);
-            outL += subLpfState * subVolume; outR += subLpfState * subVolume;
+            // 【変更】outLに足さず、専用のsub変数に出力
+            subL = subLpfState * subVolume;
+            subR = subLpfState * subVolume;
         }
     }
 

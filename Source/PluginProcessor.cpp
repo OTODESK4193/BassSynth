@@ -106,7 +106,6 @@ juce::AudioProcessorValueTreeState::ParameterLayout LiquidDreamAudioProcessor::c
     params.push_back(std::make_unique<juce::AudioParameterFloat>("flt_env_amt", "Env Amt", 0.0f, 1.0f, 0.0f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("m_gain", "Gain", 0.0f, 1.0f, 0.5f));
 
-    // 【NEW】Glideの範囲を0.0ms 〜 1000.0msに修正し、低い値で繊細な調整ができるようSkew(0.3f)を設定
     auto glideRange = juce::NormalisableRange<float>(0.0f, 1000.0f, 1.0f, 0.3f);
     params.push_back(std::make_unique<juce::AudioParameterFloat>("m_glide", "Glide", glideRange, 0.0f));
 
@@ -135,6 +134,7 @@ void LiquidDreamAudioProcessor::prepareToPlay(double sampleRate, int samplesPerB
     voiceManager.setSampleRate(sampleRate); ampEnv.setSampleRate(sampleRate); filterEnv.setSampleRate(sampleRate);
 
     tempEnvBuffer.setSize(2, samplesPerBlock);
+    tempSubBuffer.setSize(2, samplesPerBlock);
 
     double st = 0.02;
     smoothedWtLevel.reset(sampleRate, st); smoothedWtPitch.reset(sampleRate, st);
@@ -264,6 +264,7 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
 
     if (tempEnvBuffer.getNumSamples() < buffer.getNumSamples()) {
         tempEnvBuffer.setSize(2, buffer.getNumSamples(), true, true, true);
+        tempSubBuffer.setSize(2, buffer.getNumSamples(), true, true, true);
     }
 
     for (int i = 0; i < buffer.getNumSamples(); ++i) {
@@ -295,8 +296,12 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         tempEnvBuffer.setSample(0, i, aVal);
         tempEnvBuffer.setSample(1, i, fVal);
 
-        float oL = 0.0f, oR = 0.0f; oscillator.getSampleStereo(oL, oR);
+        float oL = 0.0f, oR = 0.0f, subL = 0.0f, subR = 0.0f;
+        oscillator.getSampleStereo(oL, oR, subL, subR);
+
         left[i] = oL; right[i] = oR;
+        tempSubBuffer.setSample(0, i, subL);
+        tempSubBuffer.setSample(1, i, subR);
     }
 
     float aA = smoothedMorphAAmt.getCurrentValue();
@@ -315,12 +320,20 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         float aVal = tempEnvBuffer.getSample(0, i);
         float fVal = tempEnvBuffer.getSample(1, i);
 
-        float sL = left[i], sR = right[i], mc = cc + (fVal * ce * 10000.0f);
-
-        filter.setParameters(juce::jlimit(20.0f, 20000.0f, mc), cr);
-        sL = filter.processSample(sL); sR = filter.processSample(sR);
-
+        // 【修正】WavetableのみをShaper(ディストーション)に通す
+        float sL = left[i];
+        float sR = right[i];
         shaper.processStereo(sL, sR, cd, csa, csr, csb, sL, sR);
+
+        // 【修正】ディストーションの後にSUBを合流させる（IMDによるWavetableの消失を防ぐ）
+        sL += tempSubBuffer.getSample(0, i);
+        sR += tempSubBuffer.getSample(1, i);
+
+        // FilterでWavetableとSUBを馴染ませる
+        float mc = cc + (fVal * ce * 10000.0f);
+        filter.setParameters(juce::jlimit(20.0f, 20000.0f, mc), cr);
+        sL = filter.processSample(sL);
+        sR = filter.processSample(sR);
 
         float fg = cg * aVal;
         left[i] = sL * fg; right[i] = sR * fg;

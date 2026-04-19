@@ -53,6 +53,14 @@ public:
         spectralMorph.processSingleCycleForDisplay(buffer, mA, aA, sA, mB, aB, sB, mC, aC, sC);
     }
 
+    void getDynamicWaveform(std::array<float, 512>& buffer) {
+        int readIdx = scopeWriteIndex;
+        for (int i = 0; i < 512; ++i) {
+            buffer[i] = outputScopeData[readIdx];
+            readIdx = (readIdx + 1) % 512;
+        }
+    }
+
 private:
     juce::AudioProcessorValueTreeState apvts;
     juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
@@ -67,7 +75,10 @@ private:
     std::array<float, 512> outputScopeData;
     std::array<float, 512> tempScopeBuffer;
     int scopeWriteIndex = 0;
+
     juce::AudioBuffer<float> tempEnvBuffer;
+    // 【NEW】SUBをSpectralMorphから守りつつ後段に送るための退避バッファ
+    juce::AudioBuffer<float> tempSubBuffer;
 
     std::atomic<float>* pOscOn = nullptr; std::atomic<float>* pWave = nullptr; std::atomic<float>* pPos = nullptr;
     std::atomic<float>* pOscLevel = nullptr; std::atomic<float>* pOscPitch = nullptr;
