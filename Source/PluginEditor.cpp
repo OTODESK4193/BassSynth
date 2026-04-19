@@ -137,7 +137,6 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
         };
 
     startTimerHz(30);
-    // 高さを拡張 (820 -> 900) してShiftノブのスペースを確保
     setSize(1000, 900);
 }
 

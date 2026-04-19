@@ -255,10 +255,11 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     }
 
     // 2. スペクトルモーフィングの適用 (オーディオスレッドSTFTパイプライン)
-    float aA = pMorphAAmt->load(std::memory_order_relaxed);
-    float sA = pMorphAShift->load(std::memory_order_relaxed);
-    float aB = pMorphBAmt->load(std::memory_order_relaxed);
-    float sB = pMorphBShift->load(std::memory_order_relaxed);
+    // 【重要】ここで生のアトミック値ではなく、スムージングされた現在の安全な値を渡すことでノイズを根絶
+    float aA = smoothedMorphAAmt.getCurrentValue();
+    float sA = smoothedMorphAShift.getCurrentValue();
+    float aB = smoothedMorphBAmt.getCurrentValue();
+    float sB = smoothedMorphBShift.getCurrentValue();
 
     spectralMorph.process(buffer, currentModeA, aA, sA, currentModeB, aB, sB);
 

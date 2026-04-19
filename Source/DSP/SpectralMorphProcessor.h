@@ -278,7 +278,7 @@ private:
         {
             float cutFloat = std::abs(amount) * (float)numBins;
             bool isHighCut = (amount > 0.0f);
-            float reso = std::max(0.0f, shift) * 4.0f;
+            float reso = std::abs(shift) * 4.0f;
             float rollOffWidth = 8.0f; // 滑らかにカットするビン幅
 
             for (size_t k = 1; k < numBins; ++k) {
