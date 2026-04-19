@@ -44,6 +44,9 @@ public:
             float speedHz = 0.1f + random.nextFloat() * 0.4f;
             driftRate[i] = speedHz;
         }
+
+        // 起動時にデフォルトの「Basic Shapes」を生成
+        createDefaultBasicShapes();
         resetPhase();
     }
 
@@ -54,9 +57,40 @@ public:
 
     void prepare(double sr) { sampleRate = std::max(1.0, sr); }
 
+    // 数式によるBasic Shapes（Sine -> Triangle -> Saw -> Square）の生成
+    void createDefaultBasicShapes() {
+        const int myJobId = ++loadJobId;
+        WavetableSet::Ptr newSet = new WavetableSet();
+        newSet->totalSamples = 2048 * 4;
+        newSet->frameSize = 2048;
+        newSet->numFrames = 4;
+
+        juce::AudioBuffer<float> tempRaw(1, newSet->totalSamples);
+        auto* writePtr = tempRaw.getWritePointer(0);
+
+        for (int i = 0; i < 2048; ++i) {
+            float phase = i / 2048.0f;
+            // Frame 0: Sine
+            writePtr[i] = std::sin(phase * juce::MathConstants<float>::twoPi);
+            // Frame 1: Triangle
+            writePtr[2048 + i] = 2.0f * std::abs(2.0f * (phase - std::floor(phase + 0.5f))) - 1.0f;
+            // Frame 2: Sawtooth
+            writePtr[4096 + i] = 2.0f * (phase - std::floor(phase + 0.5f));
+            // Frame 3: Square
+            writePtr[6144 + i] = phase < 0.5f ? 1.0f : -1.0f;
+        }
+
+        for (int lvl = 0; lvl < NumLevels; ++lvl) {
+            newSet->levels[lvl].setSize(1, newSet->totalSamples);
+            newSet->levels[lvl].makeCopyOf(tempRaw);
+        }
+
+        currentWavetableSet = newSet;
+        runBandlimitingTask(myJobId, newSet, tempRaw);
+    }
+
     void loadWavetableFile(juce::String fileName) {
         const int myJobId = ++loadJobId;
-
         juce::File file = juce::File(EmbeddedWavetables::wavetablesDir).getChildFile(fileName);
         if (!file.existsAsFile()) return;
 
@@ -73,18 +107,21 @@ public:
         newSet->numFrames = std::max(1, newSet->totalSamples / newSet->frameSize);
 
         for (int lvl = 0; lvl < NumLevels; ++lvl) {
+            newSet->levels[lvl].setSize(1, newSet->totalSamples);
             newSet->levels[lvl].makeCopyOf(tempRaw);
         }
 
         currentWavetableSet = newSet;
+        runBandlimitingTask(myJobId, newSet, tempRaw);
+    }
 
+    void runBandlimitingTask(int myJobId, WavetableSet::Ptr newSet, juce::AudioBuffer<float> tempRaw) {
         backgroundPool.addJob([this, myJobId, newSet, tempRaw]() {
             juce::dsp::FFT fft(11);
             juce::AudioBuffer<float> workBuf(1, 4096);
 
             for (int lvl = 1; lvl < NumLevels; ++lvl) {
                 if (myJobId != loadJobId.load()) return;
-
                 if (newSet->frameSize == 2048) {
                     for (int f = 0; f < newSet->numFrames; ++f) {
                         if (myJobId != loadJobId.load()) return;
@@ -143,7 +180,7 @@ public:
         int f1_base = std::min(frameIdx + 1, set->numFrames - 1) * set->frameSize;
 
         for (int i = 0; i < 512; ++i) {
-            float masterPhase = i / 512.0f; // 元のマスター位相
+            float masterPhase = i / 512.0f;
             float phase = masterPhase;
             float mod = 0.0f;
 
@@ -174,7 +211,6 @@ public:
             val = applyAmpWarp(val, morphBMode, morphBAmount, morphBShift);
             val = applyAmpWarp(val, morphCMode, morphCAmount, morphCShift);
 
-            // 【重要】GUI波形描画時も端点を強制ゼロクロス化
             val = applyEdgeTaper(val, masterPhase);
 
             displayBuffer[i] = val;
@@ -280,7 +316,7 @@ public:
                 const float* ptr0 = set->levels[level0].getReadPointer(0);
                 const float* ptr1 = set->levels[level1].getReadPointer(0);
 
-                float masterPhase = p.get(i); // 時間軸上の真の位相を保持
+                float masterPhase = p.get(i);
                 float tp = totalPhase.get(i);
                 tp -= std::floor(tp); if (tp < 0.0f) tp += 1.0f;
 
@@ -302,7 +338,6 @@ public:
                 val = applyAmpWarp(val, morphBMode, morphBAmount, morphBShift);
                 val = applyAmpWarp(val, morphCMode, morphCAmount, morphCShift);
 
-                // 【重要】出力波形の両端(0%, 100%)を強制ゼロクロス化しクリックノイズを根絶
                 val = applyEdgeTaper(val, masterPhase);
 
                 if (!oscOn) val = 0.0f;
@@ -356,23 +391,20 @@ private:
     juce::ReferenceCountedObjectPtr<WavetableSet> currentWavetableSet;
     std::array<SIMDFloat, MaxBlocks> phases, increments, panL, panR, amp;
 
-    // --- Edge Tapering Algorithm ---
-    // マスター位相の始点(0%)と終点(100%)のわずかな区間で波形をゼロに落とし込む
     inline float applyEdgeTaper(float val, float phase) const {
-        constexpr float taperWidth = 0.015f; // 波形の両端1.5%をフェード区間とする
+        constexpr float taperWidth = 0.015f;
         float fade = 1.0f;
         if (phase < taperWidth) {
             float t = phase / taperWidth;
-            fade = t * t * (3.0f - 2.0f * t); // スムースステップでなめらかに立ち上げる
+            fade = t * t * (3.0f - 2.0f * t);
         }
         else if (phase > 1.0f - taperWidth) {
             float t = (1.0f - phase) / taperWidth;
-            fade = t * t * (3.0f - 2.0f * t); // スムースステップでなめらかに落とす
+            fade = t * t * (3.0f - 2.0f * t);
         }
         return val * fade;
     }
 
-    // --- Time Domain Morphing (0 to 7) ---
     inline float applyPhaseWarp(float p, int mode, float amt, float shift, float& syncFadeOut) const {
         if (mode == 1) {
             float sym = std::clamp(0.5f + shift * 0.49f, 0.01f, 0.99f);

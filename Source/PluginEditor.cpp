@@ -38,7 +38,7 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     // Osc Params Setup
     addAndMakeVisible(oscOnButton);
     setupS(wtLevelSlider, wtLevelLabel, "Level");
-    setupS(wtPosSlider, wtPosLabel, "Pos"); // Positionノブ復帰済み
+    setupS(wtPosSlider, wtPosLabel, "Pos");
     setupS(oscPitchSlider, oscPitchLabel, "Pitch");
 
     setupS(pitchDecayAmtSlider, pitchDecayAmtLabel, "P.Decay");
@@ -62,7 +62,7 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
 
     setupCombo(fmWaveCombo, fmWaveLabel, "FM Mod", { "Sine", "Saw", "Pulse", "Triangle" });
 
-    // 3 Stage Morph Setup (14種類統合)
+    // 3 Stage Morph Setup
     juce::StringArray morphTypes = {
         "None", "Bend (+/-)", "PWM", "Sync", "Mirror", "Flip", "Quantize", "Remap",
         "Smear", "Vocode", "Stretch", "SpecCut", "Shepard", "Comb"
@@ -93,6 +93,10 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     setupS(ampAtkSlider, ampAtkLabel, "A"); setupS(ampDecSlider, ampDecLabel, "D"); setupS(ampSusSlider, ampSusLabel, "S"); setupS(ampRelSlider, ampRelLabel, "R");
     setupS(modAtkSlider, modAtkLabel, "A"); setupS(modDecSlider, modDecLabel, "D"); setupS(modSusSlider, modSusLabel, "S"); setupS(modRelSlider, modRelLabel, "R");
     setupS(glideSlider, glideLabel, "Glide"); setupS(pitchSlider, pitchLabel, "Pitch"); setupS(gainSlider, gainLabel, "Gain");
+
+    // Legato Button (消灯式トグル設定)
+    addAndMakeVisible(legatoButton);
+    legatoButton.setClickingTogglesState(true);
 
     auto& apvts = audioProcessor.getAPVTS();
     auto att = [&](juce::Slider& s, const juce::String& id) {
@@ -126,11 +130,12 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     att(morphCAmtSlider, "osc_morph_c_amt");
     att(morphCShiftSlider, "osc_morph_c_shift");
 
-    // Attach Sub
+    // Attach Sub & Perf
     subOnAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(apvts, "sub_on", subOnButton);
     subWaveAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(apvts, "sub_wave", subWaveCombo);
     att(subVolSlider, "sub_vol");
     att(subPitchSlider, "sub_pitch");
+    legatoAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(apvts, "m_legato", legatoButton);
 
     // Attach Others
     att(distDriveSlider, "dist_drive"); att(shpAmtSlider, "shp_amt"); att(bitSlider, "shp_bit"); att(rateSlider, "shp_rate");
@@ -153,7 +158,6 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     rndWaveButton.onClick = [this] { browser.selectRandom(); };
 
     startTimerHz(30);
-
     setSize(1300, 700);
 }
 
@@ -185,7 +189,7 @@ void LiquidDreamAudioProcessorEditor::resized()
     // --- 左側エリア (350px) ---
     auto leftArea = area.removeFromLeft(350);
 
-    // 【NEW】ナビゲーションボタン群の配置
+    // ナビゲーションボタン群の配置
     auto navRect = leftArea.removeFromTop(35).reduced(2);
     openBrowserButton.setBounds(navRect.removeFromLeft(110));
     navRect.removeFromLeft(5);
@@ -199,12 +203,14 @@ void LiquidDreamAudioProcessorEditor::resized()
     dualScope.setBounds(leftArea.removeFromTop(370));
     leftArea.removeFromTop(10);
 
+    // Performance (Legatoボタン追加)
     auto ctrlRect = leftArea.removeFromTop(100);
     controlGroup.setBounds(ctrlRect);
     int cX = ctrlRect.getX(), cY = ctrlRect.getY() + 15;
-    placeKnob(cX + 15, cY, glideLabel, glideSlider);
-    placeKnob(cX + 95, cY, pitchLabel, pitchSlider);
-    placeKnob(cX + 175, cY, gainLabel, gainSlider);
+    legatoButton.setBounds(cX + 10, cY + 20, 65, 24);
+    placeKnob(cX + 80, cY, glideLabel, glideSlider);
+    placeKnob(cX + 160, cY, pitchLabel, pitchSlider);
+    placeKnob(cX + 240, cY, gainLabel, gainSlider);
 
     leftArea.removeFromTop(10);
     auto modRect = leftArea.removeFromTop(100);
@@ -220,16 +226,16 @@ void LiquidDreamAudioProcessorEditor::resized()
     auto rightArea = area;
     browser.setBounds(rightArea);
 
-    // 1. Wavetable Osc (ワイド2段レイアウト)
+    // 1. Wavetable Osc
     auto oscRect = rightArea.removeFromTop(240);
     oscGroup.setBounds(oscRect);
     int oX = oscRect.getX() + 10, oY = oscRect.getY() + 15;
 
-    // --- 1段目 (Basic & FM) ---
+    // --- 1段目 ---
     oscOnButton.setBounds(oX, oY + 20, 50, 24);
-    int step = 73; // 11個並べるために間隔を微調整 (75 -> 73)
+    int step = 73;
     placeKnob(oX + 60 + step * 0, oY, wtLevelLabel, wtLevelSlider);
-    placeKnob(oX + 60 + step * 1, oY, wtPosLabel, wtPosSlider);       // Positionノブ
+    placeKnob(oX + 60 + step * 1, oY, wtPosLabel, wtPosSlider);
     placeKnob(oX + 60 + step * 2, oY, oscPitchLabel, oscPitchSlider);
     placeKnob(oX + 60 + step * 3, oY, pitchDecayAmtLabel, pitchDecayAmtSlider);
     placeKnob(oX + 60 + step * 4, oY, pitchDecayTimeLabel, pitchDecayTimeSlider);
@@ -242,20 +248,17 @@ void LiquidDreamAudioProcessorEditor::resized()
 
     // --- 2段目 (3 Stage Morph) ---
     int y2 = oY + 100;
-    int mWidth = 120; // コンボボックスの幅を広げて見切れを防止
+    int mWidth = 120;
 
-    // Morph A
     placeCombo(oX, y2, mWidth, morphAModeLabel, morphAModeCombo);
     placeKnob(oX + mWidth + 10, y2, morphAAmtLabel, morphAAmtSlider);
     placeKnob(oX + mWidth + 85, y2, morphAShiftLabel, morphAShiftSlider);
 
-    // Morph B
     int oX_B = oX + mWidth + 175;
     placeCombo(oX_B, y2, mWidth, morphBModeLabel, morphBModeCombo);
     placeKnob(oX_B + mWidth + 10, y2, morphBAmtLabel, morphBAmtSlider);
     placeKnob(oX_B + mWidth + 85, y2, morphBShiftLabel, morphBShiftSlider);
 
-    // Morph C
     int oX_C = oX_B + mWidth + 175;
     placeCombo(oX_C, y2, mWidth, morphCModeLabel, morphCModeCombo);
     placeKnob(oX_C + mWidth + 10, y2, morphCAmtLabel, morphCAmtSlider);
@@ -264,7 +267,7 @@ void LiquidDreamAudioProcessorEditor::resized()
     rightArea.removeFromTop(10);
 
     // --- 下部: 横一列レイアウト ---
-    int bottomGroupWidth = (rightArea.getWidth() - 30) / 4; // 4つのグループを均等幅で配置
+    int bottomGroupWidth = (rightArea.getWidth() - 30) / 4;
 
     // 2. Sub Osc
     auto subRect = rightArea.removeFromLeft(bottomGroupWidth);

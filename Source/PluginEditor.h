@@ -74,6 +74,7 @@ private:
     juce::Slider modAtkSlider, modDecSlider, modSusSlider, modRelSlider;
     juce::Label  modAtkLabel, modDecLabel, modSusLabel, modRelLabel;
 
+    juce::TextButton legatoButton{ "LEGATO" }; // 消灯式トグルボタン
     juce::Slider glideSlider, pitchSlider, gainSlider;
     juce::Label  glideLabel, pitchLabel, gainLabel;
 
@@ -81,6 +82,7 @@ private:
     std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>> attachments;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> oscOnAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> subOnAttachment;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> legatoAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> subWaveAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> fmWaveAttachment;
 

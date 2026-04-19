@@ -106,7 +106,7 @@ private:
     std::atomic<float>* pSubVol = nullptr;
     std::atomic<float>* pSubPitch = nullptr;
 
-    // --- Filter / Drive / Envelope ---
+    // --- Filter / Drive / Envelope / Perf ---
     std::atomic<float>* pCutoff = nullptr;
     std::atomic<float>* pReso = nullptr;
     std::atomic<float>* pFltEnvAmt = nullptr;
@@ -116,6 +116,7 @@ private:
     std::atomic<float>* pShpBit = nullptr;
     std::atomic<float>* pGain = nullptr;
     std::atomic<float>* pGlide = nullptr;
+    std::atomic<float>* pLegato = nullptr; // 追加
 
     std::atomic<float>* pAAtk = nullptr;
     std::atomic<float>* pADec = nullptr;

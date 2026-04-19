@@ -1,70 +1,80 @@
+// ==============================================================================
+// Source/Logic/MonoVoiceManager.h
+// ==============================================================================
 #pragma once
 #include <JuceHeader.h>
-#include <array>
-#include <cmath>
+#include <vector>
+#include <algorithm>
 
 class MonoVoiceManager
 {
 public:
-    enum class LegatoMode { Retrigger, Legato };
+    MonoVoiceManager() = default;
 
-    MonoVoiceManager() { reset(); }
-
-    void reset()
-    {
-        stack.fill(-1);
-        activeNoteCount = 0;
-        currentFrequency = 440.0f;
-        targetFrequency = 440.0f;
+    void setSampleRate(double sr) {
+        sampleRate = std::max(1.0, sr);
     }
 
-    void setSampleRate(double sr) { sampleRate = std::max(1.0, sr); }
-
-    void setGlideTime(float seconds)
-    {
-        if (seconds <= 0.001f) {
-            glideCoeff = 1.0f;
+    void setGlideTime(float timeMs) {
+        glideTimeMs = timeMs;
+        if (timeMs <= 0.001f) {
+            glideCoef = 0.0f;
         }
         else {
-            float tau = seconds * 0.25f;
-            glideCoeff = 1.0f - std::exp(-1.0f / (float)(tau * sampleRate));
+            glideCoef = std::exp(-std::log(1000.0f) / (timeMs * 0.001f * (float)sampleRate));
         }
     }
 
-    void setLegatoMode(bool isLegato) { mode = isLegato ? LegatoMode::Legato : LegatoMode::Retrigger; }
+    void setLegatoMode(bool on) {
+        legatoMode = on;
+    }
 
-    bool noteOn(int noteNumber, int velocity)
-    {
+    bool isLegatoTransition() const {
+        return legatoTransition;
+    }
+
+    bool noteOn(int noteNumber, uint8_t velocity) {
         juce::ignoreUnused(velocity);
-        bool wasStackEmpty = (activeNoteCount == 0);
-        pushToStack(noteNumber);
 
-        targetFrequency = (float)juce::MidiMessage::getMidiNoteInHertz(noteNumber, 440.0);
+        // 既に押されているノートを削除して末尾に追加（最新優先）
+        auto it = std::remove(heldNotes.begin(), heldNotes.end(), noteNumber);
+        heldNotes.erase(it, heldNotes.end());
+        heldNotes.push_back(noteNumber);
 
-        if (wasStackEmpty) {
-            currentFrequency = targetFrequency;
-            return true; // Trigger envelopes
+        targetFrequency = (float)juce::MidiMessage::getMidiNoteInHertz(noteNumber);
+
+        if (legatoMode && heldNotes.size() > 1) {
+            // ノートが重なっている場合はLegato発動
+            legatoTransition = true;
         }
-        return mode != LegatoMode::Legato;
-    }
-
-    bool noteOff(int noteNumber)
-    {
-        removeFromStack(noteNumber);
-        if (activeNoteCount > 0) {
-            int returnNote = getTopNote();
-            if (returnNote != -1) {
-                targetFrequency = (float)juce::MidiMessage::getMidiNoteInHertz(returnNote, 440.0);
-                return false; // Do not trigger release
+        else {
+            // 最初のノート、またはLegatoオフの場合は通常発音
+            legatoTransition = false;
+            if (glideTimeMs <= 0.001f || heldNotes.size() == 1) {
+                currentFrequency = targetFrequency;
             }
         }
-        return true; // Trigger release
+
+        return true;
     }
 
-    inline float getCurrentFrequency()
-    {
-        if (std::abs(targetFrequency - currentFrequency) > 0.001f) {
-            currentFrequency += (targetFrequency - currentFrequency) * glideCoeff;
+    bool noteOff(int noteNumber) {
+        auto it = std::remove(heldNotes.begin(), heldNotes.end(), noteNumber);
+        heldNotes.erase(it, heldNotes.end());
+
+        if (!heldNotes.empty()) {
+            // 他のノートがまだ押されている場合は、その音程へ戻る
+            targetFrequency = (float)juce::MidiMessage::getMidiNoteInHertz(heldNotes.back());
+            if (legatoMode) legatoTransition = true;
+            return false; // エンベロープはReleaseしない
+        }
+
+        return true; // 全てのキーが離されたのでReleaseする
+    }
+
+    float getCurrentFrequency() {
+        if (glideCoef > 0.0f) {
+            currentFrequency = targetFrequency + (currentFrequency - targetFrequency) * glideCoef;
         }
         else {
             currentFrequency = targetFrequency;
@@ -73,36 +83,14 @@ public:
     }
 
 private:
-    static constexpr int MAX_STACK = 16;
-    std::array<int, MAX_STACK> stack;
-    int activeNoteCount = 0;
-
     double sampleRate = 44100.0;
-    float currentFrequency = 440.0f, targetFrequency = 440.0f;
-    float glideCoeff = 1.0f;
-    LegatoMode mode = LegatoMode::Retrigger;
+    float targetFrequency = 440.0f;
+    float currentFrequency = 440.0f;
+    float glideTimeMs = 0.0f;
+    float glideCoef = 0.0f;
 
-    void pushToStack(int note)
-    {
-        removeFromStack(note);
-        if (activeNoteCount < MAX_STACK) {
-            stack[activeNoteCount] = note;
-            activeNoteCount++;
-        }
-    }
+    bool legatoMode = false;
+    bool legatoTransition = false;
 
-    void removeFromStack(int note)
-    {
-        for (int i = 0; i < activeNoteCount; ++i) {
-            if (stack[i] == note) {
-                for (int j = i; j < activeNoteCount - 1; ++j) stack[j] = stack[j + 1];
-                activeNoteCount--;
-                i--;
-            }
-        }
-    }
-
-    int getTopNote() const { return (activeNoteCount > 0) ? stack[activeNoteCount - 1] : -1; }
+    std::vector<int> heldNotes;
 };
-
-
