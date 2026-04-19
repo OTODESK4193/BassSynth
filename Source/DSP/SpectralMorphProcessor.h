@@ -9,7 +9,7 @@
 
 /**
  * @class SpectralMorphProcessor
- * @brief リアルタイムSTFTを用いた周波数領域モーフィングエンジン（高解像度・アンチエイリアス対応版）
+ * @brief リアルタイムSTFTを用いた周波数領域モーフィングエンジン（3系統・高解像度対応版）
  */
 class SpectralMorphProcessor
 {
@@ -34,12 +34,14 @@ public:
         hopCounter = 0;
     }
 
-    void process(juce::AudioBuffer<float>& buffer, int modeA, float amtA, float shiftA, int modeB, float amtB, float shiftB)
+    void process(juce::AudioBuffer<float>& buffer, int modeA, float amtA, float shiftA,
+        int modeB, float amtB, float shiftB, int modeC, float amtC, float shiftC)
     {
         bool isSpectralA = (modeA >= 8 && modeA <= 13) && (std::abs(amtA) > 0.001f);
         bool isSpectralB = (modeB >= 8 && modeB <= 13) && (std::abs(amtB) > 0.001f);
+        bool isSpectralC = (modeC >= 8 && modeC <= 13) && (std::abs(amtC) > 0.001f);
 
-        if (!isSpectralA && !isSpectralB) return;
+        if (!isSpectralA && !isSpectralB && !isSpectralC) return;
 
         const int numSamples = buffer.getNumSamples();
         auto* channelDataL = buffer.getWritePointer(0);
@@ -63,18 +65,19 @@ public:
             if (hopCounter >= hopSize)
             {
                 hopCounter = 0;
-                // STFTのフレーム境界でのみパラメータを取得（フレーム間ティアリングノイズの防止）
-                processSTFTFrame(modeA, amtA, shiftA, modeB, amtB, shiftB);
+                processSTFTFrame(modeA, amtA, shiftA, modeB, amtB, shiftB, modeC, amtC, shiftC);
             }
         }
     }
 
-    void processSingleCycleForDisplay(std::array<float, 512>& buffer, int modeA, float amtA, float shiftA, int modeB, float amtB, float shiftB)
+    void processSingleCycleForDisplay(std::array<float, 512>& buffer, int modeA, float amtA, float shiftA,
+        int modeB, float amtB, float shiftB, int modeC, float amtC, float shiftC)
     {
         bool isSpectralA = (modeA >= 8 && modeA <= 13) && (std::abs(amtA) > 0.001f);
         bool isSpectralB = (modeB >= 8 && modeB <= 13) && (std::abs(amtB) > 0.001f);
+        bool isSpectralC = (modeC >= 8 && modeC <= 13) && (std::abs(amtC) > 0.001f);
 
-        if (isSpectralA || isSpectralB) {
+        if (isSpectralA || isSpectralB || isSpectralC) {
             for (size_t i = 0; i < 512; ++i) displayWorkspace[i] = buffer[i];
             for (size_t i = 512; i < 1024; ++i) displayWorkspace[i] = 0.0f;
 
@@ -89,6 +92,7 @@ public:
 
             if (isSpectralA) applyMorphToMagnitude(displayMag.data(), displayTempMag.data(), modeA, amtA, shiftA, numBins);
             if (isSpectralB) applyMorphToMagnitude(displayMag.data(), displayTempMag.data(), modeB, amtB, shiftB, numBins);
+            if (isSpectralC) applyMorphToMagnitude(displayMag.data(), displayTempMag.data(), modeC, amtC, shiftC, numBins);
 
             for (size_t k = 1; k < numBins; ++k) {
                 std::complex<float> c = std::polar(displayMag[k], displayPhase[k]);
@@ -101,7 +105,7 @@ public:
             for (size_t i = 0; i < 512; ++i) buffer[i] = displayWorkspace[i];
         }
 
-        // GUI描画時のみ：無条件のピークノーマライズ
+        // 描画用の無条件ピークノーマライズ
         float peak = 1e-9f;
         for (size_t i = 0; i < 512; ++i) {
             peak = std::max(peak, std::abs(buffer[i]));
@@ -134,7 +138,9 @@ private:
     std::array<float, 1024> displayWorkspace{};
     std::array<float, 256> displayMag{}, displayPhase{}, displayTempMag{};
 
-    void processSTFTFrame(int modeA, float amtA, float shiftA, int modeB, float amtB, float shiftB)
+    void processSTFTFrame(int modeA, float amtA, float shiftA,
+        int modeB, float amtB, float shiftB,
+        int modeC, float amtC, float shiftC)
     {
         int readPos = (fifoWritePos - (int)fftSize + fifoSize) % fifoSize;
 
@@ -169,6 +175,7 @@ private:
             phaseR[k] = std::arg(cR);
         }
 
+        // 3 Stage Spectral Morphing Pipeline
         if (modeA >= 8 && modeA <= 13) {
             applyMorphToMagnitude(magL.data(), tempMag.data(), modeA, amtA, shiftA, numBins);
             applyMorphToMagnitude(magR.data(), tempMag.data(), modeA, amtA, shiftA, numBins);
@@ -176,6 +183,10 @@ private:
         if (modeB >= 8 && modeB <= 13) {
             applyMorphToMagnitude(magL.data(), tempMag.data(), modeB, amtB, shiftB, numBins);
             applyMorphToMagnitude(magR.data(), tempMag.data(), modeB, amtB, shiftB, numBins);
+        }
+        if (modeC >= 8 && modeC <= 13) {
+            applyMorphToMagnitude(magL.data(), tempMag.data(), modeC, amtC, shiftC, numBins);
+            applyMorphToMagnitude(magR.data(), tempMag.data(), modeC, amtC, shiftC, numBins);
         }
 
         for (size_t k = 1; k < numBins; ++k)
@@ -238,7 +249,7 @@ private:
                 }
                 float val0 = sum0 / (float)std::max(1, count0);
                 float val1 = sum1 / (float)std::max(1, count1);
-                tMag[k] = val0 * (1.0f - lrFrac) + val1 * lrFrac; // 小数補間でジッパーノイズ消去
+                tMag[k] = val0 * (1.0f - lrFrac) + val1 * lrFrac;
             }
             for (size_t k = 1; k < numBins; ++k) mag[k] = tMag[k];
         }
@@ -274,17 +285,16 @@ private:
             }
             for (size_t k = 1; k < numBins; ++k) mag[k] = tMag[k];
         }
-        else if (mode == 11) // SpecCut -> Fractional Edge (Anti-Aliasing)
+        else if (mode == 11) // SpecCut 
         {
             float cutFloat = std::abs(amount) * (float)numBins;
             bool isHighCut = (amount > 0.0f);
             float reso = std::abs(shift) * 4.0f;
-            float rollOffWidth = 8.0f; // 滑らかにカットするビン幅
+            float rollOffWidth = 8.0f;
 
             for (size_t k = 1; k < numBins; ++k) {
                 float dist = isHighCut ? ((float)k - ((float)numBins - cutFloat)) : (cutFloat - (float)k);
 
-                // カットのエッジを滑らかにする (Anti-aliasing)
                 float gain = 1.0f;
                 if (dist > 0.0f) {
                     if (dist > rollOffWidth) gain = 0.0f;
@@ -293,7 +303,6 @@ private:
 
                 mag[k] *= gain;
 
-                // レゾナンス（境界付近の強調）
                 if (reso > 0.0f && dist <= 0.0f && dist > -20.0f) {
                     float rEnv = 1.0f - (std::abs(dist) / 20.0f);
                     mag[k] *= (1.0f + rEnv * reso);

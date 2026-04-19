@@ -45,11 +45,16 @@ public:
         int mA = (int)pMorphAMode->load(std::memory_order_relaxed);
         float aA = pMorphAAmt->load(std::memory_order_relaxed);
         float sA = pMorphAShift->load(std::memory_order_relaxed);
+
         int mB = (int)pMorphBMode->load(std::memory_order_relaxed);
         float aB = pMorphBAmt->load(std::memory_order_relaxed);
         float sB = pMorphBShift->load(std::memory_order_relaxed);
 
-        spectralMorph.processSingleCycleForDisplay(buffer, mA, aA, sA, mB, aB, sB);
+        int mC = (int)pMorphCMode->load(std::memory_order_relaxed);
+        float aC = pMorphCAmt->load(std::memory_order_relaxed);
+        float sC = pMorphCShift->load(std::memory_order_relaxed);
+
+        spectralMorph.processSingleCycleForDisplay(buffer, mA, aA, sA, mB, aB, sB, mC, aC, sC);
     }
 
 private:
@@ -67,6 +72,7 @@ private:
     int scopeWriteIndex = 0;
 
     // --- OSC Parameters ---
+    std::atomic<float>* pOscOn = nullptr;
     std::atomic<float>* pWave = nullptr;
     std::atomic<float>* pPos = nullptr;
     std::atomic<float>* pOscLevel = nullptr;
@@ -76,13 +82,18 @@ private:
     std::atomic<float>* pFm = nullptr;
     std::atomic<float>* pFmWave = nullptr;
 
-    // --- Dual Morph Parameters ---
+    // --- 3 Stage Morph Parameters ---
     std::atomic<float>* pMorphAMode = nullptr;
     std::atomic<float>* pMorphAAmt = nullptr;
     std::atomic<float>* pMorphAShift = nullptr;
+
     std::atomic<float>* pMorphBMode = nullptr;
     std::atomic<float>* pMorphBAmt = nullptr;
     std::atomic<float>* pMorphBShift = nullptr;
+
+    std::atomic<float>* pMorphCMode = nullptr;
+    std::atomic<float>* pMorphCAmt = nullptr;
+    std::atomic<float>* pMorphCShift = nullptr;
 
     std::atomic<float>* pUni = nullptr;
     std::atomic<float>* pDetune = nullptr;
@@ -119,11 +130,15 @@ private:
     juce::SmoothedValue<float> smoothedWtLevel, smoothedWtPitch, smoothedPDecayAmt, smoothedPDecayTime;
     juce::SmoothedValue<float> smoothedCutoff, smoothedReso, smoothedFltEnvAmt, smoothedDrive, smoothedShpAmt, smoothedShpRate, smoothedShpBit, smoothedGain;
     juce::SmoothedValue<float> smoothedWtPos, smoothedFm, smoothedDrift, smoothedSubVol, smoothedSubPitch, smoothedWidth;
-    juce::SmoothedValue<float> smoothedMorphAAmt, smoothedMorphAShift, smoothedMorphBAmt, smoothedMorphBShift;
+
+    juce::SmoothedValue<float> smoothedMorphAAmt, smoothedMorphAShift;
+    juce::SmoothedValue<float> smoothedMorphBAmt, smoothedMorphBShift;
+    juce::SmoothedValue<float> smoothedMorphCAmt, smoothedMorphCShift;
 
     float lastOscFreq = -1.0f;
     int lastModeA = -1;
     int lastModeB = -1;
+    int lastModeC = -1;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(LiquidDreamAudioProcessor)
 };

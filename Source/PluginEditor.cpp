@@ -33,20 +33,20 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     controlGroup.setText("PERFORMANCE"); addAndMakeVisible(controlGroup);
 
     // Osc Params Setup
+    addAndMakeVisible(oscOnButton);
     setupS(wtLevelSlider, wtLevelLabel, "Level");
     setupS(wtPosSlider, wtPosLabel, "Pos");
     setupS(oscPitchSlider, oscPitchLabel, "Pitch");
 
+    setupS(pitchDecayAmtSlider, pitchDecayAmtLabel, "P.Decay");
+    setupS(pitchDecayTimeSlider, pitchDecayTimeLabel, "P.Time");
+
+    setupS(driftSlider, driftLabel, "Drift");
     setupS(uniCountSlider, uniCountLabel, "Unison");
     setupS(detuneSlider, detuneLabel, "Detune");
     setupS(widthSlider, widthLabel, "Width");
-    setupS(driftSlider, driftLabel, "Drift");
-
-    setupS(pitchDecayAmtSlider, pitchDecayAmtLabel, "P.Decay");
-    setupS(pitchDecayTimeSlider, pitchDecayTimeLabel, "P.Time");
     setupS(fmAmtSlider, fmAmtLabel, "FM Amt");
 
-    // ComboBox Setup Helper
     auto setupCombo = [&](juce::ComboBox& c, juce::Label& l, const char* txt, juce::StringArray items) {
         addAndMakeVisible(c);
         c.addItemList(items, 1);
@@ -59,7 +59,7 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
 
     setupCombo(fmWaveCombo, fmWaveLabel, "FM Mod", { "Sine", "Saw", "Pulse", "Triangle" });
 
-    // Dual Morph Setup (14種類統合)
+    // 3 Stage Morph Setup (14種類統合)
     juce::StringArray morphTypes = {
         "None", "Bend (+/-)", "PWM", "Sync", "Mirror", "Flip", "Quantize", "Remap",
         "Smear", "Vocode", "Stretch", "SpecCut", "Shepard", "Comb"
@@ -71,6 +71,10 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     setupCombo(morphBModeCombo, morphBModeLabel, "Morph B", morphTypes);
     setupS(morphBAmtSlider, morphBAmtLabel, "Amt B");
     setupS(morphBShiftSlider, morphBShiftLabel, "Shift B");
+
+    setupCombo(morphCModeCombo, morphCModeLabel, "Morph C", morphTypes);
+    setupS(morphCAmtSlider, morphCAmtLabel, "Amt C");
+    setupS(morphCShiftSlider, morphCShiftLabel, "Shift C");
 
     // Sub Osc Params
     addAndMakeVisible(subOnButton);
@@ -93,20 +97,20 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
         };
 
     // Attach Osc
+    oscOnAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(apvts, "osc_on", oscOnButton);
     att(wtLevelSlider, "osc_level");
     att(wtPosSlider, "osc_pos");
     att(oscPitchSlider, "osc_pitch");
-
+    att(pitchDecayAmtSlider, "osc_pdecay_amt");
+    att(pitchDecayTimeSlider, "osc_pdecay_time");
+    att(driftSlider, "osc_drift");
     att(uniCountSlider, "osc_uni");
     att(detuneSlider, "osc_detune");
     att(widthSlider, "osc_width");
-    att(driftSlider, "osc_drift");
-
-    att(pitchDecayAmtSlider, "osc_pdecay_amt");
-    att(pitchDecayTimeSlider, "osc_pdecay_time");
-    fmWaveAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(apvts, "osc_fm_wave", fmWaveCombo);
     att(fmAmtSlider, "osc_fm");
+    fmWaveAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(apvts, "osc_fm_wave", fmWaveCombo);
 
+    // Attach Morph
     morphAModeAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(apvts, "osc_morph_a_mode", morphAModeCombo);
     att(morphAAmtSlider, "osc_morph_a_amt");
     att(morphAShiftSlider, "osc_morph_a_shift");
@@ -114,6 +118,10 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     morphBModeAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(apvts, "osc_morph_b_mode", morphBModeCombo);
     att(morphBAmtSlider, "osc_morph_b_amt");
     att(morphBShiftSlider, "osc_morph_b_shift");
+
+    morphCModeAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(apvts, "osc_morph_c_mode", morphCModeCombo);
+    att(morphCAmtSlider, "osc_morph_c_amt");
+    att(morphCShiftSlider, "osc_morph_c_shift");
 
     // Attach Sub
     subOnAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(apvts, "sub_on", subOnButton);
@@ -137,7 +145,9 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
         };
 
     startTimerHz(30);
-    setSize(1000, 900);
+
+    // --- 1300x700 のワイドレイアウト ---
+    setSize(1300, 700);
 }
 
 LiquidDreamAudioProcessorEditor::~LiquidDreamAudioProcessorEditor() { setLookAndFeel(nullptr); }
@@ -160,19 +170,19 @@ void LiquidDreamAudioProcessorEditor::resized()
         sld.setBounds(x, y + 20, 70, 50);
         };
 
-    auto placeCombo = [](int x, int y, juce::Label& lbl, juce::ComboBox& cmb) {
-        lbl.setBounds(x, y, 70, 20);
-        cmb.setBounds(x, y + 30, 70, 24);
+    auto placeCombo = [](int x, int y, int w, juce::Label& lbl, juce::ComboBox& cmb) {
+        lbl.setBounds(x, y, w, 20);
+        cmb.setBounds(x, y + 30, w, 24);
         };
 
-    // --- 左側エリア ---
+    // --- 左側エリア (350px) ---
     auto leftArea = area.removeFromLeft(350);
     openBrowserButton.setBounds(leftArea.removeFromTop(35).reduced(2));
     leftArea.removeFromTop(5);
     dualScope.setBounds(leftArea.removeFromTop(370));
     leftArea.removeFromTop(10);
 
-    auto ctrlRect = leftArea.removeFromTop(90);
+    auto ctrlRect = leftArea.removeFromTop(100);
     controlGroup.setBounds(ctrlRect);
     int cX = ctrlRect.getX(), cY = ctrlRect.getY() + 15;
     placeKnob(cX + 15, cY, glideLabel, glideSlider);
@@ -180,7 +190,7 @@ void LiquidDreamAudioProcessorEditor::resized()
     placeKnob(cX + 175, cY, gainLabel, gainSlider);
 
     leftArea.removeFromTop(10);
-    auto modRect = leftArea.removeFromTop(90);
+    auto modRect = leftArea.removeFromTop(100);
     modEnvGroup.setBounds(modRect);
     int mX = modRect.getX(), mY = modRect.getY() + 15;
     placeKnob(mX + 15, mY, modAtkLabel, modAtkSlider);
@@ -188,82 +198,96 @@ void LiquidDreamAudioProcessorEditor::resized()
     placeKnob(mX + 175, mY, modSusLabel, modSusSlider);
     placeKnob(mX + 255, mY, modRelLabel, modRelSlider);
 
-    // --- 右側エリア ---
+    // --- 右側エリア (920px) ---
     area.removeFromLeft(15);
     auto rightArea = area;
     browser.setBounds(rightArea);
 
-    // 1. Wavetable Osc (高さを拡張：300 -> 380)
-    auto oscRect = rightArea.removeFromTop(380);
+    // 1. Wavetable Osc (ワイド2段レイアウト)
+    auto oscRect = rightArea.removeFromTop(240);
     oscGroup.setBounds(oscRect);
     int oX = oscRect.getX() + 10, oY = oscRect.getY() + 15;
 
-    // Row 1: Basic & Pitch
-    placeKnob(oX, oY, wtLevelLabel, wtLevelSlider);
-    placeKnob(oX + 80, oY, wtPosLabel, wtPosSlider);
-    placeKnob(oX + 160, oY, oscPitchLabel, oscPitchSlider);
-    placeKnob(oX + 240, oY, driftLabel, driftSlider);
+    // --- 1段目 (Basic & FM) ---
+    oscOnButton.setBounds(oX, oY + 20, 50, 24);
+    int step = 73; // 11個並べるために間隔を微調整 (75 -> 73)
+    placeKnob(oX + 60 + step * 0, oY, wtLevelLabel, wtLevelSlider);
+    placeKnob(oX + 60 + step * 1, oY, wtPosLabel, wtPosSlider);       // ← ここに Position を追加！
+    placeKnob(oX + 60 + step * 2, oY, oscPitchLabel, oscPitchSlider);
+    placeKnob(oX + 60 + step * 3, oY, pitchDecayAmtLabel, pitchDecayAmtSlider);
+    placeKnob(oX + 60 + step * 4, oY, pitchDecayTimeLabel, pitchDecayTimeSlider);
+    placeKnob(oX + 60 + step * 5, oY, driftLabel, driftSlider);
+    placeKnob(oX + 60 + step * 6, oY, uniCountLabel, uniCountSlider);
+    placeKnob(oX + 60 + step * 7, oY, detuneLabel, detuneSlider);
+    placeKnob(oX + 60 + step * 8, oY, widthLabel, widthSlider);
+    placeKnob(oX + 60 + step * 9, oY, fmAmtLabel, fmAmtSlider);
+    placeCombo(oX + 60 + step * 10, oY, 80, fmWaveLabel, fmWaveCombo);
 
-    // Row 2: Unison & FM Wave
-    placeKnob(oX, oY + 70, uniCountLabel, uniCountSlider);
-    placeKnob(oX + 80, oY + 70, detuneLabel, detuneSlider);
-    placeKnob(oX + 160, oY + 70, widthLabel, widthSlider);
-    placeCombo(oX + 240, oY + 70, fmWaveLabel, fmWaveCombo);
+    // --- 2段目 (3 Stage Morph) ---
+    // (以降はそのまま変更なし)
+    // --- 2段目 (3 Stage Morph) ---
+    int y2 = oY + 100;
+    int mWidth = 120; // コンボボックスの幅を広げて見切れを防止
 
-    // Row 3: FM Amt & Pitch Mod
-    placeKnob(oX, oY + 140, fmAmtLabel, fmAmtSlider);
-    placeKnob(oX + 80, oY + 140, pitchDecayAmtLabel, pitchDecayAmtSlider);
-    placeKnob(oX + 160, oY + 140, pitchDecayTimeLabel, pitchDecayTimeSlider);
+    // Morph A
+    placeCombo(oX, y2, mWidth, morphAModeLabel, morphAModeCombo);
+    placeKnob(oX + mWidth + 10, y2, morphAAmtLabel, morphAAmtSlider);
+    placeKnob(oX + mWidth + 85, y2, morphAShiftLabel, morphAShiftSlider);
 
-    // Row 4: Morph A (Mode, Amt, Shift)
-    placeCombo(oX, oY + 210, morphAModeLabel, morphAModeCombo);
-    placeKnob(oX + 80, oY + 210, morphAAmtLabel, morphAAmtSlider);
-    placeKnob(oX + 160, oY + 210, morphAShiftLabel, morphAShiftSlider);
+    // Morph B
+    int oX_B = oX + mWidth + 175;
+    placeCombo(oX_B, y2, mWidth, morphBModeLabel, morphBModeCombo);
+    placeKnob(oX_B + mWidth + 10, y2, morphBAmtLabel, morphBAmtSlider);
+    placeKnob(oX_B + mWidth + 85, y2, morphBShiftLabel, morphBShiftSlider);
 
-    // Row 5: Morph B (Mode, Amt, Shift)
-    placeCombo(oX, oY + 280, morphBModeLabel, morphBModeCombo);
-    placeKnob(oX + 80, oY + 280, morphBAmtLabel, morphBAmtSlider);
-    placeKnob(oX + 160, oY + 280, morphBShiftLabel, morphBShiftSlider);
+    // Morph C
+    int oX_C = oX_B + mWidth + 175;
+    placeCombo(oX_C, y2, mWidth, morphCModeLabel, morphCModeCombo);
+    placeKnob(oX_C + mWidth + 10, y2, morphCAmtLabel, morphCAmtSlider);
+    placeKnob(oX_C + mWidth + 85, y2, morphCShiftLabel, morphCShiftSlider);
 
     rightArea.removeFromTop(10);
 
+    // --- 下部: 横一列レイアウト ---
+    int bottomGroupWidth = (rightArea.getWidth() - 30) / 4; // 4つのグループを均等幅で配置
+
     // 2. Sub Osc
-    auto subRect = rightArea.removeFromTop(90);
+    auto subRect = rightArea.removeFromLeft(bottomGroupWidth);
     subGroup.setBounds(subRect);
     int sbX = subRect.getX() + 10, sbY = subRect.getY() + 15;
     subOnButton.setBounds(sbX, sbY + 20, 50, 24);
-    subWaveCombo.setBounds(sbX + 60, sbY + 25, 80, 24);
-    placeKnob(sbX + 160, sbY, subVolLabel, subVolSlider);
-    placeKnob(sbX + 240, sbY, subPitchLabel, subPitchSlider);
+    subWaveCombo.setBounds(sbX + 60, sbY + 25, 70, 24);
+    placeKnob(sbX + 10, sbY + 60, subVolLabel, subVolSlider);
+    placeKnob(sbX + 90, sbY + 60, subPitchLabel, subPitchSlider);
 
-    rightArea.removeFromTop(10);
+    rightArea.removeFromLeft(10);
 
     // 3. Shaper
-    auto shpRect = rightArea.removeFromTop(90);
+    auto shpRect = rightArea.removeFromLeft(bottomGroupWidth);
     shaperGroup.setBounds(shpRect);
     int sX = shpRect.getX() + 10, sY = shpRect.getY() + 15;
     placeKnob(sX, sY, distDriveLabel, distDriveSlider);
     placeKnob(sX + 80, sY, shpAmtLabel, shpAmtSlider);
-    placeKnob(sX + 160, sY, rateLabel, rateSlider);
-    placeKnob(sX + 240, sY, bitLabel, bitSlider);
+    placeKnob(sX, sY + 80, rateLabel, rateSlider);
+    placeKnob(sX + 80, sY + 80, bitLabel, bitSlider);
 
-    rightArea.removeFromTop(10);
+    rightArea.removeFromLeft(10);
 
     // 4. Filter
-    auto fltRect = rightArea.removeFromTop(90);
+    auto fltRect = rightArea.removeFromLeft(bottomGroupWidth);
     filterGroup.setBounds(fltRect);
     int fX = fltRect.getX() + 10, fY = fltRect.getY() + 15;
     placeKnob(fX, fY, cutoffLabel, cutoffSlider);
     placeKnob(fX + 80, fY, resLabel, resSlider);
-    placeKnob(fX + 160, fY, fltEnvAmtLabel, fltEnvAmtSlider);
+    placeKnob(fX + 40, fY + 80, fltEnvAmtLabel, fltEnvAmtSlider);
 
-    rightArea.removeFromTop(10);
+    rightArea.removeFromLeft(10);
 
     // 5. Amp Envelope
     ampEnvGroup.setBounds(rightArea);
     int eX = rightArea.getX() + 10, eY = rightArea.getY() + 15;
     placeKnob(eX, eY, ampAtkLabel, ampAtkSlider);
     placeKnob(eX + 80, eY, ampDecLabel, ampDecSlider);
-    placeKnob(eX + 160, eY, ampSusLabel, ampSusSlider);
-    placeKnob(eX + 240, eY, ampRelLabel, ampRelSlider);
+    placeKnob(eX, eY + 80, ampSusLabel, ampSusSlider);
+    placeKnob(eX + 80, eY + 80, ampRelLabel, ampRelSlider);
 }

@@ -29,6 +29,7 @@ private:
     juce::GroupComponent oscGroup, subGroup, shaperGroup, filterGroup, ampEnvGroup, modEnvGroup, controlGroup;
 
     // --- Osc Parameters ---
+    juce::ToggleButton oscOnButton{ "ON" };
     juce::Slider wtLevelSlider, wtPosSlider, oscPitchSlider;
     juce::Label  wtLevelLabel, wtPosLabel, oscPitchLabel;
 
@@ -41,13 +42,13 @@ private:
     juce::ComboBox fmWaveCombo;
     juce::Label    fmWaveLabel;
 
-    // --- Dual Morph Parameters ---
-    juce::ComboBox morphAModeCombo, morphBModeCombo;
-    juce::Label    morphAModeLabel, morphBModeLabel;
-    juce::Slider   morphAAmtSlider, morphBAmtSlider;
-    juce::Label    morphAAmtLabel, morphBAmtLabel;
-    juce::Slider   morphAShiftSlider, morphBShiftSlider;
-    juce::Label    morphAShiftLabel, morphBShiftLabel;
+    // --- 3 Stage Morph Parameters ---
+    juce::ComboBox morphAModeCombo, morphBModeCombo, morphCModeCombo;
+    juce::Label    morphAModeLabel, morphBModeLabel, morphCModeLabel;
+    juce::Slider   morphAAmtSlider, morphBAmtSlider, morphCAmtSlider;
+    juce::Label    morphAAmtLabel, morphBAmtLabel, morphCAmtLabel;
+    juce::Slider   morphAShiftSlider, morphBShiftSlider, morphCShiftSlider;
+    juce::Label    morphAShiftLabel, morphBShiftLabel, morphCShiftLabel;
 
     // --- Sub Osc Parameters ---
     juce::ToggleButton subOnButton{ "ON" };
@@ -73,11 +74,14 @@ private:
 
     // --- Attachments ---
     std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>> attachments;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> oscOnAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> subOnAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> subWaveAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> fmWaveAttachment;
+
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> morphAModeAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> morphBModeAttachment;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> morphCModeAttachment;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(LiquidDreamAudioProcessorEditor)
 };

@@ -134,6 +134,7 @@ public:
 
     void generateSingleCycle(std::array<float, 512>& displayBuffer) {
         WavetableSet::Ptr set = currentWavetableSet.get();
+        // オシレーターがOffでもGUIには波形を描画し続ける（音作りのガイドとして機能させる）
         if (set == nullptr || set->totalSamples == 0) { displayBuffer.fill(0.0f); return; }
         auto* ptr = set->levels[0].getReadPointer(0);
         float framePos = wtPosition * (float)std::max(0, set->numFrames - 1);
@@ -154,9 +155,10 @@ public:
             float currentPhase = std::fmod(phase + mod * fmAmount * 0.1f, 1.0f);
             if (currentPhase < 0.0f) currentPhase += 1.0f;
 
-            float syncFadeA = 1.0f, syncFadeB = 1.0f;
+            float syncFadeA = 1.0f, syncFadeB = 1.0f, syncFadeC = 1.0f;
             currentPhase = applyPhaseWarp(currentPhase, morphAMode, morphAAmount, morphAShift, syncFadeA);
             currentPhase = applyPhaseWarp(currentPhase, morphBMode, morphBAmount, morphBShift, syncFadeB);
+            currentPhase = applyPhaseWarp(currentPhase, morphCMode, morphCAmount, morphCShift, syncFadeC);
 
             float floatPos = currentPhase * set->frameSize;
             int pos = (int)floatPos;
@@ -166,10 +168,11 @@ public:
             float val1 = getHermiteSample(ptr, f1_base, set->frameSize, pos, frac);
             float val = val0 * (1.0f - frameFrac) + val1 * frameFrac;
 
-            val *= (syncFadeA * syncFadeB);
+            val *= (syncFadeA * syncFadeB * syncFadeC);
 
             val = applyAmpWarp(val, morphAMode, morphAAmount, morphAShift);
             val = applyAmpWarp(val, morphBMode, morphBAmount, morphBShift);
+            val = applyAmpWarp(val, morphCMode, morphCAmount, morphCShift);
 
             displayBuffer[i] = val;
         }
@@ -185,9 +188,12 @@ public:
     void setFMWaveform(int shape) { fmWaveform = juce::jlimit(0, 3, shape); }
     void setDriftAmount(float amt) { driftAmount = amt; }
 
+    // 3系統 Morph System
     void setMorphA(int mode, float amt, float shift) { morphAMode = mode; morphAAmount = amt; morphAShift = shift; }
     void setMorphB(int mode, float amt, float shift) { morphBMode = mode; morphBAmount = amt; morphBShift = shift; }
+    void setMorphC(int mode, float amt, float shift) { morphCMode = mode; morphCAmount = amt; morphCShift = shift; }
 
+    void setOscOn(bool on) { oscOn = on; }
     void setWavetableLevel(float level) { wtLevel = level; }
     void setWavetablePitchOffset(float semitones) { wtPitchOffset = semitones; }
     void setPitchDecay(float amount, float timeMs) {
@@ -275,10 +281,11 @@ public:
                 float tp = totalPhase.get(i);
                 tp -= std::floor(tp); if (tp < 0.0f) tp += 1.0f;
 
-                // --- Phase Warping (Morph A -> Morph B) ---
-                float syncFadeA = 1.0f, syncFadeB = 1.0f;
+                // --- 3 Stage Phase Warping (A -> B -> C) ---
+                float syncFadeA = 1.0f, syncFadeB = 1.0f, syncFadeC = 1.0f;
                 tp = applyPhaseWarp(tp, morphAMode, morphAAmount, morphAShift, syncFadeA);
                 tp = applyPhaseWarp(tp, morphBMode, morphBAmount, morphBShift, syncFadeB);
+                tp = applyPhaseWarp(tp, morphCMode, morphCAmount, morphCShift, syncFadeC);
 
                 float floatPos = tp * set->frameSize; int pos = (int)floatPos;
                 if (pos >= set->frameSize) pos -= set->frameSize; float frac = floatPos - (float)pos;
@@ -287,12 +294,15 @@ public:
                 float val1 = getHermiteSample(ptr1, f0_base, set->frameSize, pos, frac) * (1.0f - frameFrac) + getHermiteSample(ptr1, f1_base, set->frameSize, pos, frac) * frameFrac;
                 float val = val0 * (1.0f - levelFrac) + val1 * levelFrac;
 
-                // 帯域制限の代わりにSync時のフェーズ境界をウィンドウで滑らかに減衰（クリックノイズ回避）
-                val *= (syncFadeA * syncFadeB);
+                val *= (syncFadeA * syncFadeB * syncFadeC);
 
-                // --- Amplitude Shaping (Morph A -> Morph B) ---
+                // --- 3 Stage Amplitude Shaping (A -> B -> C) ---
                 val = applyAmpWarp(val, morphAMode, morphAAmount, morphAShift);
                 val = applyAmpWarp(val, morphBMode, morphBAmount, morphBShift);
+                val = applyAmpWarp(val, morphCMode, morphCAmount, morphCShift);
+
+                // oscOnがfalseの時は出力振幅を0にするが、フェーズ計算は進める（同期ズレ防止）
+                if (!oscOn) val = 0.0f;
 
                 vAmp.set(i, val * amp[b].get(i));
                 float phaseInc = p.get(i) + step; if (phaseInc >= 1.0f) phaseInc -= 1.0f; nextP.set(i, phaseInc);
@@ -329,8 +339,10 @@ private:
     int unisonCount = 1;
     int fmWaveform = 0;
 
+    bool oscOn = true;
     int morphAMode = 0; float morphAAmount = 0.0f; float morphAShift = 0.0f;
     int morphBMode = 0; float morphBAmount = 0.0f; float morphBShift = 0.0f;
+    int morphCMode = 0; float morphCAmount = 0.0f; float morphCShift = 0.0f;
 
     float wtLevel = 1.0f, wtPitchOffset = 0.0f, pitchDecayAmt = 0.0f, pitchDecayCoef = 0.0f, pitchEnvState = 0.0f;
     bool subOn = true; int subWaveform = 0; float subVolume = 0.0f, subPitchOffset = -12.0f, subPhase = 0.0f, subLpfState = 0.0f;
@@ -343,31 +355,28 @@ private:
 
     // --- Time Domain Morphing (0 to 7) ---
     inline float applyPhaseWarp(float p, int mode, float amt, float shift, float& syncFadeOut) const {
-        if (mode == 1) { // Bend (+/-) -> Shift: Symmetry
-            float sym = std::clamp(0.5f + shift * 0.49f, 0.01f, 0.99f); // 極限値を安全圏にクランプ
+        if (mode == 1) { // Bend (+/-) 
+            float sym = std::clamp(0.5f + shift * 0.49f, 0.01f, 0.99f);
             float b = std::exp(-std::clamp(amt, -0.99f, 0.99f) * 2.0f);
             if (p < sym) return sym * std::pow(std::max(0.0001f, p / sym), b);
             else return sym + (1.0f - sym) * (1.0f - std::pow(std::max(0.0001f, (1.0f - p) / (1.0f - sym)), b));
         }
-        if (mode == 2) { // PWM -> Shift: Pulse Center
+        if (mode == 2) { // PWM 
             float center = std::clamp(0.5f + shift * 0.4f, 0.1f, 0.9f);
             float pw = std::clamp(0.01f + (amt * 0.5f + 0.5f) * 0.98f, 0.01f, 0.99f);
             float pShift = std::fmod(p + (0.5f - center) + 1.0f, 1.0f);
             float warped = (pShift < pw) ? (pShift / pw * 0.5f) : (0.5f + (pShift - pw) / (1.0f - pw) * 0.5f);
             return std::fmod(warped + (center - 0.5f) + 1.0f, 1.0f);
         }
-        if (mode == 3) { // Sync -> Shift: Phase Offset
+        if (mode == 3) { // Sync
             float ratio = 1.0f + std::abs(amt) * 7.0f;
             float synced = std::fmod((p + shift * 0.5f) * ratio, 1.0f);
-
-            // Sync特有の不連続クリックノイズを防ぐため、波形の境界に到達直前にウィンドウを適用（簡易アンチエイリアス）
             float fadeWidth = 0.03f;
             if (synced > 1.0f - fadeWidth) syncFadeOut *= (1.0f - synced) / fadeWidth;
             else if (synced < fadeWidth) syncFadeOut *= synced / fadeWidth;
-
             return std::fmod(synced - shift * 0.5f + 1.0f, 1.0f);
         }
-        if (mode == 4) { // Mirror -> Shift: Mirror Point
+        if (mode == 4) { // Mirror 
             float point = std::clamp(0.5f + shift * 0.4f, 0.1f, 0.9f);
             float mirrored = (p < point) ? p * (0.5f / point) : 1.0f - (p - point) * (0.5f / (1.0f - point));
             if (amt < 0.0f) mirrored = (p > point) ? (p - point) * (0.5f / (1.0f - point)) : 1.0f - p * (0.5f / point);
@@ -377,15 +386,13 @@ private:
     }
 
     inline float applyAmpWarp(float v, int mode, float amt, float shift) const {
-        if (mode == 5) { // Flip -> Shift: Threshold (Soft-Knee対応)
+        if (mode == 5) { // Flip (Soft-Knee対応)
             float thresh = shift;
-            float delta = 0.05f; // ソフトニーの幅
+            float delta = 0.05f;
             float out = 0.0f;
-
             if (v > thresh + delta) out = thresh - (v - thresh);
             else if (v < thresh - delta) out = thresh + (thresh - v);
             else {
-                // 不連続角をなくすための二次曲線補間（C1連続性）
                 float t = (v - (thresh - delta)) / (2.0f * delta);
                 float y0 = thresh + delta;
                 float y1 = thresh - delta;
@@ -394,13 +401,11 @@ private:
             }
             return v * (1.0f - std::abs(amt)) + out * std::abs(amt);
         }
-        if (mode == 6) { // Quantize -> Shift: Offset (階段エッジの平滑化)
+        if (mode == 6) { // Quantize (階段エッジの平滑化)
             float steps = std::pow(2.0f, 2.0f + (1.0f - std::abs(amt)) * 14.0f);
             float scaled = (v + shift) * steps;
             float base = std::floor(scaled);
             float frac = scaled - base;
-
-            // 階段の角を滑らかにする
             float edge = 0.1f;
             float smoothFrac = 0.0f;
             if (frac > 1.0f - edge) {
@@ -410,7 +415,7 @@ private:
             float out = (base + smoothFrac) / steps - shift;
             return v * (1.0f - std::abs(amt)) + out * std::abs(amt);
         }
-        if (mode == 7) { // Remap (Saturation/Fold) -> Shift: Asymmetry
+        if (mode == 7) { // Remap (Saturation/Fold)
             float driven = (v + shift * 0.5f) * (1.0f + std::abs(amt) * 4.0f);
             float out = amt >= 0.0f ? std::tanh(driven) : std::sin(driven * juce::MathConstants<float>::halfPi);
             return out - (shift * 0.5f);
