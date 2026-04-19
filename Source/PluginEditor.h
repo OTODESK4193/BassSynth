@@ -46,6 +46,8 @@ private:
     juce::Label    morphAModeLabel, morphBModeLabel;
     juce::Slider   morphAAmtSlider, morphBAmtSlider;
     juce::Label    morphAAmtLabel, morphBAmtLabel;
+    juce::Slider   morphAShiftSlider, morphBShiftSlider;
+    juce::Label    morphAShiftLabel, morphBShiftLabel;
 
     // --- Sub Osc Parameters ---
     juce::ToggleButton subOnButton{ "ON" };

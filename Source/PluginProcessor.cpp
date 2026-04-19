@@ -21,8 +21,10 @@ LiquidDreamAudioProcessor::LiquidDreamAudioProcessor()
 
     pMorphAMode = apvts.getRawParameterValue("osc_morph_a_mode");
     pMorphAAmt = apvts.getRawParameterValue("osc_morph_a_amt");
+    pMorphAShift = apvts.getRawParameterValue("osc_morph_a_shift");
     pMorphBMode = apvts.getRawParameterValue("osc_morph_b_mode");
     pMorphBAmt = apvts.getRawParameterValue("osc_morph_b_amt");
+    pMorphBShift = apvts.getRawParameterValue("osc_morph_b_shift");
 
     pUni = apvts.getRawParameterValue("osc_uni");
     pDetune = apvts.getRawParameterValue("osc_detune");
@@ -65,11 +67,13 @@ juce::AudioProcessorValueTreeState::ParameterLayout LiquidDreamAudioProcessor::c
     params.push_back(std::make_unique<juce::AudioParameterFloat>("osc_fm", "FM Amt", 0.0f, 3.0f, 0.0f));
     params.push_back(std::make_unique<juce::AudioParameterInt>("osc_fm_wave", "FM Wave", 0, 3, 0));
 
-    // Dual Morph System Params (0〜13へ拡張, Amountは双方向 -1.0〜1.0)
+    // Dual Morph System Params (Shiftを追加)
     params.push_back(std::make_unique<juce::AudioParameterInt>("osc_morph_a_mode", "Morph A", 0, 13, 0));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("osc_morph_a_amt", "Amount A", -1.0f, 1.0f, 0.0f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("osc_morph_a_shift", "Shift A", -1.0f, 1.0f, 0.0f));
     params.push_back(std::make_unique<juce::AudioParameterInt>("osc_morph_b_mode", "Morph B", 0, 13, 0));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("osc_morph_b_amt", "Amount B", -1.0f, 1.0f, 0.0f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("osc_morph_b_shift", "Shift B", -1.0f, 1.0f, 0.0f));
 
     params.push_back(std::make_unique<juce::AudioParameterInt>("osc_uni", "Unison", 1, 12, 1));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("osc_detune", "Detune", 0.0f, 1.0f, 0.2f));
@@ -121,7 +125,8 @@ void LiquidDreamAudioProcessor::prepareToPlay(double sampleRate, int samplesPerB
     smoothedShpRate.reset(sampleRate, st); smoothedShpBit.reset(sampleRate, st); smoothedGain.reset(sampleRate, st);
     smoothedWtPos.reset(sampleRate, st); smoothedFm.reset(sampleRate, st); smoothedDrift.reset(sampleRate, st);
     smoothedSubVol.reset(sampleRate, st); smoothedSubPitch.reset(sampleRate, st); smoothedWidth.reset(sampleRate, st);
-    smoothedMorphAAmt.reset(sampleRate, st); smoothedMorphBAmt.reset(sampleRate, st);
+    smoothedMorphAAmt.reset(sampleRate, st); smoothedMorphAShift.reset(sampleRate, st);
+    smoothedMorphBAmt.reset(sampleRate, st); smoothedMorphBShift.reset(sampleRate, st);
 
     smoothedWtLevel.setCurrentAndTargetValue(pOscLevel->load(std::memory_order_relaxed));
     smoothedWtPitch.setCurrentAndTargetValue(pOscPitch->load(std::memory_order_relaxed));
@@ -142,7 +147,9 @@ void LiquidDreamAudioProcessor::prepareToPlay(double sampleRate, int samplesPerB
     smoothedSubPitch.setCurrentAndTargetValue(pSubPitch->load(std::memory_order_relaxed));
     smoothedWidth.setCurrentAndTargetValue(pWidth->load(std::memory_order_relaxed));
     smoothedMorphAAmt.setCurrentAndTargetValue(pMorphAAmt->load(std::memory_order_relaxed));
+    smoothedMorphAShift.setCurrentAndTargetValue(pMorphAShift->load(std::memory_order_relaxed));
     smoothedMorphBAmt.setCurrentAndTargetValue(pMorphBAmt->load(std::memory_order_relaxed));
+    smoothedMorphBShift.setCurrentAndTargetValue(pMorphBShift->load(std::memory_order_relaxed));
 
     lastOscFreq = -1.0f;
 }
@@ -163,7 +170,9 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     smoothedDrift.setTargetValue(pDrift->load(std::memory_order_relaxed)); smoothedSubVol.setTargetValue(pSubVol->load(std::memory_order_relaxed));
     smoothedSubPitch.setTargetValue(pSubPitch->load(std::memory_order_relaxed)); smoothedWidth.setTargetValue(pWidth->load(std::memory_order_relaxed));
     smoothedMorphAAmt.setTargetValue(pMorphAAmt->load(std::memory_order_relaxed));
+    smoothedMorphAShift.setTargetValue(pMorphAShift->load(std::memory_order_relaxed));
     smoothedMorphBAmt.setTargetValue(pMorphBAmt->load(std::memory_order_relaxed));
+    smoothedMorphBShift.setTargetValue(pMorphBShift->load(std::memory_order_relaxed));
 
     int waveIdx = (int)pWave->load(std::memory_order_relaxed); static int lastWaveIdx = -1;
     if (waveIdx != lastWaveIdx && waveIdx >= 0 && waveIdx < EmbeddedWavetables::numTables) {
@@ -204,9 +213,9 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         oscillator.setFMAmount(smoothedFm.getNextValue());
         oscillator.setDriftAmount(smoothedDrift.getNextValue());
 
-        // サンプル精度でのアップデート
-        oscillator.setMorphA((int)pMorphAMode->load(std::memory_order_relaxed), smoothedMorphAAmt.getNextValue());
-        oscillator.setMorphB((int)pMorphBMode->load(std::memory_order_relaxed), smoothedMorphBAmt.getNextValue());
+        // サンプル精度でのアップデート (Amt と Shift)
+        oscillator.setMorphA((int)pMorphAMode->load(std::memory_order_relaxed), smoothedMorphAAmt.getNextValue(), smoothedMorphAShift.getNextValue());
+        oscillator.setMorphB((int)pMorphBMode->load(std::memory_order_relaxed), smoothedMorphBAmt.getNextValue(), smoothedMorphBShift.getNextValue());
 
         oscillator.setWavetableLevel(smoothedWtLevel.getNextValue());
         oscillator.setWavetablePitchOffset(smoothedWtPitch.getNextValue());
@@ -226,10 +235,12 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     // 2. スペクトルモーフィングの適用 (オーディオスレッドSTFTパイプライン)
     int mA = (int)pMorphAMode->load(std::memory_order_relaxed);
     float aA = pMorphAAmt->load(std::memory_order_relaxed);
+    float sA = pMorphAShift->load(std::memory_order_relaxed);
     int mB = (int)pMorphBMode->load(std::memory_order_relaxed);
     float aB = pMorphBAmt->load(std::memory_order_relaxed);
+    float sB = pMorphBShift->load(std::memory_order_relaxed);
 
-    spectralMorph.process(buffer, mA, aA, mB, aB);
+    spectralMorph.process(buffer, mA, aA, sA, mB, aB, sB);
 
     // 3. 後段DSP (Filter, Shaper, AmpEnv)
     for (int i = 0; i < buffer.getNumSamples(); ++i) {

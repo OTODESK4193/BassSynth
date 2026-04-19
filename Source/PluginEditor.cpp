@@ -59,15 +59,18 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
 
     setupCombo(fmWaveCombo, fmWaveLabel, "FM Mod", { "Sine", "Saw", "Pulse", "Triangle" });
 
-    // Dual Morph Setup (Time: 0〜7, Spectral: 8〜13 に統一)
+    // Dual Morph Setup (14種類統合)
     juce::StringArray morphTypes = {
         "None", "Bend (+/-)", "PWM", "Sync", "Mirror", "Flip", "Quantize", "Remap",
         "Smear", "Vocode", "Stretch", "SpecCut", "Shepard", "Comb"
     };
     setupCombo(morphAModeCombo, morphAModeLabel, "Morph A", morphTypes);
     setupS(morphAAmtSlider, morphAAmtLabel, "Amt A");
+    setupS(morphAShiftSlider, morphAShiftLabel, "Shift A");
+
     setupCombo(morphBModeCombo, morphBModeLabel, "Morph B", morphTypes);
     setupS(morphBAmtSlider, morphBAmtLabel, "Amt B");
+    setupS(morphBShiftSlider, morphBShiftLabel, "Shift B");
 
     // Sub Osc Params
     addAndMakeVisible(subOnButton);
@@ -89,7 +92,7 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
         attachments.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, id, s));
         };
 
-    // Attach Osc (Syncの削除を反映)
+    // Attach Osc
     att(wtLevelSlider, "osc_level");
     att(wtPosSlider, "osc_pos");
     att(oscPitchSlider, "osc_pitch");
@@ -106,8 +109,11 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
 
     morphAModeAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(apvts, "osc_morph_a_mode", morphAModeCombo);
     att(morphAAmtSlider, "osc_morph_a_amt");
+    att(morphAShiftSlider, "osc_morph_a_shift");
+
     morphBModeAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(apvts, "osc_morph_b_mode", morphBModeCombo);
     att(morphBAmtSlider, "osc_morph_b_amt");
+    att(morphBShiftSlider, "osc_morph_b_shift");
 
     // Attach Sub
     subOnAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(apvts, "sub_on", subOnButton);
@@ -131,7 +137,8 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
         };
 
     startTimerHz(30);
-    setSize(1000, 820);
+    // 高さを拡張 (820 -> 900) してShiftノブのスペースを確保
+    setSize(1000, 900);
 }
 
 LiquidDreamAudioProcessorEditor::~LiquidDreamAudioProcessorEditor() { setLookAndFeel(nullptr); }
@@ -187,8 +194,8 @@ void LiquidDreamAudioProcessorEditor::resized()
     auto rightArea = area;
     browser.setBounds(rightArea);
 
-    // 1. Wavetable Osc (300px, 4x4 Grid レイアウト調整)
-    auto oscRect = rightArea.removeFromTop(300);
+    // 1. Wavetable Osc (高さを拡張：300 -> 380)
+    auto oscRect = rightArea.removeFromTop(380);
     oscGroup.setBounds(oscRect);
     int oX = oscRect.getX() + 10, oY = oscRect.getY() + 15;
 
@@ -208,13 +215,16 @@ void LiquidDreamAudioProcessorEditor::resized()
     placeKnob(oX, oY + 140, fmAmtLabel, fmAmtSlider);
     placeKnob(oX + 80, oY + 140, pitchDecayAmtLabel, pitchDecayAmtSlider);
     placeKnob(oX + 160, oY + 140, pitchDecayTimeLabel, pitchDecayTimeSlider);
-    // (oX + 240 は空きスペース)
 
-    // Row 4: Dual Morph (14種統合)
+    // Row 4: Morph A (Mode, Amt, Shift)
     placeCombo(oX, oY + 210, morphAModeLabel, morphAModeCombo);
     placeKnob(oX + 80, oY + 210, morphAAmtLabel, morphAAmtSlider);
-    placeCombo(oX + 160, oY + 210, morphBModeLabel, morphBModeCombo);
-    placeKnob(oX + 240, oY + 210, morphBAmtLabel, morphBAmtSlider);
+    placeKnob(oX + 160, oY + 210, morphAShiftLabel, morphAShiftSlider);
+
+    // Row 5: Morph B (Mode, Amt, Shift)
+    placeCombo(oX, oY + 280, morphBModeLabel, morphBModeCombo);
+    placeKnob(oX + 80, oY + 280, morphBAmtLabel, morphBAmtSlider);
+    placeKnob(oX + 160, oY + 280, morphBShiftLabel, morphBShiftSlider);
 
     rightArea.removeFromTop(10);
 
