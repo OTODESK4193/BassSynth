@@ -1,4 +1,4 @@
-// ==============================================================================
+Ôªø// ==============================================================================
 // Source/PluginEditor.h
 // ==============================================================================
 #pragma once
@@ -23,9 +23,14 @@ private:
     DualScopeComponent dualScope;
 
     WavetableBrowser browser;
-    juce::TextButton openBrowserButton{ "BROWSE WAVETABLE" };
+    juce::TextButton openBrowserButton{ "BROWSE" };
 
-    // --- ÉOÉãÅ[ÉvÉRÉìÉ|Å[ÉlÉìÉg ---
+    // --- „Éä„Éì„Ç≤„Éº„Ç∑„Éß„É≥„Éú„Çø„É≥ËøΩÂä† ---
+    juce::TextButton prevWaveButton{ juce::String::fromUTF8("\xe2\x97\x80") }; // ‚óÄ
+    juce::TextButton nextWaveButton{ juce::String::fromUTF8("\xe2\x96\xb6") }; // ‚ñ∂
+    juce::TextButton rndWaveButton{ "RND" };
+
+    // --- „Ç∞„É´„Éº„Éó„Ç≥„É≥„Éù„Éº„Éç„É≥„Éà ---
     juce::GroupComponent oscGroup, subGroup, shaperGroup, filterGroup, ampEnvGroup, modEnvGroup, controlGroup;
 
     // --- Osc Parameters ---

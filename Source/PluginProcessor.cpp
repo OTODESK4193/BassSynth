@@ -178,11 +178,9 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
 {
     juce::ScopedNoDenormals noDenormals; buffer.clear(); if (buffer.getNumChannels() < 2) return;
 
-    // --- インテリジェント・スムージング (フレーム連動防護) ---
     auto updateSmoothTime = [this](std::atomic<float>* pMode, int& lastMode, juce::SmoothedValue<float>& sAmt, juce::SmoothedValue<float>& sShift) {
         int currentMode = (int)pMode->load(std::memory_order_relaxed);
         if (currentMode != lastMode) {
-            // Spectral Mode (8以上) ならば、STFTホップレートより長い 25ms に強制延長して破綻を防ぐ
             double time = (currentMode >= 8) ? 0.025 : 0.005;
             sAmt.reset(getSampleRate(), time);
             sShift.reset(getSampleRate(), time);
@@ -194,7 +192,6 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     int currentModeA = updateSmoothTime(pMorphAMode, lastModeA, smoothedMorphAAmt, smoothedMorphAShift);
     int currentModeB = updateSmoothTime(pMorphBMode, lastModeB, smoothedMorphBAmt, smoothedMorphBShift);
     int currentModeC = updateSmoothTime(pMorphCMode, lastModeC, smoothedMorphCAmt, smoothedMorphCShift);
-    // ----------------------------------------------------
 
     smoothedWtLevel.setTargetValue(pOscLevel->load(std::memory_order_relaxed));
     smoothedWtPitch.setTargetValue(pOscPitch->load(std::memory_order_relaxed));
@@ -249,7 +246,6 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
 
     auto* left = buffer.getWritePointer(0); auto* right = buffer.getWritePointer(1);
 
-    // 1. オシレーターの生成 (時間領域Morph適用済み)
     for (int i = 0; i < buffer.getNumSamples(); ++i) {
         oscillator.setWavetablePosition(smoothedWtPos.getNextValue());
         oscillator.setFMAmount(smoothedFm.getNextValue());
@@ -274,8 +270,6 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         left[i] = oL; right[i] = oR;
     }
 
-    // 2. スペクトルモーフィングの適用 (STFTパイプライン)
-    // 【重要】生のアトミック値ではなく、スムージングされた現在の安全な値を渡す
     float aA = smoothedMorphAAmt.getCurrentValue();
     float sA = smoothedMorphAShift.getCurrentValue();
     float aB = smoothedMorphBAmt.getCurrentValue();
@@ -285,7 +279,6 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
 
     spectralMorph.process(buffer, currentModeA, aA, sA, currentModeB, aB, sB, currentModeC, aC, sC);
 
-    // 3. 後段DSP (Filter, Shaper, AmpEnv)
     for (int i = 0; i < buffer.getNumSamples(); ++i) {
         float cc = smoothedCutoff.getNextValue(), cr = smoothedReso.getNextValue(), ce = smoothedFltEnvAmt.getNextValue();
         float cd = smoothedDrive.getNextValue(), csa = smoothedShpAmt.getNextValue(), csr = smoothedShpRate.getNextValue(), csb = smoothedShpBit.getNextValue(), cg = smoothedGain.getNextValue();

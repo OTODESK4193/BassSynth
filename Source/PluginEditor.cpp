@@ -12,6 +12,9 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     setLookAndFeel(&abletonLnF);
 
     addAndMakeVisible(openBrowserButton);
+    addAndMakeVisible(prevWaveButton);
+    addAndMakeVisible(nextWaveButton);
+    addAndMakeVisible(rndWaveButton);
     addAndMakeVisible(dualScope);
 
     auto setupS = [&](juce::Slider& s, juce::Label& l, const char* txt) {
@@ -35,7 +38,7 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     // Osc Params Setup
     addAndMakeVisible(oscOnButton);
     setupS(wtLevelSlider, wtLevelLabel, "Level");
-    setupS(wtPosSlider, wtPosLabel, "Pos");
+    setupS(wtPosSlider, wtPosLabel, "Pos"); // Positionノブ復帰済み
     setupS(oscPitchSlider, oscPitchLabel, "Pitch");
 
     setupS(pitchDecayAmtSlider, pitchDecayAmtLabel, "P.Decay");
@@ -139,14 +142,18 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     addChildComponent(browser);
     browser.setVisible(false);
 
+    // ボタンのコールバック設定
     openBrowserButton.onClick = [this] {
         browser.setVisible(!browser.isVisible());
         if (browser.isVisible()) browser.toFront(true);
         };
 
+    prevWaveButton.onClick = [this] { browser.selectPrev(); };
+    nextWaveButton.onClick = [this] { browser.selectNext(); };
+    rndWaveButton.onClick = [this] { browser.selectRandom(); };
+
     startTimerHz(30);
 
-    // --- 1300x700 のワイドレイアウト ---
     setSize(1300, 700);
 }
 
@@ -177,7 +184,17 @@ void LiquidDreamAudioProcessorEditor::resized()
 
     // --- 左側エリア (350px) ---
     auto leftArea = area.removeFromLeft(350);
-    openBrowserButton.setBounds(leftArea.removeFromTop(35).reduced(2));
+
+    // 【NEW】ナビゲーションボタン群の配置
+    auto navRect = leftArea.removeFromTop(35).reduced(2);
+    openBrowserButton.setBounds(navRect.removeFromLeft(110));
+    navRect.removeFromLeft(5);
+    prevWaveButton.setBounds(navRect.removeFromLeft(40));
+    navRect.removeFromLeft(5);
+    nextWaveButton.setBounds(navRect.removeFromLeft(40));
+    navRect.removeFromLeft(5);
+    rndWaveButton.setBounds(navRect.removeFromLeft(60));
+
     leftArea.removeFromTop(5);
     dualScope.setBounds(leftArea.removeFromTop(370));
     leftArea.removeFromTop(10);
@@ -212,7 +229,7 @@ void LiquidDreamAudioProcessorEditor::resized()
     oscOnButton.setBounds(oX, oY + 20, 50, 24);
     int step = 73; // 11個並べるために間隔を微調整 (75 -> 73)
     placeKnob(oX + 60 + step * 0, oY, wtLevelLabel, wtLevelSlider);
-    placeKnob(oX + 60 + step * 1, oY, wtPosLabel, wtPosSlider);       // ← ここに Position を追加！
+    placeKnob(oX + 60 + step * 1, oY, wtPosLabel, wtPosSlider);       // Positionノブ
     placeKnob(oX + 60 + step * 2, oY, oscPitchLabel, oscPitchSlider);
     placeKnob(oX + 60 + step * 3, oY, pitchDecayAmtLabel, pitchDecayAmtSlider);
     placeKnob(oX + 60 + step * 4, oY, pitchDecayTimeLabel, pitchDecayTimeSlider);
@@ -223,8 +240,6 @@ void LiquidDreamAudioProcessorEditor::resized()
     placeKnob(oX + 60 + step * 9, oY, fmAmtLabel, fmAmtSlider);
     placeCombo(oX + 60 + step * 10, oY, 80, fmWaveLabel, fmWaveCombo);
 
-    // --- 2段目 (3 Stage Morph) ---
-    // (以降はそのまま変更なし)
     // --- 2段目 (3 Stage Morph) ---
     int y2 = oY + 100;
     int mWidth = 120; // コンボボックスの幅を広げて見切れを防止

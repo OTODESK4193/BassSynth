@@ -134,7 +134,6 @@ public:
 
     void generateSingleCycle(std::array<float, 512>& displayBuffer) {
         WavetableSet::Ptr set = currentWavetableSet.get();
-        // オシレーターがOffでもGUIには波形を描画し続ける（音作りのガイドとして機能させる）
         if (set == nullptr || set->totalSamples == 0) { displayBuffer.fill(0.0f); return; }
         auto* ptr = set->levels[0].getReadPointer(0);
         float framePos = wtPosition * (float)std::max(0, set->numFrames - 1);
@@ -144,7 +143,8 @@ public:
         int f1_base = std::min(frameIdx + 1, set->numFrames - 1) * set->frameSize;
 
         for (int i = 0; i < 512; ++i) {
-            float phase = i / 512.0f;
+            float masterPhase = i / 512.0f; // 元のマスター位相
+            float phase = masterPhase;
             float mod = 0.0f;
 
             if (fmWaveform == 0) mod = std::sin(phase * 2.0f * juce::MathConstants<float>::pi);
@@ -174,6 +174,9 @@ public:
             val = applyAmpWarp(val, morphBMode, morphBAmount, morphBShift);
             val = applyAmpWarp(val, morphCMode, morphCAmount, morphCShift);
 
+            // 【重要】GUI波形描画時も端点を強制ゼロクロス化
+            val = applyEdgeTaper(val, masterPhase);
+
             displayBuffer[i] = val;
         }
     }
@@ -188,7 +191,6 @@ public:
     void setFMWaveform(int shape) { fmWaveform = juce::jlimit(0, 3, shape); }
     void setDriftAmount(float amt) { driftAmount = amt; }
 
-    // 3系統 Morph System
     void setMorphA(int mode, float amt, float shift) { morphAMode = mode; morphAAmount = amt; morphAShift = shift; }
     void setMorphB(int mode, float amt, float shift) { morphBMode = mode; morphBAmount = amt; morphBShift = shift; }
     void setMorphC(int mode, float amt, float shift) { morphCMode = mode; morphCAmount = amt; morphCShift = shift; }
@@ -278,10 +280,10 @@ public:
                 const float* ptr0 = set->levels[level0].getReadPointer(0);
                 const float* ptr1 = set->levels[level1].getReadPointer(0);
 
+                float masterPhase = p.get(i); // 時間軸上の真の位相を保持
                 float tp = totalPhase.get(i);
                 tp -= std::floor(tp); if (tp < 0.0f) tp += 1.0f;
 
-                // --- 3 Stage Phase Warping (A -> B -> C) ---
                 float syncFadeA = 1.0f, syncFadeB = 1.0f, syncFadeC = 1.0f;
                 tp = applyPhaseWarp(tp, morphAMode, morphAAmount, morphAShift, syncFadeA);
                 tp = applyPhaseWarp(tp, morphBMode, morphBAmount, morphBShift, syncFadeB);
@@ -296,12 +298,13 @@ public:
 
                 val *= (syncFadeA * syncFadeB * syncFadeC);
 
-                // --- 3 Stage Amplitude Shaping (A -> B -> C) ---
                 val = applyAmpWarp(val, morphAMode, morphAAmount, morphAShift);
                 val = applyAmpWarp(val, morphBMode, morphBAmount, morphBShift);
                 val = applyAmpWarp(val, morphCMode, morphCAmount, morphCShift);
 
-                // oscOnがfalseの時は出力振幅を0にするが、フェーズ計算は進める（同期ズレ防止）
+                // 【重要】出力波形の両端(0%, 100%)を強制ゼロクロス化しクリックノイズを根絶
+                val = applyEdgeTaper(val, masterPhase);
+
                 if (!oscOn) val = 0.0f;
 
                 vAmp.set(i, val * amp[b].get(i));
@@ -353,22 +356,38 @@ private:
     juce::ReferenceCountedObjectPtr<WavetableSet> currentWavetableSet;
     std::array<SIMDFloat, MaxBlocks> phases, increments, panL, panR, amp;
 
+    // --- Edge Tapering Algorithm ---
+    // マスター位相の始点(0%)と終点(100%)のわずかな区間で波形をゼロに落とし込む
+    inline float applyEdgeTaper(float val, float phase) const {
+        constexpr float taperWidth = 0.015f; // 波形の両端1.5%をフェード区間とする
+        float fade = 1.0f;
+        if (phase < taperWidth) {
+            float t = phase / taperWidth;
+            fade = t * t * (3.0f - 2.0f * t); // スムースステップでなめらかに立ち上げる
+        }
+        else if (phase > 1.0f - taperWidth) {
+            float t = (1.0f - phase) / taperWidth;
+            fade = t * t * (3.0f - 2.0f * t); // スムースステップでなめらかに落とす
+        }
+        return val * fade;
+    }
+
     // --- Time Domain Morphing (0 to 7) ---
     inline float applyPhaseWarp(float p, int mode, float amt, float shift, float& syncFadeOut) const {
-        if (mode == 1) { // Bend (+/-) 
+        if (mode == 1) {
             float sym = std::clamp(0.5f + shift * 0.49f, 0.01f, 0.99f);
             float b = std::exp(-std::clamp(amt, -0.99f, 0.99f) * 2.0f);
             if (p < sym) return sym * std::pow(std::max(0.0001f, p / sym), b);
             else return sym + (1.0f - sym) * (1.0f - std::pow(std::max(0.0001f, (1.0f - p) / (1.0f - sym)), b));
         }
-        if (mode == 2) { // PWM 
+        if (mode == 2) {
             float center = std::clamp(0.5f + shift * 0.4f, 0.1f, 0.9f);
             float pw = std::clamp(0.01f + (amt * 0.5f + 0.5f) * 0.98f, 0.01f, 0.99f);
             float pShift = std::fmod(p + (0.5f - center) + 1.0f, 1.0f);
             float warped = (pShift < pw) ? (pShift / pw * 0.5f) : (0.5f + (pShift - pw) / (1.0f - pw) * 0.5f);
             return std::fmod(warped + (center - 0.5f) + 1.0f, 1.0f);
         }
-        if (mode == 3) { // Sync
+        if (mode == 3) {
             float ratio = 1.0f + std::abs(amt) * 7.0f;
             float synced = std::fmod((p + shift * 0.5f) * ratio, 1.0f);
             float fadeWidth = 0.03f;
@@ -376,7 +395,7 @@ private:
             else if (synced < fadeWidth) syncFadeOut *= synced / fadeWidth;
             return std::fmod(synced - shift * 0.5f + 1.0f, 1.0f);
         }
-        if (mode == 4) { // Mirror 
+        if (mode == 4) {
             float point = std::clamp(0.5f + shift * 0.4f, 0.1f, 0.9f);
             float mirrored = (p < point) ? p * (0.5f / point) : 1.0f - (p - point) * (0.5f / (1.0f - point));
             if (amt < 0.0f) mirrored = (p > point) ? (p - point) * (0.5f / (1.0f - point)) : 1.0f - p * (0.5f / point);
@@ -386,7 +405,7 @@ private:
     }
 
     inline float applyAmpWarp(float v, int mode, float amt, float shift) const {
-        if (mode == 5) { // Flip (Soft-Knee対応)
+        if (mode == 5) {
             float thresh = shift;
             float delta = 0.05f;
             float out = 0.0f;
@@ -401,7 +420,7 @@ private:
             }
             return v * (1.0f - std::abs(amt)) + out * std::abs(amt);
         }
-        if (mode == 6) { // Quantize (階段エッジの平滑化)
+        if (mode == 6) {
             float steps = std::pow(2.0f, 2.0f + (1.0f - std::abs(amt)) * 14.0f);
             float scaled = (v + shift) * steps;
             float base = std::floor(scaled);
@@ -415,7 +434,7 @@ private:
             float out = (base + smoothFrac) / steps - shift;
             return v * (1.0f - std::abs(amt)) + out * std::abs(amt);
         }
-        if (mode == 7) { // Remap (Saturation/Fold)
+        if (mode == 7) {
             float driven = (v + shift * 0.5f) * (1.0f + std::abs(amt) * 4.0f);
             float out = amt >= 0.0f ? std::tanh(driven) : std::sin(driven * juce::MathConstants<float>::halfPi);
             return out - (shift * 0.5f);

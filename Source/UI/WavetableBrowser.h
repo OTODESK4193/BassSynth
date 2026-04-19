@@ -1,3 +1,6 @@
+// ==============================================================================
+// Source/UI/WavetableBrowser.h
+// ==============================================================================
 #pragma once
 #include <JuceHeader.h>
 #include "../Generated/WavetableData_Generated.h"
@@ -35,6 +38,9 @@ public:
         addAndMakeVisible(catList);
         addAndMakeVisible(subCatList);
         addAndMakeVisible(fileList);
+
+        // 現在選択されている波形インデックスを初期化
+        currentWavetableIndex = (int)apvts.getRawParameterValue("osc_wave")->load();
 
         updateSubCategories();
     }
@@ -83,6 +89,49 @@ public:
         fileList.updateContent();
     }
 
+    // --- ナビゲーション機能 ---
+    void applySelection(int dataIdx) {
+        currentWavetableIndex = dataIdx;
+        if (auto* param = apvts.getParameter("osc_wave"))
+            param->setValueNotifyingHost(param->getNormalisableRange().convertTo0to1((float)dataIdx));
+    }
+
+    void selectNext() {
+        if (filteredIndices.isEmpty()) return;
+        int currentListIdx = -1;
+        for (int i = 0; i < filteredIndices.size(); ++i) {
+            if (filteredIndices[i] == currentWavetableIndex) {
+                currentListIdx = i; break;
+            }
+        }
+        int nextIdx = (currentListIdx + 1) % filteredIndices.size();
+        applySelection(filteredIndices[nextIdx]);
+        fileList.selectRow(nextIdx);
+        fileList.scrollToEnsureRowIsOnscreen(nextIdx);
+    }
+
+    void selectPrev() {
+        if (filteredIndices.isEmpty()) return;
+        int currentListIdx = -1;
+        for (int i = 0; i < filteredIndices.size(); ++i) {
+            if (filteredIndices[i] == currentWavetableIndex) {
+                currentListIdx = i; break;
+            }
+        }
+        int prevIdx = (currentListIdx - 1 + filteredIndices.size()) % filteredIndices.size();
+        applySelection(filteredIndices[prevIdx]);
+        fileList.selectRow(prevIdx);
+        fileList.scrollToEnsureRowIsOnscreen(prevIdx);
+    }
+
+    void selectRandom() {
+        if (filteredIndices.isEmpty()) return;
+        int rndIdx = juce::Random::getSystemRandom().nextInt(filteredIndices.size());
+        applySelection(filteredIndices[rndIdx]);
+        fileList.selectRow(rndIdx);
+        fileList.scrollToEnsureRowIsOnscreen(rndIdx);
+    }
+
     void paint(juce::Graphics& g) override {
         g.fillAll(juce::Colour::fromString("FA111111"));
         g.setColour(juce::Colour::fromString("FF555555"));
@@ -105,6 +154,7 @@ private:
     juce::Array<int> filteredIndices;
     int selectedCategoryIdx = 0;
     int selectedSubCategoryIdx = 0;
+    int currentWavetableIndex = 0;
 
     struct CatModel : public juce::ListBoxModel {
         WavetableBrowser* owner = nullptr;
@@ -147,8 +197,10 @@ private:
         int getNumRows() override { return owner ? owner->filteredIndices.size() : 0; }
         void paintListBoxItem(int row, juce::Graphics& g, int w, int h, bool selected) override {
             if (!owner) return;
-            if (selected) g.fillAll(juce::Colour::fromString("FF6A6A6A"));
-            g.setColour(selected ? juce::Colours::white : juce::Colours::lightgrey);
+            // 選択されたもの（ハイライト）
+            bool isActive = (owner->filteredIndices[row] == owner->currentWavetableIndex);
+            if (isActive) g.fillAll(juce::Colour::fromString("FF6A6A6A"));
+            g.setColour(isActive ? juce::Colours::white : juce::Colours::lightgrey);
             g.setFont(16.0f);
             int dataIdx = owner->filteredIndices[row];
             g.drawText(EmbeddedWavetables::allNames[dataIdx], 15, 0, w - 30, h, juce::Justification::centredLeft);
@@ -156,10 +208,12 @@ private:
         void listBoxItemClicked(int row, const juce::MouseEvent&) override {
             if (!owner) return;
             int dataIdx = owner->filteredIndices[row];
-            if (auto* param = owner->apvts.getParameter("osc_wave"))
-                param->setValueNotifyingHost(param->getNormalisableRange().convertTo0to1((float)dataIdx));
+            owner->applySelection(dataIdx);
 
-            owner->setVisible(false);
+            // 【変更点】クリックしてもブラウザを閉じない
+            // owner->setVisible(false);
+
+            owner->fileList.repaint(); // ハイライト更新
         }
     } fileModel;
 };
