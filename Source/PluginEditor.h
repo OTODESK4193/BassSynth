@@ -18,6 +18,7 @@ public:
 private:
     juce::AudioProcessorValueTreeState& apvts;
     struct LfoUI {
+        juce::ToggleButton onBtn{ "ON" };
         juce::ComboBox wave, beat;
         juce::ToggleButton sync{ "SYNC" };
         juce::Slider rate, amt;
@@ -37,11 +38,13 @@ public:
 private:
     juce::AudioProcessorValueTreeState& apvts;
     struct EnvUI {
+        juce::ToggleButton onBtn{ "ON" };
         juce::Slider a, d, s, r, amt;
         juce::Label aL, dL, sL, rL, amtL;
     };
     std::array<EnvUI, 3> envs;
-    std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>> atts;
+    std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>> sliderAtts;
+    std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment>> btnAtts;
 };
 
 class MatrixTab : public juce::Component {

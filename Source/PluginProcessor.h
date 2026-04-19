@@ -73,7 +73,6 @@ private:
     SineShaper shaper;
     MonoVoiceManager voiceManager;
 
-    // Core Envelopes & Modulators
     AdsrEnvelope ampEnv, filterEnv;
     std::array<AdsrEnvelope, 3> modEnvs;
     std::array<Lfo, 3> lfos;
@@ -85,7 +84,6 @@ private:
     juce::AudioBuffer<float> tempEnvBuffer;
     juce::AudioBuffer<float> tempSubBuffer;
 
-    // --- Original Params ---
     std::atomic<float>* pOscOn = nullptr; std::atomic<float>* pWave = nullptr; std::atomic<float>* pPos = nullptr;
     std::atomic<float>* pOscLevel = nullptr; std::atomic<float>* pOscPitch = nullptr;
     std::atomic<float>* pPDecayAmt = nullptr; std::atomic<float>* pPDecayTime = nullptr;
@@ -101,16 +99,14 @@ private:
     std::atomic<float>* pAAtk = nullptr; std::atomic<float>* pADec = nullptr; std::atomic<float>* pASus = nullptr; std::atomic<float>* pARel = nullptr;
     std::atomic<float>* pFAtk = nullptr; std::atomic<float>* pFDec = nullptr; std::atomic<float>* pFSus = nullptr; std::atomic<float>* pFRel = nullptr;
 
-    // --- New Modulators Params ---
-    std::array<std::atomic<float>*, 3> pModAtk, pModDec, pModSus, pModRel, pModAmt;
-    std::array<std::atomic<float>*, 3> pLfoWave, pLfoSync, pLfoRate, pLfoBeat, pLfoAmt;
+    // --- Modulators Params ---
+    std::array<std::atomic<float>*, 3> pModOn, pModAtk, pModDec, pModSus, pModRel, pModAmt;
+    std::array<std::atomic<float>*, 3> pLfoOn, pLfoWave, pLfoSync, pLfoRate, pLfoBeat, pLfoAmt;
 
-    // --- Mod Matrix Params [Source 0-5][Destination Slot 0-2] ---
-    // Sources: 0=Mod1, 1=Mod2, 2=Mod3, 3=Lfo1, 4=Lfo2, 5=Lfo3
+    // --- Mod Matrix Params ---
     std::array<std::array<std::atomic<float>*, 3>, 6> pMatrixDest;
     std::array<std::array<std::atomic<float>*, 3>, 6> pMatrixAmt;
 
-    // --- Smoothers ---
     juce::SmoothedValue<float> smoothedWtLevel, smoothedWtPitch, smoothedPDecayAmt, smoothedPDecayTime;
     juce::SmoothedValue<float> smoothedCutoff, smoothedReso, smoothedFltEnvAmt, smoothedDrive, smoothedShpAmt, smoothedShpRate, smoothedShpBit, smoothedGain;
     juce::SmoothedValue<float> smoothedWtPos, smoothedFm, smoothedDrift, smoothedSubVol, smoothedSubPitch, smoothedWidth;
