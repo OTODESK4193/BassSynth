@@ -94,7 +94,6 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     setupS(modAtkSlider, modAtkLabel, "A"); setupS(modDecSlider, modDecLabel, "D"); setupS(modSusSlider, modSusLabel, "S"); setupS(modRelSlider, modRelLabel, "R");
     setupS(glideSlider, glideLabel, "Glide"); setupS(pitchSlider, pitchLabel, "Pitch"); setupS(gainSlider, gainLabel, "Gain");
 
-    // Legato Button
     addAndMakeVisible(legatoButton);
 
     auto& apvts = audioProcessor.getAPVTS();
@@ -146,7 +145,6 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     addChildComponent(browser);
     browser.setVisible(false);
 
-    // ボタンのコールバック設定
     openBrowserButton.onClick = [this] {
         browser.setVisible(!browser.isVisible());
         if (browser.isVisible()) browser.toFront(true);
@@ -166,6 +164,7 @@ void LiquidDreamAudioProcessorEditor::paint(juce::Graphics& g) { g.fillAll(juce:
 
 void LiquidDreamAudioProcessorEditor::timerCallback()
 {
+    // 【復旧】上段スコープ（SOURCE）の静止波形取得を元に戻しました。
     std::array<float, 512> tempBuffer;
     audioProcessor.getStaticWaveform(tempBuffer);
     dualScope.updateStaticWave(tempBuffer.data(), 512);
@@ -188,7 +187,6 @@ void LiquidDreamAudioProcessorEditor::resized()
     // --- 左側エリア (350px) ---
     auto leftArea = area.removeFromLeft(350);
 
-    // ナビゲーションボタン群の配置
     auto navRect = leftArea.removeFromTop(35).reduced(2);
     openBrowserButton.setBounds(navRect.removeFromLeft(110));
     navRect.removeFromLeft(5);
@@ -206,7 +204,7 @@ void LiquidDreamAudioProcessorEditor::resized()
     auto ctrlRect = leftArea.removeFromTop(100);
     controlGroup.setBounds(ctrlRect);
     int cX = ctrlRect.getX(), cY = ctrlRect.getY() + 15;
-    legatoButton.setBounds(cX + 10, cY + 20, 75, 24); // 幅を75にして見やすく
+    legatoButton.setBounds(cX + 10, cY + 20, 75, 24);
     placeKnob(cX + 80, cY, glideLabel, glideSlider);
     placeKnob(cX + 160, cY, pitchLabel, pitchSlider);
     placeKnob(cX + 240, cY, gainLabel, gainSlider);

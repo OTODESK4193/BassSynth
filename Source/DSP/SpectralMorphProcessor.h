@@ -7,10 +7,6 @@
 #include <complex>
 #include <algorithm>
 
-/**
- * @class SpectralMorphProcessor
- * @brief リアルタイムSTFTを用いた周波数領域モーフィングエンジン（3系統・高解像度対応版）
- */
 class SpectralMorphProcessor
 {
 public:
@@ -34,303 +30,237 @@ public:
         hopCounter = 0;
     }
 
-    void process(juce::AudioBuffer<float>& buffer, int modeA, float amtA, float shiftA,
-        int modeB, float amtB, float shiftB, int modeC, float amtC, float shiftC)
+    void process(juce::AudioBuffer<float>& buffer, int mA, float aA, float sA, int mB, float aB, float sB, int mC, float aC, float sC)
     {
-        bool isSpectralA = (modeA >= 8 && modeA <= 13) && (std::abs(amtA) > 0.001f);
-        bool isSpectralB = (modeB >= 8 && modeB <= 13) && (std::abs(amtB) > 0.001f);
-        bool isSpectralC = (modeC >= 8 && modeC <= 13) && (std::abs(amtC) > 0.001f);
-
-        if (!isSpectralA && !isSpectralB && !isSpectralC) return;
+        bool isSpA = (mA >= 8 && mA <= 13) && (std::abs(aA) > 0.001f);
+        bool isSpB = (mB >= 8 && mB <= 13) && (std::abs(aB) > 0.001f);
+        bool isSpC = (mC >= 8 && mC <= 13) && (std::abs(aC) > 0.001f);
+        if (!isSpA && !isSpB && !isSpC) return;
 
         const int numSamples = buffer.getNumSamples();
-        auto* channelDataL = buffer.getWritePointer(0);
-        auto* channelDataR = buffer.getWritePointer(1);
+        auto* chL = buffer.getWritePointer(0);
+        auto* chR = buffer.getWritePointer(1);
 
         for (int i = 0; i < numSamples; ++i)
         {
-            inputFifoL[(size_t)fifoWritePos] = channelDataL[i];
-            inputFifoR[(size_t)fifoWritePos] = channelDataR[i];
-
-            channelDataL[i] = outputFifoL[(size_t)fifoWritePos];
-            channelDataR[i] = outputFifoR[(size_t)fifoWritePos];
-
+            inputFifoL[(size_t)fifoWritePos] = chL[i];
+            inputFifoR[(size_t)fifoWritePos] = chR[i];
+            chL[i] = outputFifoL[(size_t)fifoWritePos];
+            chR[i] = outputFifoR[(size_t)fifoWritePos];
             outputFifoL[(size_t)fifoWritePos] = 0.0f;
             outputFifoR[(size_t)fifoWritePos] = 0.0f;
 
-            fifoWritePos++;
-            if (fifoWritePos >= fifoSize) fifoWritePos = 0;
-
-            hopCounter++;
-            if (hopCounter >= hopSize)
+            fifoWritePos = (fifoWritePos + 1) % fifoSize;
+            if (++hopCounter >= hopSize)
             {
                 hopCounter = 0;
-                processSTFTFrame(modeA, amtA, shiftA, modeB, amtB, shiftB, modeC, amtC, shiftC);
+                processSTFTFrame(mA, aA, sA, mB, aB, sB, mC, aC, sC);
             }
         }
     }
 
-    void processSingleCycleForDisplay(std::array<float, 512>& buffer, int modeA, float amtA, float shiftA,
-        int modeB, float amtB, float shiftB, int modeC, float amtC, float shiftC)
+    void processSingleCycleForDisplay(std::array<float, 512>& buffer, int mA, float aA, float sA, int mB, float aB, float sB, int mC, float aC, float sC)
     {
-        bool isSpectralA = (modeA >= 8 && modeA <= 13) && (std::abs(amtA) > 0.001f);
-        bool isSpectralB = (modeB >= 8 && modeB <= 13) && (std::abs(amtB) > 0.001f);
-        bool isSpectralC = (modeC >= 8 && modeC <= 13) && (std::abs(amtC) > 0.001f);
+        bool isSpA = (mA >= 8 && mA <= 13) && (std::abs(aA) > 0.001f);
+        bool isSpB = (mB >= 8 && mB <= 13) && (std::abs(aB) > 0.001f);
+        bool isSpC = (mC >= 8 && mC <= 13) && (std::abs(aC) > 0.001f);
 
-        if (isSpectralA || isSpectralB || isSpectralC) {
-            for (size_t i = 0; i < 512; ++i) displayWorkspace[i] = buffer[i];
-            for (size_t i = 512; i < 1024; ++i) displayWorkspace[i] = 0.0f;
-
-            displayFFT.performRealOnlyForwardTransform(displayWorkspace.data());
-
-            size_t numBins = 256;
-            for (size_t k = 1; k < numBins; ++k) {
-                std::complex<float> c(displayWorkspace[k * 2], displayWorkspace[k * 2 + 1]);
-                displayMag[k] = std::abs(c);
-                displayPhase[k] = std::arg(c);
+        if (isSpA || isSpB || isSpC) {
+            for (size_t i = 0; i < 512; ++i) dWS[i] = buffer[i];
+            for (size_t i = 512; i < 1024; ++i) dWS[i] = 0.0f;
+            dFFT.performRealOnlyForwardTransform(dWS.data());
+            for (size_t k = 1; k < 256; ++k) {
+                std::complex<float> c(dWS[k * 2], dWS[k * 2 + 1]);
+                dMag[k] = std::abs(c); dPhase[k] = std::arg(c);
             }
 
-            if (isSpectralA) applyMorphToMagnitude(displayMag.data(), displayTempMag.data(), modeA, amtA, shiftA, numBins);
-            if (isSpectralB) applyMorphToMagnitude(displayMag.data(), displayTempMag.data(), modeB, amtB, shiftB, numBins);
-            if (isSpectralC) applyMorphToMagnitude(displayMag.data(), displayTempMag.data(), modeC, amtC, shiftC, numBins);
+            if (isSpA) applyMorphToMagnitude(dMag.data(), dTMag.data(), mA, aA, sA, 256);
+            if (isSpB) applyMorphToMagnitude(dMag.data(), dTMag.data(), mB, aB, sB, 256);
+            if (isSpC) applyMorphToMagnitude(dMag.data(), dTMag.data(), mC, aC, sC, 256);
 
-            for (size_t k = 1; k < numBins; ++k) {
-                std::complex<float> c = std::polar(displayMag[k], displayPhase[k]);
-                displayWorkspace[k * 2] = c.real();
-                displayWorkspace[k * 2 + 1] = c.imag();
+            for (size_t k = 1; k < 256; ++k) {
+                std::complex<float> c = std::polar(dMag[k], dPhase[k]);
+                dWS[k * 2] = c.real(); dWS[k * 2 + 1] = c.imag();
             }
-
-            displayFFT.performRealOnlyInverseTransform(displayWorkspace.data());
-
-            for (size_t i = 0; i < 512; ++i) buffer[i] = displayWorkspace[i];
+            dFFT.performRealOnlyInverseTransform(dWS.data());
+            for (size_t i = 0; i < 512; ++i) buffer[i] = dWS[i];
         }
-
-        // 描画用の無条件ピークノーマライズ
         float peak = 1e-9f;
-        for (size_t i = 0; i < 512; ++i) {
-            peak = std::max(peak, std::abs(buffer[i]));
-        }
+        for (size_t i = 0; i < 512; ++i) peak = std::max(peak, std::abs(buffer[i]));
         float scale = 1.0f / peak;
-        for (size_t i = 0; i < 512; ++i) {
-            buffer[i] *= scale;
-        }
+        for (size_t i = 0; i < 512; ++i) buffer[i] *= scale;
     }
 
 private:
     static constexpr int fftOrder = 11;
-    static constexpr size_t fftSize = 1 << fftOrder; // 2048
-    static constexpr int hopSize = 512;              // 4x Overlap
+    static constexpr size_t fftSize = 2048;
+    static constexpr int hopSize = 512; // 4倍オーバーラップ（超高音質）
     static constexpr int fifoSize = 4096;
 
-    juce::dsp::FFT forwardFFT;
-    juce::dsp::FFT inverseFFT;
+    juce::dsp::FFT forwardFFT, inverseFFT;
     juce::dsp::WindowingFunction<float> window;
-
-    std::array<float, fifoSize> inputFifoL, inputFifoR;
-    std::array<float, fifoSize> outputFifoL, outputFifoR;
+    std::array<float, fifoSize> inputFifoL, inputFifoR, outputFifoL, outputFifoR;
     std::array<float, fftSize * 2> fftWorkspaceL, fftWorkspaceR;
     std::array<float, fftSize / 2> magL, magR, phaseL, phaseR, tempMag;
+    int fifoWritePos = 0, hopCounter = 0;
+    juce::dsp::FFT dFFT{ 9 };
+    std::array<float, 1024> dWS{};
+    std::array<float, 256> dMag{}, dPhase{}, dTMag{};
 
-    int fifoWritePos = 0;
-    int hopCounter = 0;
-
-    juce::dsp::FFT displayFFT{ 9 }; // 512 = 2^9
-    std::array<float, 1024> displayWorkspace{};
-    std::array<float, 256> displayMag{}, displayPhase{}, displayTempMag{};
-
-    void processSTFTFrame(int modeA, float amtA, float shiftA,
-        int modeB, float amtB, float shiftB,
-        int modeC, float amtC, float shiftC)
+    void processSTFTFrame(int mA, float aA, float sA, int mB, float aB, float sB, int mC, float aC, float sC)
     {
         int readPos = (fifoWritePos - (int)fftSize + fifoSize) % fifoSize;
-
-        for (size_t i = 0; i < fftSize; ++i)
-        {
+        for (size_t i = 0; i < fftSize; ++i) {
             size_t idx = (size_t)((readPos + i) % fifoSize);
-            fftWorkspaceL[i] = inputFifoL[idx];
-            fftWorkspaceR[i] = inputFifoR[idx];
+            fftWorkspaceL[i] = inputFifoL[idx]; fftWorkspaceR[i] = inputFifoR[idx];
         }
-
         window.multiplyWithWindowingTable(fftWorkspaceL.data(), fftSize);
         window.multiplyWithWindowingTable(fftWorkspaceR.data(), fftSize);
-
-        for (size_t i = fftSize; i < fftSize * 2; ++i)
-        {
-            fftWorkspaceL[i] = 0.0f;
-            fftWorkspaceR[i] = 0.0f;
-        }
+        for (size_t i = fftSize; i < fftSize * 2; ++i) { fftWorkspaceL[i] = 0; fftWorkspaceR[i] = 0; }
 
         forwardFFT.performRealOnlyForwardTransform(fftWorkspaceL.data());
         forwardFFT.performRealOnlyForwardTransform(fftWorkspaceR.data());
 
-        size_t numBins = fftSize / 2;
-        for (size_t k = 1; k < numBins; ++k)
-        {
+        size_t nB = fftSize / 2;
+        for (size_t k = 1; k < nB; ++k) {
             std::complex<float> cL(fftWorkspaceL[k * 2], fftWorkspaceL[k * 2 + 1]);
-            magL[k] = std::abs(cL);
-            phaseL[k] = std::arg(cL);
-
+            magL[k] = std::abs(cL); phaseL[k] = std::arg(cL);
             std::complex<float> cR(fftWorkspaceR[k * 2], fftWorkspaceR[k * 2 + 1]);
-            magR[k] = std::abs(cR);
-            phaseR[k] = std::arg(cR);
+            magR[k] = std::abs(cR); phaseR[k] = std::arg(cR);
         }
 
-        // 3 Stage Spectral Morphing Pipeline
-        if (modeA >= 8 && modeA <= 13) {
-            applyMorphToMagnitude(magL.data(), tempMag.data(), modeA, amtA, shiftA, numBins);
-            applyMorphToMagnitude(magR.data(), tempMag.data(), modeA, amtA, shiftA, numBins);
-        }
-        if (modeB >= 8 && modeB <= 13) {
-            applyMorphToMagnitude(magL.data(), tempMag.data(), modeB, amtB, shiftB, numBins);
-            applyMorphToMagnitude(magR.data(), tempMag.data(), modeB, amtB, shiftB, numBins);
-        }
-        if (modeC >= 8 && modeC <= 13) {
-            applyMorphToMagnitude(magL.data(), tempMag.data(), modeC, amtC, shiftC, numBins);
-            applyMorphToMagnitude(magR.data(), tempMag.data(), modeC, amtC, shiftC, numBins);
-        }
+        if (mA >= 8 && mA <= 13) { applyMorphToMagnitude(magL.data(), tempMag.data(), mA, aA, sA, nB); applyMorphToMagnitude(magR.data(), tempMag.data(), mA, aA, sA, nB); }
+        if (mB >= 8 && mB <= 13) { applyMorphToMagnitude(magL.data(), tempMag.data(), mB, aB, sB, nB); applyMorphToMagnitude(magR.data(), tempMag.data(), mB, aB, sB, nB); }
+        if (mC >= 8 && mC <= 13) { applyMorphToMagnitude(magL.data(), tempMag.data(), mC, aC, sC, nB); applyMorphToMagnitude(magR.data(), tempMag.data(), mC, aC, sC, nB); }
 
-        for (size_t k = 1; k < numBins; ++k)
-        {
+        for (size_t k = 1; k < nB; ++k) {
             std::complex<float> cL = std::polar(magL[k], phaseL[k]);
-            fftWorkspaceL[k * 2] = cL.real();
-            fftWorkspaceL[k * 2 + 1] = cL.imag();
-
+            fftWorkspaceL[k * 2] = cL.real(); fftWorkspaceL[k * 2 + 1] = cL.imag();
             std::complex<float> cR = std::polar(magR[k], phaseR[k]);
-            fftWorkspaceR[k * 2] = cR.real();
-            fftWorkspaceR[k * 2 + 1] = cR.imag();
+            fftWorkspaceR[k * 2] = cR.real(); fftWorkspaceR[k * 2 + 1] = cR.imag();
         }
 
         inverseFFT.performRealOnlyInverseTransform(fftWorkspaceL.data());
         inverseFFT.performRealOnlyInverseTransform(fftWorkspaceR.data());
-
         window.multiplyWithWindowingTable(fftWorkspaceL.data(), fftSize);
         window.multiplyWithWindowingTable(fftWorkspaceR.data(), fftSize);
 
-        float gainCorrection = 1.0f / 2.0f;
-
-        for (size_t i = 0; i < fftSize; ++i)
-        {
-            size_t writeIdx = (size_t)((readPos + i) % fifoSize);
-            outputFifoL[writeIdx] += fftWorkspaceL[i] * gainCorrection;
-            outputFifoR[writeIdx] += fftWorkspaceR[i] * gainCorrection;
+        float gainCorrection = 1.0f / 2.0f; // 4x overlap correction
+        for (size_t i = 0; i < fftSize; ++i) {
+            size_t wIdx = (size_t)((readPos + i) % fifoSize);
+            outputFifoL[wIdx] += fftWorkspaceL[i] * gainCorrection;
+            outputFifoR[wIdx] += fftWorkspaceR[i] * gainCorrection;
         }
     }
 
-    void applyMorphToMagnitude(float* mag, float* tMag, int mode, float amount, float shift, size_t numBins)
+    void applyMorphToMagnitude(float* mag, float* tMag, int mode, float amt, float shift, size_t nB)
     {
-        if (mode == 8) // Smear -> Fractional Interpolation化
-        {
-            float floatRadius = std::abs(amount) * 15.0f + 0.001f;
-            int r0 = (int)floatRadius;
-            int r1 = r0 + 1;
-            float rFrac = floatRadius - r0;
-            float centerK = (shift + 1.0f) * 0.5f * (float)numBins;
-
-            for (size_t k = 1; k < numBins; ++k) {
-                float distance = std::abs((float)k - centerK) / (float)numBins;
-                float localRadiusF = std::max(0.0f, (1.0f - distance) * floatRadius);
-                int lr0 = (int)localRadiusF;
-                int lr1 = lr0 + 1;
-                float lrFrac = localRadiusF - lr0;
-
-                if (localRadiusF < 0.5f) {
-                    tMag[k] = mag[k];
-                    continue;
+        if (mode == 8) { // Smear
+            float fR = std::abs(amt) * 15.0f + 0.001f; int r0 = (int)fR; float rF = fR - r0;
+            float cK = (shift + 1.0f) * 0.5f * (float)nB;
+            for (size_t k = 1; k < nB; ++k) {
+                float dist = std::abs((float)k - cK) / (float)nB;
+                float lRF = std::max(0.0f, (1.0f - dist) * fR); int lr0 = (int)lRF; float lrF = lRF - lr0;
+                if (lRF < 0.5f) { tMag[k] = mag[k]; continue; }
+                float s0 = 0, s1 = 0; int c0 = 0, c1 = 0;
+                for (int r = -(lr0 + 1); r <= (lr0 + 1); ++r) {
+                    size_t idx = (size_t)std::clamp((int)k + r, 1, (int)nB - 1);
+                    s1 += mag[idx]; c1++;
+                    if (std::abs(r) <= lr0) { s0 += mag[idx]; c0++; }
                 }
+                tMag[k] = (s0 / (float)std::max(1, c0)) * (1.0f - lrF) + (s1 / (float)std::max(1, c1)) * lrF;
+            }
+            for (size_t k = 1; k < nB; ++k) mag[k] = tMag[k];
+        }
+        else if (mode == 9) { // Vocode (A-I-U-E-O Formant Filter)
+            float s = shift;
+            int seq[5];
+            if (s >= 0.0f) { seq[0] = 0; seq[1] = 1; seq[2] = 2; seq[3] = 3; seq[4] = 4; } // A, I, U, E, O
+            else { seq[0] = 0; seq[1] = 3; seq[2] = 1; seq[3] = 4; seq[4] = 2; s = -s; } // A, E, I, O, U
 
-                float sum0 = 0.0f, sum1 = 0.0f;
-                int count0 = 0, count1 = 0;
+            float pos = s * 4.0f;
+            int i0 = std::clamp((int)pos, 0, 3);
+            int i1 = i0 + 1;
+            float frac = pos - i0;
 
-                for (int r = -lr1; r <= lr1; ++r) {
-                    size_t idx = (size_t)std::clamp((int)k + r, 1, (int)numBins - 1);
-                    float val = mag[idx];
-                    sum1 += val; count1++;
-                    if (std::abs(r) <= lr0) { sum0 += val; count0++; }
+            const float fmts[5][3] = {
+                { 32.0f, 55.0f, 120.0f }, // A
+                { 14.0f, 102.0f, 139.0f }, // I
+                { 14.0f, 41.0f, 116.0f }, // U
+                { 18.0f, 74.0f, 111.0f }, // E
+                { 18.0f, 37.0f, 120.0f }  // O
+            };
+
+            float curF[3];
+            for (int j = 0; j < 3; ++j) curF[j] = fmts[seq[i0]][j] * (1.0f - frac) + fmts[seq[i1]][j] * frac;
+
+            float scale = (float)nB / 1024.0f;
+
+            for (size_t k = 1; k < nB; ++k) {
+                float env = 0.001f;
+                for (int j = 0; j < 3; ++j) {
+                    float target = curF[j] * scale;
+                    float width = target * 0.15f + 4.0f * scale;
+                    float dist = std::abs((float)k - target);
+                    env += std::exp(-(dist * dist) / (width * width));
                 }
-                float val0 = sum0 / (float)std::max(1, count0);
-                float val1 = sum1 / (float)std::max(1, count1);
-                tMag[k] = val0 * (1.0f - lrFrac) + val1 * lrFrac;
+                mag[k] = mag[k] * (1.0f - std::abs(amt)) + (mag[k] * env * 4.0f) * std::abs(amt);
             }
-            for (size_t k = 1; k < numBins; ++k) mag[k] = tMag[k];
         }
-        else if (mode == 9) // Vocode 
-        {
-            float formants[4] = { 0.1f, 0.3f, 0.6f, 0.8f };
-            float s = shift * 0.4f;
+        else if (mode == 10) { // Stretch (Sweet Spot Mapping)
+            float mappedAmt = amt * 0.10f;
+            float str = 1.0f + mappedAmt;
+            if (str < 0.1f) str = 0.1f;
 
-            for (size_t k = 1; k < numBins; ++k) {
-                float env = 0.0f;
-                float p = (float)k / (float)(numBins - 1);
-                for (int f = 0; f < 4; ++f) {
-                    float pos = std::clamp(formants[f] + s, 0.0f, 1.0f);
-                    env += std::exp(-std::abs(p - pos) * 20.0f);
-                }
-                float targetMag = mag[k] * env * 2.0f;
-                mag[k] = mag[k] * (1.0f - std::abs(amount)) + targetMag * std::abs(amount);
+            float cnt = (shift + 1.0f) * 0.5f * (float)nB;
+            for (size_t k = 1; k < nB; ++k) {
+                float src = cnt + ((float)k - cnt) / str;
+                int k0 = std::clamp((int)src, 1, (int)nB - 1);
+                float f = src - (int)src;
+                int k1 = std::min(k0 + 1, (int)nB - 1);
+                tMag[k] = mag[k0] * (1.0f - f) + mag[k1] * f;
             }
+            for (size_t k = 1; k < nB; ++k) mag[k] = tMag[k];
         }
-        else if (mode == 10) // Stretch
-        {
-            float stretch = (amount >= 0.0f) ? (1.0f + amount * 2.0f) : (1.0f / (1.0f + std::abs(amount) * 2.0f));
-            float center = (shift + 1.0f) * 0.5f * (float)numBins;
+        else if (mode == 11) { // SpecCut (Perfect Low/High Pass logic)
+            // UI Amt (-1.0 to 1.0) を (-0.08 to 1.0) にスケーリング
+            float mappedAmt = amt;
+            if (mappedAmt < 0.0f) mappedAmt *= 0.08f;
 
-            for (size_t k = 1; k < numBins; ++k) {
-                float srcK = center + ((float)k - center) / stretch;
-                int k0 = (int)srcK;
-                float frac = srcK - k0;
-                int k1 = std::min(k0 + 1, (int)numBins - 1);
-                k0 = std::clamp(k0, 1, (int)numBins - 1);
-                k1 = std::clamp(k1, 1, (int)numBins - 1);
-                tMag[k] = mag[(size_t)k0] * (1.0f - frac) + mag[(size_t)k1] * frac;
-            }
-            for (size_t k = 1; k < numBins; ++k) mag[k] = tMag[k];
-        }
-        else if (mode == 11) // SpecCut 
-        {
-            float cutFloat = std::abs(amount) * (float)numBins;
-            bool isHighCut = (amount > 0.0f);
+            float absAmt = std::abs(mappedAmt);
+            if (absAmt < 0.001f) return;
+
+            bool isHighCut = (mappedAmt > 0.0f);
+            float cutBin = isHighCut ? (float)nB * (1.0f - absAmt) : (float)nB * absAmt;
+
             float reso = std::abs(shift) * 4.0f;
-            float rollOffWidth = 8.0f;
+            float rW = 10.0f * ((float)nB / 1024.0f);
+            if (rW < 2.0f) rW = 2.0f;
 
-            for (size_t k = 1; k < numBins; ++k) {
-                float dist = isHighCut ? ((float)k - ((float)numBins - cutFloat)) : (cutFloat - (float)k);
-
-                float gain = 1.0f;
+            for (size_t k = 1; k < nB; ++k) {
+                float dist = isHighCut ? ((float)k - cutBin) : (cutBin - (float)k);
+                float g = 1.0f;
                 if (dist > 0.0f) {
-                    if (dist > rollOffWidth) gain = 0.0f;
-                    else gain = 0.5f * (1.0f + std::cos(juce::MathConstants<float>::pi * (dist / rollOffWidth)));
+                    g = (dist > rW) ? 0.0f : 0.5f * (1.0f + std::cos(juce::MathConstants<float>::pi * (dist / rW)));
                 }
+                mag[k] *= g;
 
-                mag[k] *= gain;
-
-                if (reso > 0.0f && dist <= 0.0f && dist > -20.0f) {
-                    float rEnv = 1.0f - (std::abs(dist) / 20.0f);
-                    mag[k] *= (1.0f + rEnv * reso);
+                if (reso > 0.0f && std::abs(dist) < rW * 2.0f && dist <= 0.0f) {
+                    mag[k] *= (1.0f + (1.0f - std::abs(dist) / (rW * 2.0f)) * reso);
                 }
             }
         }
-        else if (mode == 12) // Shepard
-        {
-            float wCenter = (shift + 1.0f) * 0.5f;
-
-            for (size_t k = 1; k < numBins; ++k) {
-                float logPos = std::log2f((float)k) / std::log2f((float)(numBins - 1));
-                float shifted = std::fmod(logPos + (amount * 5.0f), 1.0f);
-                if (shifted < 0.0f) shifted += 1.0f;
-
-                float windowEnv = std::exp(-std::pow((logPos - wCenter) * 4.0f, 2.0f));
-                mag[k] *= std::sin(shifted * juce::MathConstants<float>::pi) * windowEnv * 1.5f;
+        else if (mode == 12) { // Shepard
+            float wC = (shift + 1.0f) * 0.5f;
+            for (size_t k = 1; k < nB; ++k) {
+                float lP = std::log2f((float)k) / std::log2f((float)(nB - 1));
+                float sh = std::fmod(lP + (amt * 5.0f), 1.0f); if (sh < 0) sh += 1.0f;
+                mag[k] *= std::sin(sh * 3.14159f) * std::exp(-std::pow((lP - wC) * 4.0f, 2.0f)) * 1.5f;
             }
         }
-        else if (mode == 13) // Comb
-        {
-            float density = 2.0f + std::abs(amount) * 30.0f;
-            float pOffset = shift * juce::MathConstants<float>::twoPi;
-
-            for (size_t k = 1; k < numBins; ++k) {
-                float combMultiplier = 0.5f + 0.5f * std::cos((float)k * density * juce::MathConstants<float>::pi / (float)numBins + pOffset);
-                mag[k] *= combMultiplier;
-            }
+        else if (mode == 13) { // Comb
+            float d = 2.0f + std::abs(amt) * 30.0f, pO = shift * 6.283185f;
+            for (size_t k = 1; k < nB; ++k) mag[k] *= (0.5f + 0.5f * std::cos((float)k * d * 3.14159f / (float)nB + pO));
         }
     }
 };

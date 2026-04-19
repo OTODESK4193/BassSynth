@@ -64,7 +64,6 @@ juce::AudioProcessorValueTreeState::ParameterLayout LiquidDreamAudioProcessor::c
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
 
     params.push_back(std::make_unique<juce::AudioParameterBool>("osc_on", "Osc On", true));
-    // デフォルト -1 (起動時はBasic Shapesをロード)
     params.push_back(std::make_unique<juce::AudioParameterInt>("osc_wave", "Waveform", -1, EmbeddedWavetables::numTables - 1, -1));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("osc_level", "WT Level", 0.0f, 1.0f, 1.0f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("osc_pos", "Position", 0.0f, 1.0f, 0.0f));
@@ -102,12 +101,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout LiquidDreamAudioProcessor::c
     params.push_back(std::make_unique<juce::AudioParameterFloat>("shp_rate", "DS Rate", 1.0f, 20.0f, 1.0f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("flt_cutoff", "Cutoff", 20.0f, 20000.0f, 20000.0f));
 
-    // Resoのデフォルトを 0.0f に変更
     params.push_back(std::make_unique<juce::AudioParameterFloat>("flt_res", "Reso", 0.0f, 0.95f, 0.0f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("flt_env_amt", "Env Amt", 0.0f, 1.0f, 0.0f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("m_gain", "Gain", 0.0f, 1.0f, 0.5f));
 
-    // Glideのデフォルトを 0.0f に変更、Legato追加
     params.push_back(std::make_unique<juce::AudioParameterFloat>("m_glide", "Glide", 0.0f, 1.0f, 0.0f));
     params.push_back(std::make_unique<juce::AudioParameterBool>("m_legato", "Legato", false));
     params.push_back(std::make_unique<juce::AudioParameterInt>("m_pb", "PB Range", 0, 24, 12));
@@ -133,7 +130,6 @@ void LiquidDreamAudioProcessor::prepareToPlay(double sampleRate, int samplesPerB
     shaper.prepare(sampleRate);
     voiceManager.setSampleRate(sampleRate); ampEnv.setSampleRate(sampleRate); filterEnv.setSampleRate(sampleRate);
 
-    // 【重要】エンベロープ一時保存バッファのサイズ確保 (チャンネル0: Amp, チャンネル1: Filter)
     tempEnvBuffer.setSize(2, samplesPerBlock);
 
     double st = 0.02;
@@ -176,9 +172,7 @@ void LiquidDreamAudioProcessor::prepareToPlay(double sampleRate, int samplesPerB
     smoothedMorphCShift.setCurrentAndTargetValue(pMorphCShift->load(std::memory_order_relaxed));
 
     lastOscFreq = -1.0f;
-    lastModeA = -1;
-    lastModeB = -1;
-    lastModeC = -1;
+    lastModeA = -1; lastModeB = -1; lastModeC = -1;
 }
 
 void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
@@ -264,12 +258,10 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
 
     auto* left = buffer.getWritePointer(0); auto* right = buffer.getWritePointer(1);
 
-    // バッファサイズの安全確保
     if (tempEnvBuffer.getNumSamples() < buffer.getNumSamples()) {
         tempEnvBuffer.setSize(2, buffer.getNumSamples(), true, true, true);
     }
 
-    // 1. オシレーターとエンベロープの生成
     for (int i = 0; i < buffer.getNumSamples(); ++i) {
         oscillator.setWavetablePosition(smoothedWtPos.getNextValue());
         oscillator.setFMAmount(smoothedFm.getNextValue());
@@ -290,14 +282,12 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         if (cf < 1.0f) cf = 1.0f;
         if (std::abs(cf - lastOscFreq) > 0.01f) { oscillator.setFrequency(cf); lastOscFreq = cf; }
 
-        // De-click と同期した位相リセット
         float aVal = ampEnv.getNextSample();
         float fVal = filterEnv.getNextSample();
         if (ampEnv.popJustReset()) {
             oscillator.resetPhase();
         }
 
-        // 専用バッファへ退避（自己変調バグの解決）
         tempEnvBuffer.setSample(0, i, aVal);
         tempEnvBuffer.setSample(1, i, fVal);
 
@@ -305,7 +295,6 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         left[i] = oL; right[i] = oR;
     }
 
-    // 2. スペクトルモーフィング
     float aA = smoothedMorphAAmt.getCurrentValue();
     float sA = smoothedMorphAShift.getCurrentValue();
     float aB = smoothedMorphBAmt.getCurrentValue();
@@ -315,12 +304,10 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
 
     spectralMorph.process(buffer, currentModeA, aA, sA, currentModeB, aB, sB, currentModeC, aC, sC);
 
-    // 3. 後段DSP (Filter, Shaper, AmpEnv)
     for (int i = 0; i < buffer.getNumSamples(); ++i) {
         float cc = smoothedCutoff.getNextValue(), cr = smoothedReso.getNextValue(), ce = smoothedFltEnvAmt.getNextValue();
         float cd = smoothedDrive.getNextValue(), csa = smoothedShpAmt.getNextValue(), csr = smoothedShpRate.getNextValue(), csb = smoothedShpBit.getNextValue(), cg = smoothedGain.getNextValue();
 
-        // 専用バッファから安全に読み出し
         float aVal = tempEnvBuffer.getSample(0, i);
         float fVal = tempEnvBuffer.getSample(1, i);
 
@@ -334,6 +321,7 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         float fg = cg * aVal;
         left[i] = sL * fg; right[i] = sR * fg;
 
+        // 【NEW】常に最新の音声波形をリングバッファに書き込む（ティアリング対策済みのスクロール描画用）
         outputScopeData[scopeWriteIndex] = (left[i] + right[i]) * 0.5f;
         scopeWriteIndex = (scopeWriteIndex + 1) % 512;
     }

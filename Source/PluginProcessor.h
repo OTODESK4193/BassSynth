@@ -39,6 +39,7 @@ public:
     juce::AudioProcessorValueTreeState& getAPVTS() { return apvts; }
     float* getOutputScopePtr() { return outputScopeData.data(); }
 
+    // 上段スコープ（SOURCE）用の静的波形取得
     void getStaticWaveform(std::array<float, 512>& buffer) {
         oscillator.generateSingleCycle(buffer);
 
@@ -57,6 +58,15 @@ public:
         spectralMorph.processSingleCycleForDisplay(buffer, mA, aA, sA, mB, aB, sB, mC, aC, sC);
     }
 
+    // 下段スコープ（OUTPUT）のカクつきを無くす純粋なスクロールバッファ取得
+    void getDynamicWaveform(std::array<float, 512>& buffer) {
+        int readIdx = scopeWriteIndex;
+        for (int i = 0; i < 512; ++i) {
+            buffer[i] = outputScopeData[readIdx];
+            readIdx = (readIdx + 1) % 512;
+        }
+    }
+
 private:
     juce::AudioProcessorValueTreeState apvts;
     juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
@@ -70,8 +80,6 @@ private:
 
     std::array<float, 512> outputScopeData;
     int scopeWriteIndex = 0;
-
-    // 【NEW】エンベロープ値の一時保存用専用バッファ（自己変調バグ回避用）
     juce::AudioBuffer<float> tempEnvBuffer;
 
     // --- OSC Parameters ---

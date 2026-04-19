@@ -15,6 +15,9 @@ public:
         fileModel.owner = this;
 
         categories.add("All");
+        // 【NEW】「Basic」カテゴリーを先頭に追加
+        categories.add("Basic");
+
         for (int i = 0; i < EmbeddedWavetables::numTables; ++i) {
             juce::StringArray tags;
             tags.addTokens(EmbeddedWavetables::allTags[i], "|", "");
@@ -39,9 +42,7 @@ public:
         addAndMakeVisible(subCatList);
         addAndMakeVisible(fileList);
 
-        // 現在選択されている波形インデックスを初期化
         currentWavetableIndex = (int)apvts.getRawParameterValue("osc_wave")->load();
-
         updateSubCategories();
     }
 
@@ -50,6 +51,11 @@ public:
         subCategories.clear();
         subCategories.add("All");
         juce::String selCat = categories[selectedCategoryIdx];
+
+        // 【NEW】Basicカテゴリー選択時はShapesサブカテゴリーを追加
+        if (selCat == "All" || selCat == "Basic") {
+            subCategories.add("Shapes");
+        }
 
         for (int i = 0; i < EmbeddedWavetables::numTables; ++i) {
             juce::StringArray tags;
@@ -72,6 +78,11 @@ public:
         juce::String selSub = (selectedSubCategoryIdx >= 0 && selectedSubCategoryIdx < subCategories.size())
             ? subCategories[selectedSubCategoryIdx] : "All";
 
+        // 【NEW】条件に合致すれば -1 (Basic Shapes) をリストに追加
+        if ((selCat == "All" || selCat == "Basic") && (selSub == "All" || selSub == "Shapes")) {
+            filteredIndices.add(-1);
+        }
+
         for (int i = 0; i < EmbeddedWavetables::numTables; ++i) {
             juce::StringArray tags;
             tags.addTokens(EmbeddedWavetables::allTags[i], "|", "");
@@ -89,7 +100,6 @@ public:
         fileList.updateContent();
     }
 
-    // --- ナビゲーション機能 ---
     void applySelection(int dataIdx) {
         currentWavetableIndex = dataIdx;
         if (auto* param = apvts.getParameter("osc_wave"))
@@ -154,7 +164,7 @@ private:
     juce::Array<int> filteredIndices;
     int selectedCategoryIdx = 0;
     int selectedSubCategoryIdx = 0;
-    int currentWavetableIndex = 0;
+    int currentWavetableIndex = -1;
 
     struct CatModel : public juce::ListBoxModel {
         WavetableBrowser* owner = nullptr;
@@ -197,23 +207,21 @@ private:
         int getNumRows() override { return owner ? owner->filteredIndices.size() : 0; }
         void paintListBoxItem(int row, juce::Graphics& g, int w, int h, bool selected) override {
             if (!owner) return;
-            // 選択されたもの（ハイライト）
             bool isActive = (owner->filteredIndices[row] == owner->currentWavetableIndex);
             if (isActive) g.fillAll(juce::Colour::fromString("FF6A6A6A"));
             g.setColour(isActive ? juce::Colours::white : juce::Colours::lightgrey);
             g.setFont(16.0f);
             int dataIdx = owner->filteredIndices[row];
-            g.drawText(EmbeddedWavetables::allNames[dataIdx], 15, 0, w - 30, h, juce::Justification::centredLeft);
+
+            // 【NEW】 -1 の場合は名前を「Basic Shapes」として描画
+            juce::String displayName = (dataIdx == -1) ? "Basic Shapes" : EmbeddedWavetables::allNames[dataIdx];
+            g.drawText(displayName, 15, 0, w - 30, h, juce::Justification::centredLeft);
         }
         void listBoxItemClicked(int row, const juce::MouseEvent&) override {
             if (!owner) return;
             int dataIdx = owner->filteredIndices[row];
             owner->applySelection(dataIdx);
-
-            // 【変更点】クリックしてもブラウザを閉じない
-            // owner->setVisible(false);
-
-            owner->fileList.repaint(); // ハイライト更新
+            owner->fileList.repaint();
         }
     } fileModel;
 };

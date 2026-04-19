@@ -25,15 +25,12 @@ private:
     WavetableBrowser browser;
     juce::TextButton openBrowserButton{ "BROWSE" };
 
-    // --- ナビゲーションボタン追加 ---
-    juce::TextButton prevWaveButton{ juce::String::fromUTF8("\xe2\x97\x80") }; // ◀
-    juce::TextButton nextWaveButton{ juce::String::fromUTF8("\xe2\x96\xb6") }; // ▶
+    juce::TextButton prevWaveButton{ juce::String::fromUTF8("\xe2\x97\x80") };
+    juce::TextButton nextWaveButton{ juce::String::fromUTF8("\xe2\x96\xb6") };
     juce::TextButton rndWaveButton{ "RND" };
 
-    // --- グループコンポーネント ---
     juce::GroupComponent oscGroup, subGroup, shaperGroup, filterGroup, ampEnvGroup, modEnvGroup, controlGroup;
 
-    // --- Osc Parameters ---
     juce::ToggleButton oscOnButton{ "ON" };
     juce::Slider wtLevelSlider, wtPosSlider, oscPitchSlider;
     juce::Label  wtLevelLabel, wtPosLabel, oscPitchLabel;
@@ -47,7 +44,6 @@ private:
     juce::ComboBox fmWaveCombo;
     juce::Label    fmWaveLabel;
 
-    // --- 3 Stage Morph Parameters ---
     juce::ComboBox morphAModeCombo, morphBModeCombo, morphCModeCombo;
     juce::Label    morphAModeLabel, morphBModeLabel, morphCModeLabel;
     juce::Slider   morphAAmtSlider, morphBAmtSlider, morphCAmtSlider;
@@ -55,13 +51,11 @@ private:
     juce::Slider   morphAShiftSlider, morphBShiftSlider, morphCShiftSlider;
     juce::Label    morphAShiftLabel, morphBShiftLabel, morphCShiftLabel;
 
-    // --- Sub Osc Parameters ---
     juce::ToggleButton subOnButton{ "ON" };
     juce::ComboBox subWaveCombo;
     juce::Slider subVolSlider, subPitchSlider;
     juce::Label  subVolLabel, subPitchLabel;
 
-    // --- Filter / Shaper / Perf ---
     juce::Slider distDriveSlider, shpAmtSlider, bitSlider, rateSlider;
     juce::Label  distDriveLabel, shpAmtLabel, bitLabel, rateLabel;
 
@@ -74,13 +68,11 @@ private:
     juce::Slider modAtkSlider, modDecSlider, modSusSlider, modRelSlider;
     juce::Label  modAtkLabel, modDecLabel, modSusLabel, modRelLabel;
 
-    // 【変更】ToggleButtonにしてON/OFFの点灯視認性を向上
     juce::ToggleButton legatoButton{ "LEGATO" };
 
     juce::Slider glideSlider, pitchSlider, gainSlider;
     juce::Label  glideLabel, pitchLabel, gainLabel;
 
-    // --- Attachments ---
     std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>> attachments;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> oscOnAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> subOnAttachment;
