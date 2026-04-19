@@ -40,7 +40,17 @@ public:
     float* getOutputScopePtr() { return outputScopeData.data(); }
 
     void getStaticWaveform(std::array<float, 512>& buffer) {
+        // 1. オシレーターから時間領域Morph適用済みの基本波形を取得
         oscillator.generateSingleCycle(buffer);
+
+        // 2. 現在のSpectral Morphのパラメータを取得
+        int mA = (int)pMorphAMode->load(std::memory_order_relaxed);
+        float aA = pMorphAAmt->load(std::memory_order_relaxed);
+        int mB = (int)pMorphBMode->load(std::memory_order_relaxed);
+        float aB = pMorphBAmt->load(std::memory_order_relaxed);
+
+        // 3. Spectral MorphingをGUI用の波形に適用
+        spectralMorph.processSingleCycleForDisplay(buffer, mA, aA, mB, aB);
     }
 
 private:
@@ -48,7 +58,7 @@ private:
     juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
     WavetableOscillator oscillator;
-    SpectralMorphProcessor spectralMorph; // <--- 新規追加
+    SpectralMorphProcessor spectralMorph;
     LadderFilter filter;
     SineShaper shaper;
     MonoVoiceManager voiceManager;

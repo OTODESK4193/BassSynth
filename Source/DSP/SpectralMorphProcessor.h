@@ -76,7 +76,64 @@ public:
         }
     }
 
+    // --- GUI描画用の軽量1周期FFT関数 ---
+    void processSingleCycleForDisplay(std::array<float, 512>& buffer, int modeA, float amtA, int modeB, float amtB)
+    {
+        bool isSpectralA = (modeA >= 9 && modeA <= 13) && (std::abs(amtA) > 0.001f);
+        bool isSpectralB = (modeB >= 9 && modeB <= 13) && (std::abs(amtB) > 0.001f);
+
+        if (!isSpectralA && !isSpectralB) return;
+
+        // 1. 直近のデータをワークスペースにコピー (窓関数なし)
+        for (size_t i = 0; i < 512; ++i) {
+            displayWorkspace[i] = buffer[i];
+        }
+        for (size_t i = 512; i < 1024; ++i) {
+            displayWorkspace[i] = 0.0f;
+        }
+
+        // 2. FFT
+        displayFFT.performRealOnlyForwardTransform(displayWorkspace.data());
+
+        // 3. 極座標変換
+        size_t numBins = 256;
+        for (size_t k = 1; k < numBins; ++k) {
+            std::complex<float> c(displayWorkspace[k * 2], displayWorkspace[k * 2 + 1]);
+            displayMag[k] = std::abs(c);
+            displayPhase[k] = std::arg(c);
+        }
+
+        // 4. Morph適用 (汎用化した関数を使用)
+        if (isSpectralA) applyMorphToMagnitude(displayMag.data(), displayTempMag.data(), modeA, amtA, numBins);
+        if (isSpectralB) applyMorphToMagnitude(displayMag.data(), displayTempMag.data(), modeB, amtB, numBins);
+
+        // 5. 直交座標再構築
+        for (size_t k = 1; k < numBins; ++k) {
+            std::complex<float> c = std::polar(displayMag[k], displayPhase[k]);
+            displayWorkspace[k * 2] = c.real();
+            displayWorkspace[k * 2 + 1] = c.imag();
+        }
+
+        // 6. 逆FFT
+        displayFFT.performRealOnlyInverseTransform(displayWorkspace.data());
+
+        // 7. ピークノーマライズ（はみ出し防止）して元のバッファに戻す
+        float peak = 1e-9f;
+        // まず最大振幅を探す
+        for (size_t i = 0; i < 512; ++i) {
+            peak = std::max(peak, std::abs(displayWorkspace[i]));
+        }
+
+        // 常に-1.0〜1.0の枠内に美しく収まるようにスケーリング係数を計算
+        float scale = 1.0f / peak;
+
+        for (size_t i = 0; i < 512; ++i) {
+            buffer[i] = displayWorkspace[i] * scale;
+        }
+    }
+
 private:
+    // --- Audio Thread STFT Variables ---
     static constexpr int fftOrder = 11;
     static constexpr size_t fftSize = 1 << fftOrder; // 2048
     static constexpr int hopSize = 512;              // 4x Overlap
@@ -89,17 +146,20 @@ private:
     std::array<float, fifoSize> inputFifoL, inputFifoR;
     std::array<float, fifoSize> outputFifoL, outputFifoR;
     std::array<float, fftSize * 2> fftWorkspaceL, fftWorkspaceR;
-
     std::array<float, fftSize / 2> magL, magR, phaseL, phaseR, tempMag;
 
     int fifoWritePos = 0;
     int hopCounter = 0;
 
+    // --- GUI Display FFT Variables ---
+    juce::dsp::FFT displayFFT{ 9 }; // 512 = 2^9
+    std::array<float, 1024> displayWorkspace{};
+    std::array<float, 256> displayMag{}, displayPhase{}, displayTempMag{};
+
     void processSTFTFrame(int modeA, float amtA, int modeB, float amtB)
     {
         int readPos = (fifoWritePos - (int)fftSize + fifoSize) % fifoSize;
 
-        // 1. 直近の入力データをワーキングバッファにコピー
         for (size_t i = 0; i < fftSize; ++i)
         {
             size_t idx = (size_t)((readPos + i) % fifoSize);
@@ -107,22 +167,18 @@ private:
             fftWorkspaceR[i] = inputFifoR[idx];
         }
 
-        // 窓関数を配列全体に直接適用
         window.multiplyWithWindowingTable(fftWorkspaceL.data(), fftSize);
         window.multiplyWithWindowingTable(fftWorkspaceR.data(), fftSize);
 
-        // 残りの配列（虚数部などゼロパディング）をクリア
         for (size_t i = fftSize; i < fftSize * 2; ++i)
         {
             fftWorkspaceL[i] = 0.0f;
             fftWorkspaceR[i] = 0.0f;
         }
 
-        // 2. FFTの実行 (実数のみ)
         forwardFFT.performRealOnlyForwardTransform(fftWorkspaceL.data());
         forwardFFT.performRealOnlyForwardTransform(fftWorkspaceR.data());
 
-        // 3. 直交座標から極座標（振幅・位相）への変換
         size_t numBins = fftSize / 2;
         for (size_t k = 1; k < numBins; ++k)
         {
@@ -135,17 +191,15 @@ private:
             phaseR[k] = std::arg(cR);
         }
 
-        // 4. Spectral Morphの適用 (A -> B の直列適用)
         if (modeA >= 9 && modeA <= 13) {
-            applyMorphToMagnitude(magL, modeA, amtA, numBins);
-            applyMorphToMagnitude(magR, modeA, amtA, numBins);
+            applyMorphToMagnitude(magL.data(), tempMag.data(), modeA, amtA, numBins);
+            applyMorphToMagnitude(magR.data(), tempMag.data(), modeA, amtA, numBins);
         }
         if (modeB >= 9 && modeB <= 13) {
-            applyMorphToMagnitude(magL, modeB, amtB, numBins);
-            applyMorphToMagnitude(magR, modeB, amtB, numBins);
+            applyMorphToMagnitude(magL.data(), tempMag.data(), modeB, amtB, numBins);
+            applyMorphToMagnitude(magR.data(), tempMag.data(), modeB, amtB, numBins);
         }
 
-        // 5. 極座標から直交座標へ再構築（位相を維持）
         for (size_t k = 1; k < numBins; ++k)
         {
             std::complex<float> cL = std::polar(magL[k], phaseL[k]);
@@ -157,17 +211,13 @@ private:
             fftWorkspaceR[k * 2 + 1] = cR.imag();
         }
 
-        // 6. 逆FFTの実行
         inverseFFT.performRealOnlyInverseTransform(fftWorkspaceL.data());
         inverseFFT.performRealOnlyInverseTransform(fftWorkspaceR.data());
 
-        // 7. 出力用の窓関数を再度適用（オーバーラップアド用）
         window.multiplyWithWindowingTable(fftWorkspaceL.data(), fftSize);
         window.multiplyWithWindowingTable(fftWorkspaceR.data(), fftSize);
 
-        // 8. オーバーラップアド (OLA) とスケーリング
-        // 4x Overlap と Hann窓に基づくスケーリング補正
-        float gainCorrection = 1.0f / 2.0f; // オーバラップアド補正係数
+        float gainCorrection = 1.0f / 2.0f;
 
         for (size_t i = 0; i < fftSize; ++i)
         {
@@ -177,7 +227,7 @@ private:
         }
     }
 
-    void applyMorphToMagnitude(std::array<float, fftSize / 2>& mag, int mode, float amount, size_t numBins)
+    void applyMorphToMagnitude(float* mag, float* tMag, int mode, float amount, size_t numBins)
     {
         if (mode == 9) // Smear
         {
@@ -190,9 +240,9 @@ private:
                     sum += mag[idx];
                     count++;
                 }
-                tempMag[k] = sum / (float)count;
+                tMag[k] = sum / (float)count;
             }
-            for (size_t k = 1; k < numBins; ++k) mag[k] = tempMag[k];
+            for (size_t k = 1; k < numBins; ++k) mag[k] = tMag[k];
         }
         else if (mode == 10) // Vocode
         {
@@ -217,9 +267,9 @@ private:
                 int k1 = std::min(k0 + 1, (int)numBins - 1);
                 k0 = std::clamp(k0, 1, (int)numBins - 1);
                 k1 = std::clamp(k1, 1, (int)numBins - 1);
-                tempMag[k] = mag[(size_t)k0] * (1.0f - frac) + mag[(size_t)k1] * frac;
+                tMag[k] = mag[(size_t)k0] * (1.0f - frac) + mag[(size_t)k1] * frac;
             }
-            for (size_t k = 1; k < numBins; ++k) mag[k] = tempMag[k];
+            for (size_t k = 1; k < numBins; ++k) mag[k] = tMag[k];
         }
         else if (mode == 12) // SpecCut
         {
