@@ -36,9 +36,9 @@ static void setupCombo(juce::ComboBox& c, juce::Label& l, const char* txt, juce:
 // LfoTab Implementation
 // ==============================================================================
 LfoTab::LfoTab(juce::AudioProcessorValueTreeState& vts) : apvts(vts) {
-    juce::StringArray waves = { "Sine", "Saw", "Pulse", "Random" };
-    juce::StringArray beats = { "1/1", "1/2", "1/4", "1/8", "1/16", "1/32", "1/4T", "1/8T", "1/16T" };
-
+    juce::StringArray waves = {"Sine", "Saw", "Pulse", "Random"};
+    juce::StringArray beats = {"1/1", "1/2", "1/4", "1/8", "1/16", "1/32", "1/4T", "1/8T", "1/16T"};
+    
     for (int i = 0; i < 3; ++i) {
         addAndMakeVisible(lfos[i].onBtn);
         setupCombo(lfos[i].wave, lfos[i].waveLbl, "Wave", waves, this);
@@ -58,7 +58,7 @@ LfoTab::LfoTab(juce::AudioProcessorValueTreeState& vts) : apvts(vts) {
 }
 void LfoTab::paint(juce::Graphics& g) {
     g.fillAll(juce::Colour::fromString("FF1A1A1A"));
-    for (int i = 0; i < 3; ++i) {
+    for(int i=0; i<3; ++i) {
         g.setColour(juce::Colours::white.withAlpha(0.05f));
         g.fillRoundedRectangle(10, 10 + i * 130, getWidth() - 20, 115, 5.0f);
         g.setColour(juce::Colour::fromString("FFFF764D"));
@@ -66,19 +66,23 @@ void LfoTab::paint(juce::Graphics& g) {
         g.drawText("LFO " + juce::String(i + 1), 20, 15 + i * 130, 50, 20, juce::Justification::centredLeft);
     }
 }
+
 void LfoTab::resized() {
     for (int i = 0; i < 3; ++i) {
         int y = 30 + i * 130;
-        lfos[i].onBtn.setBounds(20, y + 15, 45, 24);
-        lfos[i].waveLbl.setBounds(85, y + 5, 80, 20);
-        lfos[i].wave.setBounds(85, y + 25, 80, 24);
-        lfos[i].sync.setBounds(180, y + 25, 60, 24);
-        placeKnob(245, y, lfos[i].rateLbl, lfos[i].rate);
-        lfos[i].beatLbl.setBounds(330, y + 5, 70, 20);
-        lfos[i].beat.setBounds(330, y + 25, 70, 24);
-        placeKnob(415, y, lfos[i].amtLbl, lfos[i].amt);
+        // 全体的に左へシフトし、間隔を最適化
+        lfos[i].onBtn.setBounds(15, y + 15, 45, 24);
+        lfos[i].waveLbl.setBounds(70, y + 5, 75, 20);
+        lfos[i].wave.setBounds(70, y + 25, 75, 24);
+        lfos[i].sync.setBounds(155, y + 25, 55, 24);
+        placeKnob(220, y, lfos[i].rateLbl, lfos[i].rate);
+        lfos[i].beatLbl.setBounds(300, y + 5, 70, 20);
+        lfos[i].beat.setBounds(300, y + 25, 70, 24);
+        // 右端のノブを415から385に移動し、見切れを解消
+        placeKnob(385, y, lfos[i].amtLbl, lfos[i].amt);
     }
 }
+
 
 // ==============================================================================
 // ModEnvTab Implementation
@@ -103,7 +107,7 @@ ModEnvTab::ModEnvTab(juce::AudioProcessorValueTreeState& vts) : apvts(vts) {
 }
 void ModEnvTab::paint(juce::Graphics& g) {
     g.fillAll(juce::Colour::fromString("FF1A1A1A"));
-    for (int i = 0; i < 3; ++i) {
+    for(int i=0; i<3; ++i) {
         g.setColour(juce::Colours::white.withAlpha(0.05f));
         g.fillRoundedRectangle(10, 10 + i * 130, getWidth() - 20, 115, 5.0f);
         g.setColour(juce::Colour::fromString("FFFF764D"));
@@ -114,12 +118,14 @@ void ModEnvTab::paint(juce::Graphics& g) {
 void ModEnvTab::resized() {
     for (int i = 0; i < 3; ++i) {
         int y = 30 + i * 130;
-        envs[i].onBtn.setBounds(20, y + 15, 45, 24);
-        placeKnob(85, y, envs[i].aL, envs[i].a);
-        placeKnob(160, y, envs[i].dL, envs[i].d);
-        placeKnob(235, y, envs[i].sL, envs[i].s);
-        placeKnob(310, y, envs[i].rL, envs[i].r);
-        placeKnob(415, y, envs[i].amtL, envs[i].amt);
+        // 等間隔（75pxピッチ）で左に詰め、Amountを分離
+        envs[i].onBtn.setBounds(15, y + 15, 45, 24);
+        placeKnob(75, y, envs[i].aL, envs[i].a);
+        placeKnob(150, y, envs[i].dL, envs[i].d);
+        placeKnob(225, y, envs[i].sL, envs[i].s);
+        placeKnob(300, y, envs[i].rL, envs[i].r);
+        // 右端のノブを415から385に移動し、見切れを解消
+        placeKnob(385, y, envs[i].amtL, envs[i].amt);
     }
 }
 
@@ -138,7 +144,7 @@ MatrixTab::MatrixTab(juce::AudioProcessorValueTreeState& vts) : apvts(vts) {
             addAndMakeVisible(rows[src].slots[slot].amt);
             rows[src].slots[slot].amt.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
             rows[src].slots[slot].amt.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
-
+            
             juce::String dId = "matrix_s" + juce::String(src) + "_d" + juce::String(slot);
             juce::String aId = "matrix_s" + juce::String(src) + "_a" + juce::String(slot);
             comboAtts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(apvts, dId, rows[src].slots[slot].dest));
@@ -148,8 +154,8 @@ MatrixTab::MatrixTab(juce::AudioProcessorValueTreeState& vts) : apvts(vts) {
 }
 void MatrixTab::paint(juce::Graphics& g) {
     g.fillAll(juce::Colour::fromString("FF1A1A1A"));
-    juce::StringArray srcNames = { "MOD 1", "MOD 2", "MOD 3", "LFO 1", "LFO 2", "LFO 3" };
-    for (int i = 0; i < 6; ++i) {
+    juce::StringArray srcNames = {"MOD 1", "MOD 2", "MOD 3", "LFO 1", "LFO 2", "LFO 3"};
+    for(int i=0; i<6; ++i) {
         g.setColour(juce::Colours::white.withAlpha(i % 2 == 0 ? 0.03f : 0.00f));
         g.fillRect(0, i * 65, getWidth(), 65);
         g.setColour(juce::Colour::fromString("FFDDDDDD"));
@@ -211,7 +217,7 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     setupS(distDriveSlider, distDriveLabel, "Drive", this); setupS(shpAmtSlider, shpAmtLabel, "Shaper", this);
     setupS(bitSlider, bitLabel, "Bits", this); setupS(rateSlider, rateLabel, "Rate", this);
     setupS(cutoffSlider, cutoffLabel, "Cutoff", this); setupS(resSlider, resLabel, "Reso", this); setupS(fltEnvAmtSlider, fltEnvAmtLabel, "EnvAmt", this);
-
+    
     setupS(ampAtkSlider, ampAtkLabel, "A", this); setupS(ampDecSlider, ampDecLabel, "D", this); setupS(ampSusSlider, ampSusLabel, "S", this); setupS(ampRelSlider, ampRelLabel, "R", this);
     setupS(fltAtkSlider, fltAtkLabel, "A", this); setupS(fltDecSlider, fltDecLabel, "D", this); setupS(fltSusSlider, fltSusLabel, "S", this); setupS(fltRelSlider, fltRelLabel, "R", this);
     setupS(glideSlider, glideLabel, "Glide", this); setupS(pitchSlider, pitchLabel, "Pitch", this); setupS(gainSlider, gainLabel, "Gain", this);
@@ -270,7 +276,7 @@ void LiquidDreamAudioProcessorEditor::timerCallback() {
     dualScope.updateStaticWave(tempBuffer.data(), 512);
 
     // 2. モジュレーション・リング（ピンクArc）の更新ロジック
-    float modDepths[12] = { 0.0f };
+    float modDepths[12] = {0.0f};
     auto& apvts = audioProcessor.getAPVTS();
 
     // マトリックス全探索によるモジュレーション深度の合算
@@ -296,12 +302,11 @@ void LiquidDreamAudioProcessorEditor::timerCallback() {
             float pNorm = range.convertTo0to1((float)s.getValue());
             s.getProperties().set("mod_min", juce::jlimit(0.0f, 1.0f, pNorm - depth));
             s.getProperties().set("mod_max", juce::jlimit(0.0f, 1.0f, pNorm + depth));
-        }
-        else {
+        } else {
             s.getProperties().set("mod_active", false);
         }
         s.repaint();
-        };
+    };
 
     // 各アサイン先スライダーへの適用
     updateRing(wtPosSlider, modDepths[1]);
@@ -323,7 +328,7 @@ void LiquidDreamAudioProcessorEditor::resized()
 
     auto placeComboLocal = [](int x, int y, int w, juce::Label& lbl, juce::ComboBox& cmb) {
         lbl.setBounds(x, y, w, 20); cmb.setBounds(x, y + 30, w, 24);
-        };
+    };
 
     // --- 左側エリア (350px) ---
     auto leftArea = area.removeFromLeft(350);
