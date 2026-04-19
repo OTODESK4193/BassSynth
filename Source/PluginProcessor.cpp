@@ -9,6 +9,7 @@ LiquidDreamAudioProcessor::LiquidDreamAudioProcessor()
     apvts(*this, nullptr, "PARAMS", createParameterLayout())
 {
     outputScopeData.fill(0.0f);
+    tempScopeBuffer.fill(0.0f);
 
     pOscOn = apvts.getRawParameterValue("osc_on");
     pWave = apvts.getRawParameterValue("osc_wave");
@@ -105,7 +106,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout LiquidDreamAudioProcessor::c
     params.push_back(std::make_unique<juce::AudioParameterFloat>("flt_env_amt", "Env Amt", 0.0f, 1.0f, 0.0f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("m_gain", "Gain", 0.0f, 1.0f, 0.5f));
 
-    params.push_back(std::make_unique<juce::AudioParameterFloat>("m_glide", "Glide", 0.0f, 1.0f, 0.0f));
+    // 【NEW】Glideの範囲を0.0ms 〜 1000.0msに修正し、低い値で繊細な調整ができるようSkew(0.3f)を設定
+    auto glideRange = juce::NormalisableRange<float>(0.0f, 1000.0f, 1.0f, 0.3f);
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("m_glide", "Glide", glideRange, 0.0f));
+
     params.push_back(std::make_unique<juce::AudioParameterBool>("m_legato", "Legato", false));
     params.push_back(std::make_unique<juce::AudioParameterInt>("m_pb", "PB Range", 0, 24, 12));
 
@@ -321,9 +325,12 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         float fg = cg * aVal;
         left[i] = sL * fg; right[i] = sR * fg;
 
-        // 【NEW】常に最新の音声波形をリングバッファに書き込む（ティアリング対策済みのスクロール描画用）
-        outputScopeData[scopeWriteIndex] = (left[i] + right[i]) * 0.5f;
-        scopeWriteIndex = (scopeWriteIndex + 1) % 512;
+        tempScopeBuffer[scopeWriteIndex] = (left[i] + right[i]) * 0.5f;
+        scopeWriteIndex++;
+        if (scopeWriteIndex >= 512) {
+            outputScopeData = tempScopeBuffer;
+            scopeWriteIndex = 0;
+        }
     }
 }
 

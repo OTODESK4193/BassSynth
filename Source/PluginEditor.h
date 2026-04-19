@@ -24,7 +24,6 @@ private:
 
     WavetableBrowser browser;
     juce::TextButton openBrowserButton{ "BROWSE" };
-
     juce::TextButton prevWaveButton{ juce::String::fromUTF8("\xe2\x97\x80") };
     juce::TextButton nextWaveButton{ juce::String::fromUTF8("\xe2\x96\xb6") };
     juce::TextButton rndWaveButton{ "RND" };
@@ -69,7 +68,6 @@ private:
     juce::Label  modAtkLabel, modDecLabel, modSusLabel, modRelLabel;
 
     juce::ToggleButton legatoButton{ "LEGATO" };
-
     juce::Slider glideSlider, pitchSlider, gainSlider;
     juce::Label  glideLabel, pitchLabel, gainLabel;
 

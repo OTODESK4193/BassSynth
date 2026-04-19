@@ -116,7 +116,7 @@ public:
                     workBuf.clear();
                     auto* workPtr = workBuf.getWritePointer(0);
                     for (int i = 0; i < 2048; ++i) {
-                        int srcIdx = f * 2048 + i;
+                        int srcIdx = (int)(f * 2048) + i; // キャスト追加
                         workPtr[i] = (srcIdx < newSet->totalSamples) ? tempRaw.getSample(0, srcIdx) : 0.0f;
                     }
                     fft.performRealOnlyForwardTransform(workPtr);
@@ -138,7 +138,7 @@ public:
                     float normalizeScale = 1.0f / peak;
                     auto* destPtr = newSet->levels[lvl].getWritePointer(0);
                     for (int i = 0; i < 2048; ++i) {
-                        int dstIdx = f * 2048 + i;
+                        int dstIdx = (int)(f * 2048) + i; // キャスト追加
                         if (dstIdx < newSet->totalSamples) destPtr[dstIdx] = juce::jlimit(-1.0f, 1.0f, workPtr[i] * normalizeScale);
                     }
                 }
@@ -153,8 +153,10 @@ public:
         float framePos = wtPosition * (float)std::max(0, set->numFrames - 1);
         int frameIdx = (int)framePos;
         float frameFrac = framePos - (float)frameIdx;
-        int f0_base = frameIdx * set->frameSize;
-        int f1_base = std::min(frameIdx + 1, set->numFrames - 1) * set->frameSize;
+
+        // オーバーフロー警告回避のための明示的キャスト
+        int f0_base = (int)(frameIdx * set->frameSize);
+        int f1_base = (int)(std::min(frameIdx + 1, set->numFrames - 1) * set->frameSize);
 
         for (int i = 0; i < 512; ++i) {
             float phase = i / 512.0f;
@@ -228,8 +230,10 @@ public:
         float framePos = wtPosition * (float)std::max(0, set->numFrames - 1);
         int frameIdx = (int)framePos;
         float frameFrac = framePos - (float)frameIdx;
-        int f0_base = frameIdx * set->frameSize;
-        int f1_base = std::min(frameIdx + 1, set->numFrames - 1) * set->frameSize;
+
+        // オーバーフロー警告回避
+        int f0_base = (int)(frameIdx * set->frameSize);
+        int f1_base = (int)(std::min(frameIdx + 1, set->numFrames - 1) * set->frameSize);
 
         SIMDFloat outL_simd(0.0f), outR_simd(0.0f);
         int numBlocks = (unisonCount + SimdWidth - 1) / SimdWidth;
@@ -238,7 +242,6 @@ public:
             SIMDFloat p = phases[b];
             SIMDFloat modSignal(0.0f);
 
-            // MSVCのSIMDエラーを回避するため、安全なforループと明示的キャストで変調波を生成
             for (int i = 0; i < SimdWidth; ++i) {
                 float pVal = p.get(i);
                 float mVal = 0.0f;
@@ -322,26 +325,26 @@ private:
     std::array<SIMDFloat, MaxBlocks> phases, increments, panL, panR, amp;
 
     inline float applyPhaseWarp(float p, int mode, float amt, float shift, float& sOut) const {
-        if (mode == 1) { // Bend
+        if (mode == 1) {
             float sym = std::clamp(0.5f + shift * 0.49f, 0.01f, 0.99f);
             float b = std::exp(-std::clamp(amt, -0.99f, 0.99f) * 2.0f);
             if (p < sym) return sym * std::pow(p / sym, b);
             return sym + (1.0f - sym) * (1.0f - std::pow((1.0f - p) / (1.0f - sym), b));
         }
-        if (mode == 2) { // PWM
+        if (mode == 2) {
             float c = std::clamp(0.5f + shift * 0.4f, 0.1f, 0.9f);
             float pw = std::clamp(0.01f + (amt * 0.5f + 0.5f) * 0.98f, 0.01f, 0.99f);
             float ps = p + (0.5f - c); ps -= (int)(ps + 10.0f) - 10;
             float w = (ps < pw) ? (ps / pw * 0.5f) : (0.5f + (ps - pw) / (1.0f - pw) * 0.5f);
             float res = w + (c - 0.5f); res -= (int)(res + 10.0f) - 10; return res;
         }
-        if (mode == 3) { // Sync
+        if (mode == 3) {
             float ratio = 1.0f + std::abs(amt) * 7.0f;
             float res = (p + shift * 0.5f) * ratio; res -= (int)res;
             if (res > 0.985f) sOut *= (1.0f - res) / 0.015f; else if (res < 0.015f) sOut *= res / 0.015f;
             float finalR = res - shift * 0.5f; finalR -= (int)(finalR + 10.0f) - 10; return finalR;
         }
-        if (mode == 4) { // Mirror
+        if (mode == 4) {
             float pt = std::clamp(0.5f + shift * 0.4f, 0.1f, 0.9f);
             float m = (p < pt) ? p * (0.5f / pt) : 1.0f - (p - pt) * (0.5f / (1.0f - pt));
             if (amt < 0.0f) m = (p > pt) ? (p - pt) * (0.5f / (1.0f - pt)) : 1.0f - p * (0.5f / pt);
@@ -351,19 +354,19 @@ private:
     }
 
     inline float applyAmpWarp(float v, int mode, float amt, float shift) const {
-        if (mode == 5) { // Flip
+        if (mode == 5) {
             float d = 0.05f, out = 0.0f;
             if (v > shift + d) out = shift - (v - shift);
             else if (v < shift - d) out = shift + (shift - v);
             else { float t = (v - (shift - d)) / (2.0f * d); out = (shift + d) + (t * t * (3.0f - 2.0f * t)) * (-2.0f * d); }
             return v * (1.0f - std::abs(amt)) + out * std::abs(amt);
         }
-        if (mode == 6) { // Quantize
+        if (mode == 6) {
             float st = std::pow(2.0f, 2.0f + (1.0f - std::abs(amt)) * 14.0f);
             float sc = (v + shift) * st, bs = std::floor(sc), fr = sc - bs, ed = 0.1f, sm = (fr > 1.0f - ed) ? (fr - (1.0f - ed)) / ed : 0.0f;
             return v * (1.0f - std::abs(amt)) + ((bs + (sm * sm * (3.0f - 2.0f * sm))) / st - shift) * std::abs(amt);
         }
-        if (mode == 7) { // Remap
+        if (mode == 7) {
             float dr = (v + shift * 0.5f) * (1.0f + std::abs(amt) * 4.0f);
             return (amt >= 0.0f ? std::tanh(dr) : std::sin(dr * 1.570796f)) - (shift * 0.5f);
         }
