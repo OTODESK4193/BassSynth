@@ -16,14 +16,12 @@ public:
 
     ColorIREngine()
     {
-        // ゼロレイテンシーでのコンボリューション初期化
         convEngineA.loadImpulseResponse(juce::AudioBuffer<float>(2, 256), 44100.0, juce::dsp::Convolution::Stereo::yes, juce::dsp::Convolution::Trim::no, juce::dsp::Convolution::Normalise::no);
         convEngineB.loadImpulseResponse(juce::AudioBuffer<float>(2, 256), 44100.0, juce::dsp::Convolution::Stereo::yes, juce::dsp::Convolution::Trim::no, juce::dsp::Convolution::Normalise::no);
 
         preFilterL.setType(juce::dsp::StateVariableTPTFilterType::highpass); preFilterR.setType(juce::dsp::StateVariableTPTFilterType::highpass);
         postFilterL.setType(juce::dsp::StateVariableTPTFilterType::highpass); postFilterR.setType(juce::dsp::StateVariableTPTFilterType::highpass);
 
-        // 強烈な音圧とレゾナンスを引き出すOTTライクなコンプレッサー
         ottCompressor.setAttack(1.0f);
         ottCompressor.setRelease(150.0f);
         ottCompressor.setThreshold(-30.0f);
@@ -53,6 +51,7 @@ public:
             std::lock_guard<std::mutex> lock(chordMutex);
             learnedNotes.clear();
         }
+        // UI側で点滅を止めさせるため状態は即座に反映
         state.store(newState);
     }
 
@@ -71,7 +70,6 @@ public:
         return names.joinIntoString(", ");
     }
 
-    // irType: 0=Pure Saw, 1=Pure Square, 2=Pure FM Chime, 3=Resonant Noise
     void finishLearningAndGenerate(float attackMs, float decayMs, int irType)
     {
         std::vector<int> currentNotes;
@@ -81,39 +79,41 @@ public:
             currentNotes = learnedNotes;
         }
 
-        // ★ユーザーのボイシングと低音域を完全リスペクト（強制シフトやスプレッドは一切行わない）
         std::sort(currentNotes.begin(), currentNotes.end());
 
         const int myJobId = ++irGenJobId;
         const double sr = currentSampleRate;
-        state.store(LearnState::Active);
+
+        // ★修正1: ここで Active にせず、一時的に Learning 状態のまま裏スレッドを走らせる
+        // （ロード完了前に無音バッファが再生されるのを防ぐため）
 
         threadPool.addJob([this, currentNotes, attackMs, decayMs, irType, sr, myJobId]() {
             if (myJobId != irGenJobId.load()) return;
 
-            int numSamples = (int)(sr * (decayMs + attackMs) / 1000.0);
-            if (numSamples < 256) numSamples = 256;
+            float actualDecayMs = std::max(100.0f, decayMs);
+            int numSamples = (int)(sr * (actualDecayMs + attackMs) / 1000.0);
+            if (numSamples < 2048) numSamples = 2048;
+
             juce::AudioBuffer<float> tempIR(2, numSamples); tempIR.clear();
 
-            // ★ ピッチの揺れ（Drift）とDetuneを完全排除し、各ノート1ボイスの純粋な倍音の束を生成する
             std::vector<float> phases(currentNotes.size(), 0.0f);
             std::vector<float> incs(currentNotes.size(), 0.0f);
-            std::vector<int> delayLengths(currentNotes.size(), 0); // Noise用
+            std::vector<int> delayLengths(currentNotes.size(), 0);
 
             auto& random = juce::Random::getSystemRandom();
 
             for (size_t n = 0; n < currentNotes.size(); ++n) {
                 float freq = (float)juce::MidiMessage::getMidiNoteInHertz(currentNotes[n]);
                 incs[n] = freq / (float)sr;
-                phases[n] = 0.0f; // 位相もゼロからスタートさせ、アタックのパンチを揃える
+                phases[n] = 0.0f;
                 delayLengths[n] = (int)(sr / freq);
             }
 
             float atkSamples = std::max(1.0f, (attackMs / 1000.0f) * (float)sr);
-            float decSamples = (decayMs / 1000.0f) * (float)sr;
-            auto* outL = tempIR.getWritePointer(0); auto* outR = tempIR.getWritePointer(1);
+            float decSamples = (actualDecayMs / 1000.0f) * (float)sr;
+            float noiseSamples = sr * 0.02f;
 
-            // 音量正規化（ボイス数で割る）
+            auto* outL = tempIR.getWritePointer(0); auto* outR = tempIR.getWritePointer(1);
             float norm = 1.0f / (float)currentNotes.size();
 
             for (int i = 0; i < numSamples; ++i) {
@@ -122,15 +122,13 @@ public:
                 float sample = 0.0f;
 
                 if (irType == 3) {
-                    // Type 3: Resonant Noise (Karplus-Strong)
-                    // ピッチを持たないノイズバーストに強力なコムフィルターをかけ、金属的な共鳴を作る
                     for (size_t n = 0; n < currentNotes.size(); ++n) {
-                        float noise = (i < 200) ? (random.nextFloat() * 2.0f - 1.0f) : 0.0f;
+                        float noise = (i < 100) ? (random.nextFloat() * 2.0f - 1.0f) : 0.0f;
                         int dl = delayLengths[n];
-                        float fb = (i >= dl) ? outL[i - dl] : 0.0f; // 簡易フィードバック
-                        sample += noise + fb * 0.99f;
+                        float fb = (i >= dl) ? outL[i - dl] : 0.0f;
+                        sample += noise + fb * 0.995f;
                     }
-                    sample *= (norm * 0.2f);
+                    sample *= (norm * 0.15f);
                 }
                 else {
                     for (size_t n = 0; n < currentNotes.size(); ++n) {
@@ -138,51 +136,46 @@ public:
                         float val = 0.0f;
 
                         if (irType == 0) {
-                            // Type 0: Pure Saw (王道のColor Bass)
                             val = (2.0f * phase - 1.0f);
                         }
                         else if (irType == 1) {
-                            // Type 1: Pure Square (Hollow / Vocal / トーキングベース的)
                             val = (phase < 0.5f) ? 1.0f : -1.0f;
                         }
                         else if (irType == 2) {
-                            // Type 2: Pure FM Chime (Glassy / Metallic)
-                            // LFO等の揺らぎを一切排除した純粋な非整数次倍音の合成
                             float pPi = phase * juce::MathConstants<float>::twoPi;
-                            val = std::sin(pPi)
-                                + 0.6f * std::sin(pPi * 2.76f)
-                                + 0.4f * std::sin(pPi * 5.4f)
-                                + 0.2f * std::sin(pPi * 8.9f);
+                            val = std::sin(pPi) + 0.6f * std::sin(pPi * 2.76f) + 0.4f * std::sin(pPi * 5.4f) + 0.2f * std::sin(pPi * 8.9f);
                             val *= 0.6f;
                         }
 
                         sample += val;
-
-                        // ピッチの揺らぎ（Drift）を完全に排除した純粋な位相進行
                         phases[n] += incs[n];
                         if (phases[n] >= 1.0f) phases[n] -= 1.0f;
                     }
                     sample *= norm;
+
+                    if (i < noiseSamples) {
+                        float noiseEnv = 1.0f - ((float)i / noiseSamples);
+                        float noise = (random.nextFloat() * 2.0f - 1.0f) * noiseEnv * 0.3f;
+                        sample += noise;
+                    }
                 }
 
-                // サチュレーション（IR自体のRMSを極限まで引き上げ、Mix100%時の音量低下を防ぐ）
-                // Type3(Noise)はフィードバックで膨張するためサチュレーションを弱めに設定
-                float drive = (irType == 3) ? 1.5f : 6.0f;
+                float drive = (irType == 3) ? 1.0f : 4.0f;
                 sample = std::tanh(sample * drive);
 
-                // アタック＆ディケイ・エンベロープ (指数関数的な鋭いプラックカーブ)
                 float env = 0.0f;
                 if (i < atkSamples) {
                     env = (float)i / atkSamples;
                 }
                 else {
                     float decPos = (float)(i - atkSamples) / decSamples;
-                    env = std::pow(std::max(0.0f, 1.0f - decPos), 4.0f); // よりタイトに
+                    env = std::pow(std::max(0.0f, 1.0f - decPos), 4.0f);
                 }
 
-                // ステレオ感は不要（モノラルIRとして扱い、ベース原音の位相を壊さない）
-                outL[i] = sample * env;
-                outR[i] = sample * env;
+                // ★修正2: コンボリューション出力が爆音(NaN)にならないよう、IRのゲインを強力に抑える
+                float safeGain = 0.025f;
+                outL[i] = sample * env * safeGain;
+                outR[i] = sample * env * safeGain;
             }
 
             if (activeEngineIsA.load()) {
@@ -191,7 +184,11 @@ public:
             else {
                 convEngineA.loadImpulseResponse(std::move(tempIR), sr, juce::dsp::Convolution::Stereo::yes, juce::dsp::Convolution::Trim::no, juce::dsp::Convolution::Normalise::no);
             }
+
             triggerCrossfade();
+
+            // ★ロード完了後に初めて状態をActiveにし、安全に音を通す
+            state.store(LearnState::Active);
             });
     }
 
@@ -215,7 +212,6 @@ public:
 
         for (int ch = 0; ch < 2; ++ch) wetBufferA.copyFrom(ch, 0, buffer, ch, 0, numSamples);
 
-        // 1. Pre-HPF (原音の低域がIRの低域とぶつかって泥沼化するのを防ぐ)
         auto* wAL = wetBufferA.getWritePointer(0); auto* wAR = wetBufferA.getWritePointer(1);
         for (int i = 0; i < numSamples; ++i) {
             wAL[i] = preFilterL.processSample(0, wAL[i]); wAR[i] = preFilterR.processSample(1, wAR[i]);
@@ -223,23 +219,31 @@ public:
 
         for (int ch = 0; ch < 2; ++ch) wetBufferB.copyFrom(ch, 0, wetBufferA, ch, 0, numSamples);
 
-        // 2. Convolution
         juce::dsp::AudioBlock<float> blockA(wetBufferA); juce::dsp::ProcessContextReplacing<float> contextA(blockA);
         convEngineA.process(contextA);
         juce::dsp::AudioBlock<float> blockB(wetBufferB); juce::dsp::ProcessContextReplacing<float> contextB(blockB);
         convEngineB.process(contextB);
 
-        updateCrossfade(numSamples);
-
         auto* inL = buffer.getReadPointer(0); auto* inR = buffer.getReadPointer(1);
         auto* outL = buffer.getWritePointer(0); auto* outR = buffer.getWritePointer(1);
         auto* wBL = wetBufferB.getReadPointer(0); auto* wBR = wetBufferB.getReadPointer(1);
 
+        float fadeInc = 1.0f / (float)(currentSampleRate * 0.05);
+
         for (int i = 0; i < numSamples; ++i) {
+            // ★修正3: サンプル単位での滑らかなクロスフェード適用
+            if (fadeVolA < fadeTargetA) fadeVolA = std::min(fadeVolA + fadeInc, fadeTargetA);
+            else if (fadeVolA > fadeTargetA) fadeVolA = std::max(fadeVolA - fadeInc, fadeTargetA);
+            if (fadeVolB < fadeTargetB) fadeVolB = std::min(fadeVolB + fadeInc, fadeTargetB);
+            else if (fadeVolB > fadeTargetB) fadeVolB = std::max(fadeVolB - fadeInc, fadeTargetB);
+
             float currentWetL = wAL[i] * fadeVolA + wBL[i] * fadeVolB;
             float currentWetR = wAR[i] * fadeVolA + wBR[i] * fadeVolB;
 
-            // 3. Post-HPF (コンボリューション乗算により意図せず発生した重低音をカット)
+            // ★修正4: コンボリューション後の異常共鳴からシステムを保護するセーフティ・クリッパー
+            currentWetL = std::tanh(currentWetL);
+            currentWetR = std::tanh(currentWetR);
+
             currentWetL = postFilterL.processSample(0, currentWetL);
             currentWetR = postFilterR.processSample(1, currentWetR);
 
@@ -247,7 +251,6 @@ public:
             outR[i] = inR[i] * (1.0f - mix) + currentWetR * mix;
         }
 
-        // 4. OTT Compressor (ColorIRのレゾナンスを極限まで持ち上げる)
         if (ottAmount > 0.001f) {
             juce::AudioBuffer<float> ottBuf;
             ottBuf.makeCopyOf(buffer);
@@ -255,10 +258,13 @@ public:
             juce::dsp::ProcessContextReplacing<float> outCtx(outBlock);
             ottCompressor.process(outCtx);
 
-            float mkup = 5.0f; // OTTによる音量低下を補う強力なメイクアップゲイン
+            float mkup = 5.0f;
             for (int i = 0; i < numSamples; ++i) {
-                outL[i] = outL[i] * (1.0f - ottAmount) + (ottBuf.getSample(0, i) * mkup * ottAmount);
-                outR[i] = outR[i] * (1.0f - ottAmount) + (ottBuf.getSample(1, i) * mkup * ottAmount);
+                float oL = outL[i] * (1.0f - ottAmount) + (ottBuf.getSample(0, i) * mkup * ottAmount);
+                float oR = outR[i] * (1.0f - ottAmount) + (ottBuf.getSample(1, i) * mkup * ottAmount);
+                // 最終出力も確実に保護
+                outL[i] = std::tanh(oL);
+                outR[i] = std::tanh(oR);
             }
         }
     }
@@ -284,15 +290,5 @@ private:
     void triggerCrossfade() {
         if (activeEngineIsA.load()) { activeEngineIsA.store(false); fadeTargetA = 0.0f; fadeTargetB = 1.0f; }
         else { activeEngineIsA.store(true); fadeTargetA = 1.0f; fadeTargetB = 0.0f; }
-    }
-
-    void updateCrossfade(int numSamples) {
-        float fadeInc = 1.0f / (float)(currentSampleRate * 0.05);
-        for (int i = 0; i < numSamples; ++i) {
-            if (fadeVolA < fadeTargetA) fadeVolA = std::min(fadeVolA + fadeInc, fadeTargetA);
-            else if (fadeVolA > fadeTargetA) fadeVolA = std::max(fadeVolA - fadeInc, fadeTargetA);
-            if (fadeVolB < fadeTargetB) fadeVolB = std::min(fadeVolB + fadeInc, fadeTargetB);
-            else if (fadeVolB > fadeTargetB) fadeVolB = std::max(fadeVolB - fadeInc, fadeTargetB);
-        }
     }
 };
