@@ -61,6 +61,32 @@ private:
     std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment>> comboAtts;
 };
 
+// --- ColorIR Overlay Panel ---
+
+class ColorIrPanel : public juce::Component {
+public:
+    ColorIrPanel(LiquidDreamAudioProcessor& p);
+    void paint(juce::Graphics& g) override;
+    void resized() override;
+
+    void updateState(ColorIREngine::LearnState state, const juce::String& chordText, bool blinkFlag);
+
+    juce::TextButton learnButton{ "LEARN CHORD" };
+private:
+    LiquidDreamAudioProcessor& processor;
+    juce::AudioProcessorValueTreeState& apvts;
+    juce::Label chordLabel;
+
+    juce::ComboBox typeCombo;
+    juce::Label typeLabel;
+
+    juce::Slider mixSlider, preHpSlider, postHpSlider, atkSlider, decSlider, ottSlider;
+    juce::Label mixLabel, preHpLabel, postHpLabel, atkLabel, decLabel, ottLabel;
+
+    std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>> atts;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> typeAtt;
+};
+
 // --- Main Editor Class ---
 
 class LiquidDreamAudioProcessorEditor : public juce::AudioProcessorEditor, public juce::Timer
@@ -83,8 +109,10 @@ private:
     juce::TextButton prevWaveButton{ juce::String::fromUTF8("\xe2\x97\x80") };
     juce::TextButton nextWaveButton{ juce::String::fromUTF8("\xe2\x96\xb6") };
     juce::TextButton rndWaveButton{ "RND" };
+    juce::ToggleButton colorButton{ "COLOR" };
 
-    // Groups
+    // Overlays & Groups
+    ColorIrPanel colorPanel;
     juce::GroupComponent oscGroup, subGroup, shaperGroup, filterGroup, ampEnvGroup, filterEnvGroup, controlGroup;
 
     // Osc Params
@@ -133,8 +161,10 @@ private:
 
     // Attachments
     std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>> attachments;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> oscOnAtt, subOnAtt, legatoAtt;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> oscOnAtt, subOnAtt, legatoAtt, colorOnAtt;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> subWaveAtt, fmWaveAtt, morphAAtt, morphBAtt, morphCAtt;
+
+    int blinkCounter = 0;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(LiquidDreamAudioProcessorEditor)
 };

@@ -4,10 +4,13 @@
 #pragma once
 #include <JuceHeader.h>
 #include <array>
+#include <vector>
+#include <mutex>
 #include "DSP/WavetableOscillator.h"
 #include "DSP/SpectralMorphProcessor.h"
 #include "DSP/LadderFilter.h"
 #include "DSP/SineShaper.h"
+#include "DSP/ColorIREngine.h"
 #include "Logic/MonoVoiceManager.h"
 #include "Logic/AdsrEnvelope.h"
 #include "Logic/Lfo.h"
@@ -63,6 +66,8 @@ public:
         }
     }
 
+    ColorIREngine& getColorEngine() { return colorEngine; }
+
 private:
     juce::AudioProcessorValueTreeState apvts;
     juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
@@ -71,6 +76,7 @@ private:
     SpectralMorphProcessor spectralMorph;
     LadderFilter filter;
     SineShaper shaper;
+    ColorIREngine colorEngine;
     MonoVoiceManager voiceManager;
 
     AdsrEnvelope ampEnv, filterEnv;
@@ -83,7 +89,9 @@ private:
 
     juce::AudioBuffer<float> tempEnvBuffer;
     juce::AudioBuffer<float> tempSubBuffer;
+    juce::AudioBuffer<float> tempWavetableBuffer;
 
+    // Core Params
     std::atomic<float>* pOscOn = nullptr; std::atomic<float>* pWave = nullptr; std::atomic<float>* pPos = nullptr;
     std::atomic<float>* pOscLevel = nullptr; std::atomic<float>* pOscPitch = nullptr;
     std::atomic<float>* pPDecayAmt = nullptr; std::atomic<float>* pPDecayTime = nullptr;
@@ -99,11 +107,22 @@ private:
     std::atomic<float>* pAAtk = nullptr; std::atomic<float>* pADec = nullptr; std::atomic<float>* pASus = nullptr; std::atomic<float>* pARel = nullptr;
     std::atomic<float>* pFAtk = nullptr; std::atomic<float>* pFDec = nullptr; std::atomic<float>* pFSus = nullptr; std::atomic<float>* pFRel = nullptr;
 
-    // --- Modulators Params ---
+    // ColorIR Params (OTT Added)
+// ColorIR Params (OTT & Type Added)
+    std::atomic<float>* pColorOn = nullptr;
+    std::atomic<float>* pColorType = nullptr; // <--- 追加
+    std::atomic<float>* pColorMix = nullptr;
+    std::atomic<float>* pColorPreHp = nullptr;
+    std::atomic<float>* pColorPostHp = nullptr;
+    std::atomic<float>* pColorAtk = nullptr;
+    std::atomic<float>* pColorDec = nullptr;
+    std::atomic<float>* pColorOtt = nullptr;
+
+    // Modulators Params
     std::array<std::atomic<float>*, 3> pModOn, pModAtk, pModDec, pModSus, pModRel, pModAmt;
     std::array<std::atomic<float>*, 3> pLfoOn, pLfoWave, pLfoSync, pLfoRate, pLfoBeat, pLfoAmt;
 
-    // --- Mod Matrix Params ---
+    // Mod Matrix Params
     std::array<std::array<std::atomic<float>*, 3>, 6> pMatrixDest;
     std::array<std::array<std::atomic<float>*, 3>, 6> pMatrixAmt;
 

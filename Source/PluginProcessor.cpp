@@ -8,8 +8,7 @@ LiquidDreamAudioProcessor::LiquidDreamAudioProcessor()
     : AudioProcessor(BusesProperties().withOutput("Output", juce::AudioChannelSet::stereo(), true)),
     apvts(*this, nullptr, "PARAMS", createParameterLayout())
 {
-    outputScopeData.fill(0.0f);
-    tempScopeBuffer.fill(0.0f);
+    outputScopeData.fill(0.0f); tempScopeBuffer.fill(0.0f);
 
     pOscOn = apvts.getRawParameterValue("osc_on"); pWave = apvts.getRawParameterValue("osc_wave"); pPos = apvts.getRawParameterValue("osc_pos");
     pOscLevel = apvts.getRawParameterValue("osc_level"); pOscPitch = apvts.getRawParameterValue("osc_pitch");
@@ -25,6 +24,15 @@ LiquidDreamAudioProcessor::LiquidDreamAudioProcessor()
     pGain = apvts.getRawParameterValue("m_gain"); pGlide = apvts.getRawParameterValue("m_glide"); pLegato = apvts.getRawParameterValue("m_legato");
     pAAtk = apvts.getRawParameterValue("a_atk"); pADec = apvts.getRawParameterValue("a_dec"); pASus = apvts.getRawParameterValue("a_sus"); pARel = apvts.getRawParameterValue("a_rel");
     pFAtk = apvts.getRawParameterValue("f_atk"); pFDec = apvts.getRawParameterValue("f_dec"); pFSus = apvts.getRawParameterValue("f_sus"); pFRel = apvts.getRawParameterValue("f_rel");
+
+    pColorOn = apvts.getRawParameterValue("color_on");
+    pColorType = apvts.getRawParameterValue("color_type"); // <--- 追加
+    pColorMix = apvts.getRawParameterValue("color_mix");
+    pColorPreHp = apvts.getRawParameterValue("color_pre_hp");
+    pColorPostHp = apvts.getRawParameterValue("color_post_hp");
+    pColorAtk = apvts.getRawParameterValue("color_atk");
+    pColorDec = apvts.getRawParameterValue("color_dec");
+    pColorOtt = apvts.getRawParameterValue("color_ott"); // OTT Added
 
     for (int i = 0; i < 3; ++i) {
         juce::String ms = "mod" + juce::String(i + 1) + "_";
@@ -110,6 +118,16 @@ juce::AudioProcessorValueTreeState::ParameterLayout LiquidDreamAudioProcessor::c
     params.push_back(std::make_unique<juce::AudioParameterFloat>("f_sus", "Flt Sus", 0.0f, 1.0f, 0.5f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("f_rel", "Flt Rel", attRange, 0.3f));
 
+    // ColorIR Params
+    params.push_back(std::make_unique<juce::AudioParameterBool>("color_on", "Color On", false));
+    params.push_back(std::make_unique<juce::AudioParameterInt>("color_type", "IR Type", 0, 3, 0)); // <--- 追加: 0=Saw, 1=Square, 2=Chime, 3=Noise
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("color_mix", "Color Mix", 0.0f, 1.0f, 0.5f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("color_pre_hp", "Pre HPF", 20.0f, 2000.0f, 150.0f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("color_post_hp", "Post HPF", 20.0f, 2000.0f, 150.0f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("color_atk", "IR Attack", 2.0f, 100.0f, 5.0f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("color_dec", "IR Decay", 10.0f, 500.0f, 100.0f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("color_ott", "OTT", 0.0f, 1.0f, 0.5f)); // OTT 追加
+
     for (int i = 1; i <= 3; ++i) {
         juce::String pfx = "mod" + juce::String(i) + "_";
         juce::String nm = "Mod" + juce::String(i) + " ";
@@ -152,6 +170,7 @@ void LiquidDreamAudioProcessor::prepareToPlay(double sampleRate, int samplesPerB
     filter.prepare(sampleRate);
     shaper.prepare(sampleRate);
     voiceManager.setSampleRate(sampleRate);
+    colorEngine.prepare(sampleRate, samplesPerBlock);
 
     ampEnv.setSampleRate(sampleRate); filterEnv.setSampleRate(sampleRate);
     for (auto& env : modEnvs) env.setSampleRate(sampleRate);
@@ -159,6 +178,7 @@ void LiquidDreamAudioProcessor::prepareToPlay(double sampleRate, int samplesPerB
 
     tempEnvBuffer.setSize(5, samplesPerBlock);
     tempSubBuffer.setSize(2, samplesPerBlock);
+    tempWavetableBuffer.setSize(2, samplesPerBlock);
 
     double st = 0.02;
     smoothedWtLevel.reset(sampleRate, st); smoothedWtPitch.reset(sampleRate, st);
@@ -231,6 +251,9 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     for (const auto metadata : midiMessages) {
         auto msg = metadata.getMessage();
         if (msg.isNoteOn()) {
+            if (colorEngine.getLearnState() == ColorIREngine::LearnState::Learning) {
+                colorEngine.addNote(msg.getNoteNumber());
+            }
             if (voiceManager.noteOn(msg.getNoteNumber(), msg.getVelocity())) {
                 bool isLegato = voiceManager.isLegatoTransition();
                 ampEnv.noteOn(isLegato); filterEnv.noteOn(isLegato);
@@ -262,16 +285,18 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         lfos[i].setParameters((int)pLfoWave[i]->load(), pLfoSync[i]->load() > 0.5f, pLfoRate[i]->load(), (int)pLfoBeat[i]->load(), pLfoAmt[i]->load());
     }
 
-    auto* left = buffer.getWritePointer(0); auto* right = buffer.getWritePointer(1);
-    if (tempEnvBuffer.getNumSamples() < buffer.getNumSamples()) {
-        tempEnvBuffer.setSize(5, buffer.getNumSamples(), true, true, true);
-        tempSubBuffer.setSize(2, buffer.getNumSamples(), true, true, true);
+    int numSamples = buffer.getNumSamples();
+    if (tempEnvBuffer.getNumSamples() < numSamples) {
+        tempEnvBuffer.setSize(5, numSamples, true, true, true);
+        tempSubBuffer.setSize(2, numSamples, true, true, true);
+        tempWavetableBuffer.setSize(2, numSamples, true, true, true);
     }
 
+    auto* left = buffer.getWritePointer(0); auto* right = buffer.getWritePointer(1);
+    auto* wtL = tempWavetableBuffer.getWritePointer(0); auto* wtR = tempWavetableBuffer.getWritePointer(1);
     float stft_aA = 0.0f, stft_sA = 0.0f, stft_aB = 0.0f, stft_sB = 0.0f, stft_aC = 0.0f, stft_sC = 0.0f;
 
-    for (int i = 0; i < buffer.getNumSamples(); ++i) {
-        // Apply On/Off Switches to Modulation outputs
+    for (int i = 0; i < numSamples; ++i) {
         float modValues[6] = {
             (pModOn[0]->load(std::memory_order_relaxed) > 0.5f ? modEnvs[0].getNextSample() * pModAmt[0]->load(std::memory_order_relaxed) : 0.0f),
             (pModOn[1]->load(std::memory_order_relaxed) > 0.5f ? modEnvs[1].getNextSample() * pModAmt[1]->load(std::memory_order_relaxed) : 0.0f),
@@ -330,29 +355,34 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         float oL = 0.0f, oR = 0.0f, subL = 0.0f, subR = 0.0f;
         oscillator.getSampleStereo(oL, oR, subL, subR);
 
-        left[i] = oL; right[i] = oR;
-        tempSubBuffer.setSample(0, i, subL);
-        tempSubBuffer.setSample(1, i, subR);
+        wtL[i] = oL; wtR[i] = oR;
+        tempSubBuffer.setSample(0, i, subL); tempSubBuffer.setSample(1, i, subR);
     }
 
-    spectralMorph.process(buffer, currentModeA, stft_aA, stft_sA, currentModeB, stft_aB, stft_sB, currentModeC, stft_aC, stft_sC);
+    spectralMorph.process(tempWavetableBuffer, currentModeA, stft_aA, stft_sA, currentModeB, stft_aB, stft_sB, currentModeC, stft_aC, stft_sC);
 
-    for (int i = 0; i < buffer.getNumSamples(); ++i) {
-        float cc = smoothedCutoff.getNextValue(), cr = smoothedReso.getNextValue(), ce = pFltEnvAmt->load();
+    for (int i = 0; i < numSamples; ++i) {
         float cd = smoothedDrive.getNextValue(), csa = smoothedShpAmt.getNextValue(), csr = smoothedShpRate.getNextValue(), csb = smoothedShpBit.getNextValue();
-        float cg = smoothedGain.getNextValue();
+        float sL = wtL[i]; float sR = wtR[i];
+        shaper.processStereo(sL, sR, cd, csa, csr, csb, sL, sR);
+        wtL[i] = sL; wtR[i] = sR;
+    }
 
+    if (pColorOn->load() > 0.5f) {
+        colorEngine.setParameters(pColorPreHp->load(), pColorPostHp->load(), pColorOtt->load(), pColorMix->load());
+        colorEngine.process(tempWavetableBuffer);
+    }
+
+    for (int i = 0; i < numSamples; ++i) {
+        float cc = smoothedCutoff.getNextValue(), cr = smoothedReso.getNextValue(), ce = pFltEnvAmt->load(), cg = smoothedGain.getNextValue();
         float aVal = tempEnvBuffer.getSample(0, i);
         float fVal = tempEnvBuffer.getSample(1, i);
         float cutoffMod = tempEnvBuffer.getSample(2, i);
         float resoMod = tempEnvBuffer.getSample(3, i);
         float gainMod = tempEnvBuffer.getSample(4, i);
 
-        float sL = left[i]; float sR = right[i];
-        shaper.processStereo(sL, sR, cd, csa, csr, csb, sL, sR);
-
-        sL += tempSubBuffer.getSample(0, i);
-        sR += tempSubBuffer.getSample(1, i);
+        float sL = wtL[i] + tempSubBuffer.getSample(0, i);
+        float sR = wtR[i] + tempSubBuffer.getSample(1, i);
 
         float mc = cc * std::exp2(cutoffMod * 8.0f);
         mc += (fVal * ce * 10000.0f);
