@@ -58,15 +58,12 @@ public:
         spectralMorph.processSingleCycleForDisplay(buffer, mA, aA, sA, mB, aB, sB, mC, aC, sC);
     }
 
-    void getDynamicWaveform(std::array<float, 512>& buffer) {
-        int readIdx = scopeWriteIndex;
-        for (int i = 0; i < 512; ++i) {
-            buffer[i] = outputScopeData[(size_t)readIdx];
-            readIdx = (readIdx + 1) % 512;
-        }
-    }
-
     ColorIREngine& getColorEngine() { return colorEngine; }
+
+    std::vector<int> getActiveMidiNotes() {
+        std::lock_guard<std::mutex> lock(midiNotesMutex);
+        return activeMidiNotes;
+    }
 
 private:
     juce::AudioProcessorValueTreeState apvts;
@@ -91,6 +88,9 @@ private:
     juce::AudioBuffer<float> tempSubBuffer;
     juce::AudioBuffer<float> tempWavetableBuffer;
 
+    std::vector<int> activeMidiNotes;
+    std::mutex midiNotesMutex;
+
     // Core Params
     std::atomic<float>* pOscOn = nullptr; std::atomic<float>* pWave = nullptr; std::atomic<float>* pPos = nullptr;
     std::atomic<float>* pOscLevel = nullptr; std::atomic<float>* pOscPitch = nullptr;
@@ -107,16 +107,20 @@ private:
     std::atomic<float>* pAAtk = nullptr; std::atomic<float>* pADec = nullptr; std::atomic<float>* pASus = nullptr; std::atomic<float>* pARel = nullptr;
     std::atomic<float>* pFAtk = nullptr; std::atomic<float>* pFDec = nullptr; std::atomic<float>* pFSus = nullptr; std::atomic<float>* pFRel = nullptr;
 
-    // ColorIR Params (OTT Added)
-// ColorIR Params (OTT & Type Added)
+    // ColorIR & True OTT Params
     std::atomic<float>* pColorOn = nullptr;
-    std::atomic<float>* pColorType = nullptr; // <--- 追加
+    std::atomic<float>* pColorType = nullptr;
     std::atomic<float>* pColorMix = nullptr;
     std::atomic<float>* pColorPreHp = nullptr;
     std::atomic<float>* pColorPostHp = nullptr;
     std::atomic<float>* pColorAtk = nullptr;
     std::atomic<float>* pColorDec = nullptr;
-    std::atomic<float>* pColorOtt = nullptr;
+
+    std::atomic<float>* pOttDepth = nullptr;
+    std::atomic<float>* pOttTime = nullptr;
+    std::atomic<float>* pOttUp = nullptr;
+    std::atomic<float>* pOttDown = nullptr;
+    std::atomic<float>* pOttGain = nullptr;
 
     // Modulators Params
     std::array<std::atomic<float>*, 3> pModOn, pModAtk, pModDec, pModSus, pModRel, pModAmt;

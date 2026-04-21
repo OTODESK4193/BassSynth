@@ -26,13 +26,18 @@ LiquidDreamAudioProcessor::LiquidDreamAudioProcessor()
     pFAtk = apvts.getRawParameterValue("f_atk"); pFDec = apvts.getRawParameterValue("f_dec"); pFSus = apvts.getRawParameterValue("f_sus"); pFRel = apvts.getRawParameterValue("f_rel");
 
     pColorOn = apvts.getRawParameterValue("color_on");
-    pColorType = apvts.getRawParameterValue("color_type"); // <--- 追加
+    pColorType = apvts.getRawParameterValue("color_type");
     pColorMix = apvts.getRawParameterValue("color_mix");
     pColorPreHp = apvts.getRawParameterValue("color_pre_hp");
     pColorPostHp = apvts.getRawParameterValue("color_post_hp");
     pColorAtk = apvts.getRawParameterValue("color_atk");
     pColorDec = apvts.getRawParameterValue("color_dec");
-    pColorOtt = apvts.getRawParameterValue("color_ott"); // OTT Added
+
+    pOttDepth = apvts.getRawParameterValue("ott_depth");
+    pOttTime = apvts.getRawParameterValue("ott_time");
+    pOttUp = apvts.getRawParameterValue("ott_up");
+    pOttDown = apvts.getRawParameterValue("ott_down");
+    pOttGain = apvts.getRawParameterValue("ott_gain");
 
     for (int i = 0; i < 3; ++i) {
         juce::String ms = "mod" + juce::String(i + 1) + "_";
@@ -120,13 +125,19 @@ juce::AudioProcessorValueTreeState::ParameterLayout LiquidDreamAudioProcessor::c
 
     // ColorIR Params
     params.push_back(std::make_unique<juce::AudioParameterBool>("color_on", "Color On", false));
-    params.push_back(std::make_unique<juce::AudioParameterInt>("color_type", "IR Type", 0, 3, 0)); // <--- 追加: 0=Saw, 1=Square, 2=Chime, 3=Noise
+    params.push_back(std::make_unique<juce::AudioParameterInt>("color_type", "IR Type", 0, 3, 0));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("color_mix", "Color Mix", 0.0f, 1.0f, 0.5f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("color_pre_hp", "Pre HPF", 20.0f, 2000.0f, 150.0f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("color_post_hp", "Post HPF", 20.0f, 2000.0f, 150.0f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("color_atk", "IR Attack", 2.0f, 100.0f, 5.0f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("color_dec", "IR Decay", 10.0f, 500.0f, 100.0f));
-    params.push_back(std::make_unique<juce::AudioParameterFloat>("color_ott", "OTT", 0.0f, 1.0f, 0.5f)); // OTT 追加
+
+    // True OTT Params
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("ott_depth", "OTT Depth", 0.0f, 1.0f, 0.5f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("ott_time", "OTT Time", 0.0f, 1.0f, 0.5f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("ott_up", "Upward %", 0.0f, 1.0f, 0.5f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("ott_down", "Downward %", 0.0f, 1.0f, 0.5f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("ott_gain", "Out Gain", -12.0f, 24.0f, 0.0f));
 
     for (int i = 1; i <= 3; ++i) {
         juce::String pfx = "mod" + juce::String(i) + "_";
@@ -331,6 +342,8 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         oscillator.setWavetablePosition(modPos);
         oscillator.setFMAmount(modFm);
         oscillator.setDriftAmount(smoothedDrift.getNextValue());
+
+        // Morphの適用を完全に復元！
         oscillator.setMorphA(currentModeA, aA, sA);
         oscillator.setMorphB(currentModeB, aB, sB);
         oscillator.setMorphC(currentModeC, aC, sC);
@@ -359,6 +372,7 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         tempSubBuffer.setSample(0, i, subL); tempSubBuffer.setSample(1, i, subR);
     }
 
+    // スペクトラルモーフ処理の復元！
     spectralMorph.process(tempWavetableBuffer, currentModeA, stft_aA, stft_sA, currentModeB, stft_aB, stft_sB, currentModeC, stft_aC, stft_sC);
 
     for (int i = 0; i < numSamples; ++i) {
@@ -368,8 +382,10 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         wtL[i] = sL; wtR[i] = sR;
     }
 
+    // ColorIREngine と True OTT へのパラメーター渡し
     if (pColorOn->load() > 0.5f) {
-        colorEngine.setParameters(pColorPreHp->load(), pColorPostHp->load(), pColorOtt->load(), pColorMix->load());
+        colorEngine.setOttParameters(pOttDepth->load(), pOttTime->load(), pOttUp->load(), pOttDown->load(), pOttGain->load());
+        colorEngine.setParameters(pColorPreHp->load(), pColorPostHp->load(), pColorMix->load());
         colorEngine.process(tempWavetableBuffer);
     }
 

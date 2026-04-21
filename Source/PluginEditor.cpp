@@ -169,7 +169,7 @@ void MatrixTab::resized() {
 }
 
 // ==============================================================================
-// ColorIrPanel Implementation
+// ColorIrPanel Implementation (Vertical Rack Design)
 // ==============================================================================
 ColorIrPanel::ColorIrPanel(LiquidDreamAudioProcessor& p) : processor(p), apvts(p.getAPVTS()) {
     addAndMakeVisible(learnButton);
@@ -186,28 +186,38 @@ ColorIrPanel::ColorIrPanel(LiquidDreamAudioProcessor& p) : processor(p), apvts(p
 
     addAndMakeVisible(chordLabel);
     chordLabel.setJustificationType(juce::Justification::centred);
-    chordLabel.setFont(juce::FontOptions(24.0f, juce::Font::bold));
+    chordLabel.setFont(juce::FontOptions(22.0f, juce::Font::bold));
     chordLabel.setColour(juce::Label::textColourId, juce::Colour::fromString("FF00FFCC"));
 
-    // IR Type コンボボックスの設定
-    setupCombo(typeCombo, typeLabel, "IR Type", { "Hyper Saw", "Hollow Square", "FM Chime", "Resonant Noise" }, this);
+    // Generator Block Params
+    setupCombo(typeCombo, typeLabel, "IR Type", { "Pure Saw", "Pure Square", "FM Chime", "Resonant Noise" }, this);
     typeAtt = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(apvts, "color_type", typeCombo);
 
-    setupS(mixSlider, mixLabel, "Mix Amount", this);
+    setupS(mixSlider, mixLabel, "Mix", this);
+    setupS(atkSlider, atkLabel, "Attack", this);
+    setupS(decSlider, decLabel, "Decay", this);
     setupS(preHpSlider, preHpLabel, "Pre HPF", this);
     setupS(postHpSlider, postHpLabel, "Post HPF", this);
-    setupS(atkSlider, atkLabel, "IR Attack", this);
-    setupS(decSlider, decLabel, "IR Decay", this);
-    setupS(ottSlider, ottLabel, "OTT Amt", this);
 
     atts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, "color_mix", mixSlider));
-    atts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, "color_pre_hp", preHpSlider));
-    atts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, "color_post_hp", postHpSlider));
     atts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, "color_atk", atkSlider));
     atts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, "color_dec", decSlider));
-    atts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, "color_ott", ottSlider));
+    atts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, "color_pre_hp", preHpSlider));
+    atts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, "color_post_hp", postHpSlider));
 
-    // リアルタイム反映: Attack, Decay, IR Typeを変更した時、Learn完了状態なら自動でIR再生成
+    // True OTT Block Params
+    setupS(ottDepthSlider, ottDepthLabel, "Depth", this);
+    setupS(ottTimeSlider, ottTimeLabel, "Time", this);
+    setupS(ottUpSlider, ottUpLabel, "Upward %", this);
+    setupS(ottDownSlider, ottDownLabel, "Down %", this);
+    setupS(ottGainSlider, ottGainLabel, "Out Gain", this);
+
+    atts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, "ott_depth", ottDepthSlider));
+    atts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, "ott_time", ottTimeSlider));
+    atts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, "ott_up", ottUpSlider));
+    atts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, "ott_down", ottDownSlider));
+    atts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, "ott_gain", ottGainSlider));
+
     auto regenIR = [this]() {
         if (processor.getColorEngine().getLearnState() == ColorIREngine::LearnState::Active) {
             processor.getColorEngine().finishLearningAndGenerate(atkSlider.getValue(), decSlider.getValue(), typeCombo.getSelectedId() - 1);
@@ -220,42 +230,51 @@ ColorIrPanel::ColorIrPanel(LiquidDreamAudioProcessor& p) : processor(p), apvts(p
 
 void ColorIrPanel::paint(juce::Graphics& g) {
     g.fillAll(juce::Colour::fromString("FF121212"));
-    g.setColour(juce::Colours::white.withAlpha(0.05f));
-    g.fillRoundedRectangle(getLocalBounds().toFloat().reduced(5.0f), 8.0f);
 
-    g.setColour(juce::Colour::fromString("FFFF764D"));
-    g.setFont(18.0f);
-    g.drawText("COLOR IR - MULTI RESONATOR", 20, 20, 300, 30, juce::Justification::left);
+    auto drawBlock = [&](int y, int height, const juce::String& title, juce::Colour color) {
+        g.setColour(juce::Colours::white.withAlpha(0.04f));
+        g.fillRoundedRectangle(5, y, getWidth() - 10, height, 5.0f);
+        g.setColour(color);
+        g.setFont(14.0f);
+        g.drawText(title, 15, y + 5, 200, 20, juce::Justification::left);
+        g.setColour(juce::Colours::white.withAlpha(0.1f));
+        g.drawLine(15, y + 25, getWidth() - 15, y + 25, 1.0f);
+        };
 
-    g.setColour(juce::Colour::fromString("FF444444"));
-    g.drawLine(20, 60, getWidth() - 20, 60, 2.0f);
+    // Block 1: Generator
+    drawBlock(5, 255, "1. COLOR IR GENERATOR", juce::Colour::fromString("FFFF764D"));
+    // Block 2: True OTT
+    drawBlock(265, 200, "2. DYNAMICS (TRUE OTT)", juce::Colour::fromString("FF00FFCC"));
+    // Block 3: Sparkle Arp (Placeholder)
+    drawBlock(470, 180, "3. SPARKLE ARP (NEXT PHASE)", juce::Colour::fromString("FFFFD700"));
 }
 
 void ColorIrPanel::resized() {
-    auto area = getLocalBounds().reduced(20);
-    area.removeFromTop(60);
+    // --- Block 1: GENERATOR (Y: 5 ~ 260) ---
+    learnButton.setBounds(20, 35, 310, 30);
+    chordLabel.setBounds(20, 70, 310, 30);
 
-    auto learnArea = area.removeFromTop(90);
-    learnButton.setBounds(learnArea.removeFromTop(40).withSizeKeepingCentre(200, 40));
-    chordLabel.setBounds(learnArea.removeFromTop(40).withSizeKeepingCentre(300, 40));
+    typeLabel.setBounds(20, 110, 120, 20);
+    typeCombo.setBounds(20, 130, 120, 24);
 
-    area.removeFromTop(15);
+    placeKnob(160, 110, atkLabel, atkSlider);
+    placeKnob(250, 110, decLabel, decSlider);
 
-    int sX = 10;
-    int sY = area.getY();
+    placeKnob(20, 180, mixLabel, mixSlider);
+    placeKnob(160, 180, preHpLabel, preHpSlider);
+    placeKnob(250, 180, postHpLabel, postHpSlider);
 
-    // Type Combo (幅を広めに確保)
-    typeLabel.setBounds(sX, sY, 120, 20);
-    typeCombo.setBounds(sX, sY + 20, 120, 24);
+    // --- Block 2: TRUE OTT (Y: 265 ~ 465) ---
+    int b2y = 295;
+    placeKnob(20, b2y, ottDepthLabel, ottDepthSlider);
+    placeKnob(110, b2y, ottTimeLabel, ottTimeSlider);
+    placeKnob(200, b2y, ottUpLabel, ottUpSlider);
 
-    placeKnob(sX + 140, sY, mixLabel, mixSlider);
-    placeKnob(sX + 225, sY, atkLabel, atkSlider);
+    placeKnob(65, b2y + 80, ottDownLabel, ottDownSlider);
+    placeKnob(155, b2y + 80, ottGainLabel, ottGainSlider);
 
-    sY += 80;
-    placeKnob(sX + 15, sY, decLabel, decSlider);
-    placeKnob(sX + 100, sY, preHpLabel, preHpSlider);
-    placeKnob(sX + 185, sY, postHpLabel, postHpSlider);
-    placeKnob(sX + 270, sY, ottLabel, ottSlider);
+    // --- Block 3: SPARKLE ARP (Y: 470 ~ 650) ---
+    // (Next phase GUI components will be placed here)
 }
 
 void ColorIrPanel::updateState(ColorIREngine::LearnState state, const juce::String& chordText, bool blinkFlag) {

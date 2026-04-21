@@ -61,7 +61,7 @@ private:
     std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment>> comboAtts;
 };
 
-// --- ColorIR Overlay Panel ---
+// --- ColorIR Vertical Rack Panel ---
 
 class ColorIrPanel : public juce::Component {
 public:
@@ -77,11 +77,14 @@ private:
     juce::AudioProcessorValueTreeState& apvts;
     juce::Label chordLabel;
 
-    juce::ComboBox typeCombo;
-    juce::Label typeLabel;
+    // Block 1: Generator
+    juce::ComboBox typeCombo; juce::Label typeLabel;
+    juce::Slider mixSlider, preHpSlider, postHpSlider, atkSlider, decSlider;
+    juce::Label mixLabel, preHpLabel, postHpLabel, atkLabel, decLabel;
 
-    juce::Slider mixSlider, preHpSlider, postHpSlider, atkSlider, decSlider, ottSlider;
-    juce::Label mixLabel, preHpLabel, postHpLabel, atkLabel, decLabel, ottLabel;
+    // Block 2: True OTT
+    juce::Slider ottDepthSlider, ottTimeSlider, ottUpSlider, ottDownSlider, ottGainSlider;
+    juce::Label ottDepthLabel, ottTimeLabel, ottUpLabel, ottDownLabel, ottGainLabel;
 
     std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>> atts;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> typeAtt;
