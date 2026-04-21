@@ -38,7 +38,6 @@ static void setupCombo(juce::ComboBox& c, juce::Label& l, const char* txt, juce:
 LfoTab::LfoTab(juce::AudioProcessorValueTreeState& vts) : apvts(vts) {
     juce::StringArray waves = { "Sine", "Saw", "Pulse", "Random" };
     juce::StringArray beats = { "1/1", "1/2", "1/4", "1/8", "1/16", "1/32", "1/4T", "1/8T", "1/16T" };
-
     for (int i = 0; i < 3; ++i) {
         addAndMakeVisible(lfos[i].onBtn);
         setupCombo(lfos[i].wave, lfos[i].waveLbl, "Wave", waves, this);
@@ -70,12 +69,10 @@ void LfoTab::resized() {
     for (int i = 0; i < 3; ++i) {
         int y = 30 + i * 130;
         lfos[i].onBtn.setBounds(15, y + 15, 45, 24);
-        lfos[i].waveLbl.setBounds(70, y + 5, 75, 20);
-        lfos[i].wave.setBounds(70, y + 25, 75, 24);
+        lfos[i].waveLbl.setBounds(70, y + 5, 75, 20); lfos[i].wave.setBounds(70, y + 25, 75, 24);
         lfos[i].sync.setBounds(155, y + 25, 55, 24);
         placeKnob(220, y, lfos[i].rateLbl, lfos[i].rate);
-        lfos[i].beatLbl.setBounds(300, y + 5, 70, 20);
-        lfos[i].beat.setBounds(300, y + 25, 70, 24);
+        lfos[i].beatLbl.setBounds(300, y + 5, 70, 20); lfos[i].beat.setBounds(300, y + 25, 70, 24);
         placeKnob(385, y, lfos[i].amtLbl, lfos[i].amt);
     }
 }
@@ -86,10 +83,8 @@ void LfoTab::resized() {
 ModEnvTab::ModEnvTab(juce::AudioProcessorValueTreeState& vts) : apvts(vts) {
     for (int i = 0; i < 3; ++i) {
         addAndMakeVisible(envs[i].onBtn);
-        setupS(envs[i].a, envs[i].aL, "A", this);
-        setupS(envs[i].d, envs[i].dL, "D", this);
-        setupS(envs[i].s, envs[i].sL, "S", this);
-        setupS(envs[i].r, envs[i].rL, "R", this);
+        setupS(envs[i].a, envs[i].aL, "A", this); setupS(envs[i].d, envs[i].dL, "D", this);
+        setupS(envs[i].s, envs[i].sL, "S", this); setupS(envs[i].r, envs[i].rL, "R", this);
         setupS(envs[i].amt, envs[i].amtL, "Amount", this);
 
         juce::String pfx = "mod" + juce::String(i + 1) + "_";
@@ -115,10 +110,8 @@ void ModEnvTab::resized() {
     for (int i = 0; i < 3; ++i) {
         int y = 30 + i * 130;
         envs[i].onBtn.setBounds(15, y + 15, 45, 24);
-        placeKnob(75, y, envs[i].aL, envs[i].a);
-        placeKnob(150, y, envs[i].dL, envs[i].d);
-        placeKnob(225, y, envs[i].sL, envs[i].s);
-        placeKnob(300, y, envs[i].rL, envs[i].r);
+        placeKnob(75, y, envs[i].aL, envs[i].a); placeKnob(150, y, envs[i].dL, envs[i].d);
+        placeKnob(225, y, envs[i].sL, envs[i].s); placeKnob(300, y, envs[i].rL, envs[i].r);
         placeKnob(385, y, envs[i].amtL, envs[i].amt);
     }
 }
@@ -189,9 +182,9 @@ ColorIrPanel::ColorIrPanel(LiquidDreamAudioProcessor& p) : processor(p), apvts(p
     chordLabel.setFont(juce::FontOptions(22.0f, juce::Font::bold));
     chordLabel.setColour(juce::Label::textColourId, juce::Colour::fromString("FF00FFCC"));
 
-    // Generator Block Params
+    // Block 1: Generator Params
     setupCombo(typeCombo, typeLabel, "IR Type", { "Pure Saw", "Pure Square", "FM Chime", "Resonant Noise" }, this);
-    typeAtt = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(apvts, "color_type", typeCombo);
+    comboAtts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(apvts, "color_type", typeCombo));
 
     setupS(mixSlider, mixLabel, "Mix", this);
     setupS(atkSlider, atkLabel, "Attack", this);
@@ -205,7 +198,7 @@ ColorIrPanel::ColorIrPanel(LiquidDreamAudioProcessor& p) : processor(p), apvts(p
     atts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, "color_pre_hp", preHpSlider));
     atts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, "color_post_hp", postHpSlider));
 
-    // True OTT Block Params
+    // Block 2: True OTT Params
     setupS(ottDepthSlider, ottDepthLabel, "Depth", this);
     setupS(ottTimeSlider, ottTimeLabel, "Time", this);
     setupS(ottUpSlider, ottUpLabel, "Upward %", this);
@@ -216,7 +209,22 @@ ColorIrPanel::ColorIrPanel(LiquidDreamAudioProcessor& p) : processor(p), apvts(p
     atts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, "ott_time", ottTimeSlider));
     atts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, "ott_up", ottUpSlider));
     atts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, "ott_down", ottDownSlider));
+
+    // ★バグ原因の行を削除し、正しくSliderAttachmentのみをPushするように修正
     atts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, "ott_gain", ottGainSlider));
+
+    // Block 3: Sparkle Arp Params
+    setupCombo(arpWaveCombo, arpWaveLabel, "Arp Wave", { "Sine", "Saw", "Square", "Pulse 25%", "Pulse 12.5%" }, this);
+    setupCombo(arpModeCombo, arpModeLabel, "Mode", { "Up", "Down", "Up/Down", "Random" }, this);
+    setupCombo(arpRateCombo, arpRateLabel, "Rate", { "1/8", "1/16", "1/32", "1/64" }, this);
+    setupCombo(arpPitchCombo, arpPitchLabel, "Octave", { "+1 Oct", "+2 Oct", "+3 Oct" }, this);
+    setupS(arpLevelSlider, arpLevelLabel, "Level", this);
+
+    comboAtts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(apvts, "arp_wave", arpWaveCombo));
+    comboAtts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(apvts, "arp_mode", arpModeCombo));
+    comboAtts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(apvts, "arp_rate", arpRateCombo));
+    comboAtts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(apvts, "arp_pitch", arpPitchCombo));
+    atts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, "arp_level", arpLevelSlider));
 
     auto regenIR = [this]() {
         if (processor.getColorEngine().getLearnState() == ColorIREngine::LearnState::Active) {
@@ -236,7 +244,7 @@ void ColorIrPanel::paint(juce::Graphics& g) {
         g.fillRoundedRectangle(5, y, getWidth() - 10, height, 5.0f);
         g.setColour(color);
         g.setFont(14.0f);
-        g.drawText(title, 15, y + 5, 200, 20, juce::Justification::left);
+        g.drawText(title, 15, y + 5, 250, 20, juce::Justification::left);
         g.setColour(juce::Colours::white.withAlpha(0.1f));
         g.drawLine(15, y + 25, getWidth() - 15, y + 25, 1.0f);
         };
@@ -244,9 +252,9 @@ void ColorIrPanel::paint(juce::Graphics& g) {
     // Block 1: Generator
     drawBlock(5, 255, "1. COLOR IR GENERATOR", juce::Colour::fromString("FFFF764D"));
     // Block 2: True OTT
-    drawBlock(265, 200, "2. DYNAMICS (TRUE OTT)", juce::Colour::fromString("FF00FFCC"));
-    // Block 3: Sparkle Arp (Placeholder)
-    drawBlock(470, 180, "3. SPARKLE ARP (NEXT PHASE)", juce::Colour::fromString("FFFFD700"));
+    drawBlock(265, 175, "2. DYNAMICS (TRUE OTT)", juce::Colour::fromString("FF00FFCC"));
+    // Block 3: Sparkle Arp
+    drawBlock(445, 185, "3. SPARKLE ARP (CHIPTUNE)", juce::Colour::fromString("FFFFD700"));
 }
 
 void ColorIrPanel::resized() {
@@ -254,9 +262,7 @@ void ColorIrPanel::resized() {
     learnButton.setBounds(20, 35, 310, 30);
     chordLabel.setBounds(20, 70, 310, 30);
 
-    typeLabel.setBounds(20, 110, 120, 20);
-    typeCombo.setBounds(20, 130, 120, 24);
-
+    typeLabel.setBounds(20, 110, 120, 20); typeCombo.setBounds(20, 130, 120, 24);
     placeKnob(160, 110, atkLabel, atkSlider);
     placeKnob(250, 110, decLabel, decSlider);
 
@@ -264,17 +270,24 @@ void ColorIrPanel::resized() {
     placeKnob(160, 180, preHpLabel, preHpSlider);
     placeKnob(250, 180, postHpLabel, postHpSlider);
 
-    // --- Block 2: TRUE OTT (Y: 265 ~ 465) ---
+    // --- Block 2: TRUE OTT (Y: 265 ~ 440) ---
     int b2y = 295;
     placeKnob(20, b2y, ottDepthLabel, ottDepthSlider);
     placeKnob(110, b2y, ottTimeLabel, ottTimeSlider);
     placeKnob(200, b2y, ottUpLabel, ottUpSlider);
 
-    placeKnob(65, b2y + 80, ottDownLabel, ottDownSlider);
-    placeKnob(155, b2y + 80, ottGainLabel, ottGainSlider);
+    placeKnob(65, b2y + 70, ottDownLabel, ottDownSlider);
+    placeKnob(155, b2y + 70, ottGainLabel, ottGainSlider);
 
-    // --- Block 3: SPARKLE ARP (Y: 470 ~ 650) ---
-    // (Next phase GUI components will be placed here)
+    // --- Block 3: SPARKLE ARP (Y: 445 ~ 630) ---
+    int b3y = 480;
+    arpWaveLabel.setBounds(20, b3y, 100, 20); arpWaveCombo.setBounds(20, b3y + 20, 100, 24);
+    arpModeLabel.setBounds(130, b3y, 100, 20); arpModeCombo.setBounds(130, b3y + 20, 100, 24);
+
+    arpRateLabel.setBounds(20, b3y + 60, 100, 20); arpRateCombo.setBounds(20, b3y + 80, 100, 24);
+    arpPitchLabel.setBounds(130, b3y + 60, 100, 20); arpPitchCombo.setBounds(130, b3y + 80, 100, 24);
+
+    placeKnob(250, b3y + 30, arpLevelLabel, arpLevelSlider);
 }
 
 void ColorIrPanel::updateState(ColorIREngine::LearnState state, const juce::String& chordText, bool blinkFlag) {

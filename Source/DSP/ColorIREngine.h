@@ -10,19 +10,18 @@
 #include <cmath>
 
 // ==============================================================================
-// True OTT Module (3-Band Upward/Downward Compressor with Phase Compensation)
+// True OTT Module
 // ==============================================================================
 class TrueOTT
 {
 public:
     TrueOTT()
     {
-        // Linkwitz-Riley 4次フィルターの初期化
         lp1.setType(juce::dsp::LinkwitzRileyFilterType::lowpass);
         hp1.setType(juce::dsp::LinkwitzRileyFilterType::highpass);
         lp2.setType(juce::dsp::LinkwitzRileyFilterType::lowpass);
         hp2.setType(juce::dsp::LinkwitzRileyFilterType::highpass);
-        ap2.setType(juce::dsp::LinkwitzRileyFilterType::allpass); // Low帯域の位相補償用
+        ap2.setType(juce::dsp::LinkwitzRileyFilterType::allpass);
     }
 
     void prepare(const juce::dsp::ProcessSpec& spec)
@@ -32,25 +31,19 @@ public:
         lp2.prepare(spec); hp2.prepare(spec);
         ap2.prepare(spec);
 
-        // クロスオーバー周波数の設定 (Low-Mid: 250Hz, Mid-High: 2500Hz)
         lp1.setCutoffFrequency(250.0f); hp1.setCutoffFrequency(250.0f);
         lp2.setCutoffFrequency(2500.0f); hp2.setCutoffFrequency(2500.0f);
         ap2.setCutoffFrequency(2500.0f);
 
-        envLowL = 1.0f; envLowR = 1.0f;
-        envMidL = 1.0f; envMidR = 1.0f;
-        envHighL = 1.0f; envHighR = 1.0f;
+        envLowL = 1.0f; envLowR = 1.0f; envMidL = 1.0f; envMidR = 1.0f; envHighL = 1.0f; envHighR = 1.0f;
     }
 
-    // マクロパラメーターの更新
     void setParameters(float depthPct, float timePct, float upPct, float downPct, float outGainDb)
     {
         depth = juce::jlimit(0.0f, 1.0f, depthPct);
         upwardAmount = juce::jlimit(0.0f, 1.0f, upPct);
         downwardAmount = juce::jlimit(0.0f, 1.0f, downPct);
         outGainLinear = juce::Decibels::decibelsToGain(outGainDb);
-
-        // Timeパラメーターによるアタック・リリースのスケーリング (0.0=Fast/Glitchy, 1.0=Slow/Smear)
         attackMs = juce::jmap(timePct, 0.5f, 50.0f);
         releaseMs = juce::jmap(timePct, 10.0f, 500.0f);
     }
@@ -60,39 +53,21 @@ public:
         if (depth <= 0.001f && outGainLinear == 1.0f) return;
 
         const int numSamples = buffer.getNumSamples();
-        auto* outL = buffer.getWritePointer(0);
-        auto* outR = buffer.getWritePointer(1);
+        auto* outL = buffer.getWritePointer(0); auto* outR = buffer.getWritePointer(1);
 
         for (int i = 0; i < numSamples; ++i) {
-            float inL = outL[i];
-            float inR = outR[i];
+            float inL = outL[i], inR = outR[i];
+            float lowL = lp1.processSample(0, inL), lowR = lp1.processSample(1, inR);
+            float midHighL = hp1.processSample(0, inL), midHighR = hp1.processSample(1, inR);
+            float midL = lp2.processSample(0, midHighL), midR = lp2.processSample(1, midHighR);
+            float highL = hp2.processSample(0, midHighL), highR = hp2.processSample(1, midHighR);
 
-            // 1. 帯域分割 (3-Band Crossover)
-            float lowL = lp1.processSample(0, inL);
-            float lowR = lp1.processSample(1, inR);
-            float midHighL = hp1.processSample(0, inL);
-            float midHighR = hp1.processSample(1, inR);
+            lowL = ap2.processSample(0, lowL); lowR = ap2.processSample(1, lowR);
 
-            float midL = lp2.processSample(0, midHighL);
-            float midR = lp2.processSample(1, midHighR);
-            float highL = hp2.processSample(0, midHighL);
-            float highR = hp2.processSample(1, midHighR);
+            lowL *= calculateGain(lowL, envLowL, 0); lowR *= calculateGain(lowR, envLowR, 0);
+            midL *= calculateGain(midL, envMidL, 1); midR *= calculateGain(midR, envMidR, 1);
+            highL *= calculateGain(highL, envHighL, 2); highR *= calculateGain(highR, envHighR, 2);
 
-            // Low帯域の完全位相補償 (Perfect Reconstruction)
-            lowL = ap2.processSample(0, lowL);
-            lowR = ap2.processSample(1, lowR);
-
-            // 2. 対数領域コンプレッション (Upward / Downward)
-            lowL *= calculateGain(lowL, envLowL, 0);
-            lowR *= calculateGain(lowR, envLowR, 0);
-
-            midL *= calculateGain(midL, envMidL, 1);
-            midR *= calculateGain(midR, envMidR, 1);
-
-            highL *= calculateGain(highL, envHighL, 2);
-            highR *= calculateGain(highR, envHighR, 2);
-
-            // 3. 再合成とパラレル・ミックス
             float processedL = (lowL + midL + highL) * outGainLinear;
             float processedR = (lowR + midR + highR) * outGainLinear;
 
@@ -104,44 +79,155 @@ public:
 private:
     juce::dsp::LinkwitzRileyFilter<float> lp1, hp1, lp2, hp2, ap2;
     double sampleRate = 44100.0;
-
     float depth = 1.0f, upwardAmount = 0.5f, downwardAmount = 0.5f, outGainLinear = 1.0f;
     float attackMs = 10.0f, releaseMs = 100.0f;
-
     float envLowL, envLowR, envMidL, envMidR, envHighL, envHighR;
 
     float calculateGain(float inputAbs, float& envState, int bandIndex)
     {
         float inputDb = juce::Decibels::gainToDecibels(std::abs(inputAbs) + 1e-6f);
         float targetDb = inputDb;
-
-        // 帯域ごとのスレッショルド (MidはWiggle Roomを広くとる)
         float threshDown = (bandIndex == 1) ? -10.0f : -20.0f;
         float threshUp = (bandIndex == 1) ? -40.0f : -35.0f;
-        float activeRange = -80.0f; // -80dB以下はノイズフロアとして無視
+        float activeRange = -80.0f;
 
         if (inputDb > threshDown) {
-            // Downward Compression
-            float ratio = 1.0f + 4.0f * downwardAmount;
-            targetDb = threshDown + (inputDb - threshDown) / ratio;
+            targetDb = threshDown + (inputDb - threshDown) / (1.0f + 4.0f * downwardAmount);
         }
         else if (inputDb < threshUp && inputDb > activeRange) {
-            // Upward Compression
-            float ratio = 1.0f - 0.7f * upwardAmount;
-            targetDb = threshUp - (threshUp - inputDb) * ratio;
+            targetDb = threshUp - (threshUp - inputDb) * (1.0f - 0.7f * upwardAmount);
         }
 
         float targetGain = juce::Decibels::decibelsToGain(targetDb - inputDb);
-
-        // Envelope Follower
-        float alphaAtk = std::exp(-1.0f / (sampleRate * attackMs * 0.001f));
-        float alphaRel = std::exp(-1.0f / (sampleRate * releaseMs * 0.001f));
-
-        // ゲインが下がる時が「アタック（潰す）」、上がる時が「リリース（戻る）」
-        float alpha = (targetGain < envState) ? alphaAtk : alphaRel;
+        float alpha = (targetGain < envState) ? std::exp(-1.0f / (sampleRate * attackMs * 0.001f)) : std::exp(-1.0f / (sampleRate * releaseMs * 0.001f));
         envState = alpha * envState + (1.0f - alpha) * targetGain;
 
         return envState;
+    }
+};
+
+// ==============================================================================
+// Sparkle Arp Module (Alias-Free Chiptune Synthesizer)
+// ==============================================================================
+class SparkleArp
+{
+public:
+    void prepare(double sr) { sampleRate = sr; }
+
+    void setParameters(int wave, int mode, int rateIdx, int octIdx, float level, double bpm) {
+        currentWave = wave; currentMode = mode;
+        currentOctave = (octIdx + 1) * 12; // 0->+12, 1->+24, 2->+36
+        targetLevel = level;
+
+        // Rate: 0=1/8, 1=1/16, 2=1/32, 3=1/64
+        float beats[4] = { 0.5f, 0.25f, 0.125f, 0.0625f };
+        float beat = beats[std::clamp(rateIdx, 0, 3)];
+        samplesPerStep = (int)((60.0 / std::max(10.0, bpm)) * 4.0 * beat * sampleRate);
+    }
+
+    void updateChord(const std::vector<int>& learnedNotes) {
+        std::lock_guard<std::mutex> lock(arpMutex);
+        if (learnedNotes.empty()) { intervals.clear(); return; }
+        intervals.clear();
+        int root = learnedNotes[0];
+        for (int note : learnedNotes) intervals.push_back(note - root);
+        std::sort(intervals.begin(), intervals.end());
+        intervals.erase(std::unique(intervals.begin(), intervals.end()), intervals.end());
+    }
+
+    void process(juce::AudioBuffer<float>& buffer, const std::vector<int>& activeNotes) {
+        if (targetLevel <= 0.001f || activeNotes.empty() || samplesPerStep <= 0) {
+            currentLevel = 0.0f; return;
+        }
+
+        std::lock_guard<std::mutex> lock(arpMutex);
+        if (intervals.empty()) return;
+
+        int baseNote = activeNotes.back(); // 最も新しく押されたベースノートに追従
+        const int numSamples = buffer.getNumSamples();
+        auto* outL = buffer.getWritePointer(0); auto* outR = buffer.getWritePointer(1);
+
+        for (int i = 0; i < numSamples; ++i) {
+            if (sampleCounter >= samplesPerStep) {
+                sampleCounter = 0; advanceStep(); envPhase = 0.0f;
+            }
+
+            int note = baseNote + currentOctave + intervals[currentStepIndex];
+            float freq = (float)juce::MidiMessage::getMidiNoteInHertz(note);
+            float inc = freq / (float)sampleRate;
+
+            // ピュアな加算合成チップチューン波形
+            float sample = generateOscillator(oscPhase, inc, currentWave);
+            oscPhase += inc; if (oscPhase >= 1.0f) oscPhase -= 1.0f;
+
+            // パーカッシブなプラック・エンベロープ
+            float env = std::max(0.0f, 1.0f - (envPhase / (float)(samplesPerStep)));
+            env = std::pow(env, 4.0f);
+            envPhase += 1.0f;
+
+            currentLevel = currentLevel * 0.999f + targetLevel * 0.001f; // スムージング
+            float val = sample * env * currentLevel * 0.2f; // マスター音量補正
+
+            outL[i] += val; outR[i] += val; // 既存のバッファに加算（パラレルミックス）
+            sampleCounter++;
+        }
+    }
+
+private:
+    double sampleRate = 44100.0;
+    int currentWave = 0, currentMode = 0, currentOctave = 12, samplesPerStep = 10000, sampleCounter = 0;
+    float targetLevel = 0.0f, currentLevel = 0.0f, oscPhase = 0.0f, envPhase = 0.0f;
+
+    std::vector<int> intervals;
+    int currentStepIndex = 0;
+    bool movingUp = true;
+    std::mutex arpMutex;
+
+    void advanceStep() {
+        if (intervals.empty()) return;
+        if (currentMode == 0) { // Up
+            currentStepIndex = (currentStepIndex + 1) % intervals.size();
+        }
+        else if (currentMode == 1) { // Down
+            currentStepIndex = (currentStepIndex - 1 + intervals.size()) % intervals.size();
+        }
+        else if (currentMode == 2) { // Up/Down
+            if (movingUp) {
+                currentStepIndex++;
+                if (currentStepIndex >= intervals.size()) { currentStepIndex = std::max(0, (int)intervals.size() - 2); movingUp = false; }
+            }
+            else {
+                currentStepIndex--;
+                if (currentStepIndex < 0) { currentStepIndex = std::min(1, (int)intervals.size() - 1); movingUp = true; }
+            }
+        }
+        else if (currentMode == 3) { // Random
+            currentStepIndex = juce::Random::getSystemRandom().nextInt(intervals.size());
+        }
+    }
+
+    // ナイキスト限界を考慮したエイリアスフリー加算合成
+    float generateOscillator(float phase, float inc, int wave) {
+        float out = 0.0f;
+        float pPi = phase * juce::MathConstants<float>::twoPi;
+        int maxHarmonic = (int)(0.5f / inc);
+        if (maxHarmonic > 40) maxHarmonic = 40; // 負荷軽減のための上限
+
+        if (wave == 0) { out = std::sin(pPi); } // Sine
+        else if (wave == 1) { // Saw
+            for (int h = 1; h <= maxHarmonic; ++h) out += std::sin(pPi * h) / (float)h;
+            out *= 0.6366f;
+        }
+        else if (wave == 2) { // Square
+            for (int h = 1; h <= maxHarmonic; h += 2) out += std::sin(pPi * h) / (float)h;
+            out *= 1.273f;
+        }
+        else if (wave == 3 || wave == 4) { // Pulse 25% or 12.5%
+            float duty = (wave == 3) ? 0.25f : 0.125f;
+            for (int h = 1; h <= maxHarmonic; ++h) out += std::sin(h * duty * juce::MathConstants<float>::pi) * std::cos(pPi * h) / (float)h;
+            out *= 1.273f;
+        }
+        return out;
     }
 };
 
@@ -157,15 +243,11 @@ public:
     {
         convEngineA.loadImpulseResponse(juce::AudioBuffer<float>(2, 256), 44100.0, juce::dsp::Convolution::Stereo::yes, juce::dsp::Convolution::Trim::no, juce::dsp::Convolution::Normalise::no);
         convEngineB.loadImpulseResponse(juce::AudioBuffer<float>(2, 256), 44100.0, juce::dsp::Convolution::Stereo::yes, juce::dsp::Convolution::Trim::no, juce::dsp::Convolution::Normalise::no);
-
         preFilterL.setType(juce::dsp::StateVariableTPTFilterType::highpass); preFilterR.setType(juce::dsp::StateVariableTPTFilterType::highpass);
         postFilterL.setType(juce::dsp::StateVariableTPTFilterType::highpass); postFilterR.setType(juce::dsp::StateVariableTPTFilterType::highpass);
     }
 
-    ~ColorIREngine() {
-        irGenJobId++;
-        threadPool.removeAllJobs(true, 1000);
-    }
+    ~ColorIREngine() { irGenJobId++; threadPool.removeAllJobs(true, 1000); }
 
     void prepare(double sampleRate, int samplesPerBlock)
     {
@@ -174,9 +256,8 @@ public:
         convEngineA.prepare(spec); convEngineB.prepare(spec);
         preFilterL.prepare(spec); preFilterR.prepare(spec);
         postFilterL.prepare(spec); postFilterR.prepare(spec);
-
-        trueOtt.prepare(spec); // True OTT 準備
-
+        trueOtt.prepare(spec);
+        sparkleArp.prepare(sampleRate);
         wetBufferA.setSize(2, samplesPerBlock); wetBufferB.setSize(2, samplesPerBlock);
     }
 
@@ -188,9 +269,7 @@ public:
 
     void addNote(int note) {
         std::lock_guard<std::mutex> lock(chordMutex);
-        if (learnedNotes.size() < 7 && std::find(learnedNotes.begin(), learnedNotes.end(), note) == learnedNotes.end()) {
-            learnedNotes.push_back(note);
-        }
+        if (learnedNotes.size() < 7 && std::find(learnedNotes.begin(), learnedNotes.end(), note) == learnedNotes.end()) learnedNotes.push_back(note);
     }
 
     juce::String getLearnedChordNames() const {
@@ -211,6 +290,7 @@ public:
         }
 
         std::sort(currentNotes.begin(), currentNotes.end());
+        sparkleArp.updateChord(currentNotes); // ★Arpエンジンにコード構成音のインターバルを登録
 
         const int myJobId = ++irGenJobId;
         const double sr = currentSampleRate;
@@ -223,9 +303,7 @@ public:
             if (numSamples < 2048) numSamples = 2048;
 
             juce::AudioBuffer<float> tempIR(2, numSamples); tempIR.clear();
-
-            std::vector<float> phases(currentNotes.size(), 0.0f);
-            std::vector<float> incs(currentNotes.size(), 0.0f);
+            std::vector<float> phases(currentNotes.size(), 0.0f), incs(currentNotes.size(), 0.0f);
             std::vector<int> delayLengths(currentNotes.size(), 0);
             auto& random = juce::Random::getSystemRandom();
 
@@ -237,7 +315,6 @@ public:
             float atkSamples = std::max(1.0f, (attackMs / 1000.0f) * (float)sr);
             float decSamples = (actualDecayMs / 1000.0f) * (float)sr;
             float noiseSamples = sr * 0.02f;
-
             auto* outL = tempIR.getWritePointer(0); auto* outR = tempIR.getWritePointer(1);
             float norm = 1.0f / (float)currentNotes.size();
 
@@ -247,8 +324,7 @@ public:
 
                 if (irType == 3) {
                     for (size_t n = 0; n < currentNotes.size(); ++n) {
-                        float noise = (i < 100) ? (random.nextFloat() * 2.0f - 1.0f) : 0.0f;
-                        sample += noise + ((i >= delayLengths[n]) ? outL[i - delayLengths[n]] : 0.0f) * 0.995f;
+                        sample += ((i < 100) ? (random.nextFloat() * 2.0f - 1.0f) : 0.0f) + ((i >= delayLengths[n]) ? outL[i - delayLengths[n]] : 0.0f) * 0.995f;
                     }
                     sample *= (norm * 0.15f);
                 }
@@ -259,25 +335,18 @@ public:
                         else if (irType == 1) val = (phase < 0.5f) ? 1.0f : -1.0f;
                         else if (irType == 2) {
                             float pPi = phase * juce::MathConstants<float>::twoPi;
-                            val = std::sin(pPi) + 0.6f * std::sin(pPi * 2.76f) + 0.4f * std::sin(pPi * 5.4f) + 0.2f * std::sin(pPi * 8.9f);
-                            val *= 0.6f;
+                            val = (std::sin(pPi) + 0.6f * std::sin(pPi * 2.76f) + 0.4f * std::sin(pPi * 5.4f) + 0.2f * std::sin(pPi * 8.9f)) * 0.6f;
                         }
                         sample += val;
                         phases[n] += incs[n]; if (phases[n] >= 1.0f) phases[n] -= 1.0f;
                     }
                     sample *= norm;
-                    if (i < noiseSamples) {
-                        float noiseEnv = 1.0f - ((float)i / noiseSamples);
-                        sample += (random.nextFloat() * 2.0f - 1.0f) * noiseEnv * 0.3f;
-                    }
+                    if (i < noiseSamples) sample += (random.nextFloat() * 2.0f - 1.0f) * (1.0f - ((float)i / noiseSamples)) * 0.3f;
                 }
 
-                float drive = (irType == 3) ? 1.0f : 4.0f;
-                sample = std::tanh(sample * drive);
-
+                sample = std::tanh(sample * ((irType == 3) ? 1.0f : 4.0f));
                 float env = (i < atkSamples) ? ((float)i / atkSamples) : std::pow(std::max(0.0f, 1.0f - ((float)(i - atkSamples) / decSamples)), 4.0f);
-                float safeGain = 0.025f;
-                outL[i] = sample * env * safeGain; outR[i] = sample * env * safeGain;
+                outL[i] = sample * env * 0.025f; outR[i] = sample * env * 0.025f;
             }
 
             if (activeEngineIsA.load()) convEngineB.loadImpulseResponse(std::move(tempIR), sr, juce::dsp::Convolution::Stereo::yes, juce::dsp::Convolution::Trim::no, juce::dsp::Convolution::Normalise::no);
@@ -288,9 +357,8 @@ public:
             });
     }
 
-    void setOttParameters(float depth, float time, float up, float down, float gainDb) {
-        trueOtt.setParameters(depth, time, up, down, gainDb);
-    }
+    void setOttParameters(float depth, float time, float up, float down, float gainDb) { trueOtt.setParameters(depth, time, up, down, gainDb); }
+    void setArpParameters(int wave, int mode, int rate, int pitch, float level, double bpm) { sparkleArp.setParameters(wave, mode, rate, pitch, level, bpm); }
 
     void setParameters(float preCutoffHz, float postCutoffHz, float mixVal)
     {
@@ -305,8 +373,7 @@ public:
 
         const int numSamples = buffer.getNumSamples();
         if (wetBufferA.getNumSamples() < numSamples) {
-            wetBufferA.setSize(2, numSamples, false, false, true);
-            wetBufferB.setSize(2, numSamples, false, false, true);
+            wetBufferA.setSize(2, numSamples, false, false, true); wetBufferB.setSize(2, numSamples, false, false, true);
         }
 
         for (int ch = 0; ch < 2; ++ch) wetBufferA.copyFrom(ch, 0, buffer, ch, 0, numSamples);
@@ -318,35 +385,34 @@ public:
 
         for (int ch = 0; ch < 2; ++ch) wetBufferB.copyFrom(ch, 0, wetBufferA, ch, 0, numSamples);
 
-        juce::dsp::AudioBlock<float> blockA(wetBufferA); juce::dsp::ProcessContextReplacing<float> contextA(blockA);
-        convEngineA.process(contextA);
-        juce::dsp::AudioBlock<float> blockB(wetBufferB); juce::dsp::ProcessContextReplacing<float> contextB(blockB);
-        convEngineB.process(contextB);
+        juce::dsp::AudioBlock<float> blockA(wetBufferA); juce::dsp::ProcessContextReplacing<float> contextA(blockA); convEngineA.process(contextA);
+        juce::dsp::AudioBlock<float> blockB(wetBufferB); juce::dsp::ProcessContextReplacing<float> contextB(blockB); convEngineB.process(contextB);
 
         auto* inL = buffer.getReadPointer(0); auto* inR = buffer.getReadPointer(1);
         auto* outL = buffer.getWritePointer(0); auto* outR = buffer.getWritePointer(1);
         auto* wBL = wetBufferB.getReadPointer(0); auto* wBR = wetBufferB.getReadPointer(1);
 
         float fadeInc = 1.0f / (float)(currentSampleRate * 0.05);
-
         for (int i = 0; i < numSamples; ++i) {
-            if (fadeVolA < fadeTargetA) fadeVolA = std::min(fadeVolA + fadeInc, fadeTargetA);
-            else if (fadeVolA > fadeTargetA) fadeVolA = std::max(fadeVolA - fadeInc, fadeTargetA);
-            if (fadeVolB < fadeTargetB) fadeVolB = std::min(fadeVolB + fadeInc, fadeTargetB);
-            else if (fadeVolB > fadeTargetB) fadeVolB = std::max(fadeVolB - fadeInc, fadeTargetB);
+            if (fadeVolA < fadeTargetA) fadeVolA = std::min(fadeVolA + fadeInc, fadeTargetA); else if (fadeVolA > fadeTargetA) fadeVolA = std::max(fadeVolA - fadeInc, fadeTargetA);
+            if (fadeVolB < fadeTargetB) fadeVolB = std::min(fadeVolB + fadeInc, fadeTargetB); else if (fadeVolB > fadeTargetB) fadeVolB = std::max(fadeVolB - fadeInc, fadeTargetB);
 
             float currentWetL = std::tanh(wAL[i] * fadeVolA + wBL[i] * fadeVolB);
             float currentWetR = std::tanh(wAR[i] * fadeVolA + wBR[i] * fadeVolB);
 
-            currentWetL = postFilterL.processSample(0, currentWetL);
-            currentWetR = postFilterR.processSample(1, currentWetR);
+            currentWetL = postFilterL.processSample(0, currentWetL); currentWetR = postFilterR.processSample(1, currentWetR);
 
-            outL[i] = inL[i] * (1.0f - mix) + currentWetL * mix;
-            outR[i] = inR[i] * (1.0f - mix) + currentWetR * mix;
+            outL[i] = inL[i] * (1.0f - mix) + currentWetL * mix; outR[i] = inR[i] * (1.0f - mix) + currentWetR * mix;
         }
 
-        // True OTT 処理 (コンボリューション直後の信号全体に適用)
         trueOtt.process(buffer);
+    }
+
+    // ★ Arpはマスターの出力バッファに直接加算（フィルターやOTTをバイパスする純粋なレイヤー）
+    void processArp(juce::AudioBuffer<float>& masterBuffer, const std::vector<int>& activeNotes) {
+        if (state.load() == LearnState::Active) {
+            sparkleArp.process(masterBuffer, activeNotes);
+        }
     }
 
 private:
@@ -361,8 +427,8 @@ private:
 
     juce::AudioBuffer<float> wetBufferA, wetBufferB;
     juce::dsp::StateVariableTPTFilter<float> preFilterL, preFilterR, postFilterL, postFilterR;
-
-    TrueOTT trueOtt; // ★ 新規組み込み
+    TrueOTT trueOtt;
+    SparkleArp sparkleArp; // ★ 新規組み込み
 
     std::atomic<bool> activeEngineIsA{ true };
     float fadeVolA = 1.0f, fadeVolB = 0.0f, fadeTargetA = 1.0f, fadeTargetB = 0.0f, mix = 0.0f;

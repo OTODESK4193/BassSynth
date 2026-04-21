@@ -39,6 +39,13 @@ LiquidDreamAudioProcessor::LiquidDreamAudioProcessor()
     pOttDown = apvts.getRawParameterValue("ott_down");
     pOttGain = apvts.getRawParameterValue("ott_gain");
 
+    // ★ Sparkle Arp パラメーターポインタの取得（追加）
+    pArpWave = apvts.getRawParameterValue("arp_wave");
+    pArpMode = apvts.getRawParameterValue("arp_mode");
+    pArpRate = apvts.getRawParameterValue("arp_rate");
+    pArpPitch = apvts.getRawParameterValue("arp_pitch");
+    pArpLevel = apvts.getRawParameterValue("arp_level");
+
     for (int i = 0; i < 3; ++i) {
         juce::String ms = "mod" + juce::String(i + 1) + "_";
         pModOn[i] = apvts.getRawParameterValue(ms + "on");
@@ -138,6 +145,13 @@ juce::AudioProcessorValueTreeState::ParameterLayout LiquidDreamAudioProcessor::c
     params.push_back(std::make_unique<juce::AudioParameterFloat>("ott_up", "Upward %", 0.0f, 1.0f, 0.5f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("ott_down", "Downward %", 0.0f, 1.0f, 0.5f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("ott_gain", "Out Gain", -12.0f, 24.0f, 0.0f));
+
+    // ★ Sparkle Arp Params パラメーターレイアウト追加
+    params.push_back(std::make_unique<juce::AudioParameterInt>("arp_wave", "Arp Wave", 0, 4, 2)); // 0=Sine, 1=Saw, 2=Square, 3=Pulse25, 4=Pulse12
+    params.push_back(std::make_unique<juce::AudioParameterInt>("arp_mode", "Arp Mode", 0, 3, 0)); // 0=Up, 1=Down, 2=UpDown, 3=Random
+    params.push_back(std::make_unique<juce::AudioParameterInt>("arp_rate", "Arp Rate", 0, 3, 1)); // 0=1/8, 1=1/16, 2=1/32, 3=1/64
+    params.push_back(std::make_unique<juce::AudioParameterInt>("arp_pitch", "Arp Pitch", 0, 2, 1)); // 0=+1 Oct, 1=+2 Oct, 2=+3 Oct
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("arp_level", "Arp Level", 0.0f, 1.0f, 0.0f));
 
     for (int i = 1; i <= 3; ++i) {
         juce::String pfx = "mod" + juce::String(i) + "_";
@@ -265,6 +279,11 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
             if (colorEngine.getLearnState() == ColorIREngine::LearnState::Learning) {
                 colorEngine.addNote(msg.getNoteNumber());
             }
+            // ★ MIDI Note Tracking に追加
+            if (std::find(activeMidiNotes.begin(), activeMidiNotes.end(), msg.getNoteNumber()) == activeMidiNotes.end()) {
+                activeMidiNotes.push_back(msg.getNoteNumber());
+            }
+
             if (voiceManager.noteOn(msg.getNoteNumber(), msg.getVelocity())) {
                 bool isLegato = voiceManager.isLegatoTransition();
                 ampEnv.noteOn(isLegato); filterEnv.noteOn(isLegato);
@@ -273,6 +292,9 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
             }
         }
         else if (msg.isNoteOff()) {
+            // ★ MIDI Note Tracking から削除
+            activeMidiNotes.erase(std::remove(activeMidiNotes.begin(), activeMidiNotes.end(), msg.getNoteNumber()), activeMidiNotes.end());
+
             if (voiceManager.noteOff(msg.getNoteNumber())) {
                 ampEnv.noteOff(); filterEnv.noteOff();
                 for (auto& env : modEnvs) env.noteOff();
@@ -343,7 +365,6 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         oscillator.setFMAmount(modFm);
         oscillator.setDriftAmount(smoothedDrift.getNextValue());
 
-        // Morphの適用を完全に復元！
         oscillator.setMorphA(currentModeA, aA, sA);
         oscillator.setMorphB(currentModeB, aB, sB);
         oscillator.setMorphC(currentModeC, aC, sC);
@@ -372,7 +393,6 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         tempSubBuffer.setSample(0, i, subL); tempSubBuffer.setSample(1, i, subR);
     }
 
-    // スペクトラルモーフ処理の復元！
     spectralMorph.process(tempWavetableBuffer, currentModeA, stft_aA, stft_sA, currentModeB, stft_aB, stft_sB, currentModeC, stft_aC, stft_sC);
 
     for (int i = 0; i < numSamples; ++i) {
@@ -382,7 +402,6 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         wtL[i] = sL; wtR[i] = sR;
     }
 
-    // ColorIREngine と True OTT へのパラメーター渡し
     if (pColorOn->load() > 0.5f) {
         colorEngine.setOttParameters(pOttDepth->load(), pOttTime->load(), pOttUp->load(), pOttDown->load(), pOttGain->load());
         colorEngine.setParameters(pColorPreHp->load(), pColorPostHp->load(), pColorMix->load());
@@ -408,7 +427,22 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
 
         float finalGain = juce::jlimit(0.0f, 1.0f, cg + gainMod) * aVal;
         left[i] = sL * finalGain; right[i] = sR * finalGain;
+    }
 
+    // ★ Sparkle Arpのパラレル・ミックス処理の追加（マスターバッファに直接加算）
+    if (pColorOn->load() > 0.5f) {
+        colorEngine.setArpParameters((int)pArpWave->load(), (int)pArpMode->load(), (int)pArpRate->load(), (int)pArpPitch->load(), pArpLevel->load(), currentBpm);
+
+        std::vector<int> currentNotes;
+        {
+            std::lock_guard<std::mutex> lock(midiNotesMutex);
+            currentNotes = activeMidiNotes;
+        }
+        colorEngine.processArp(buffer, currentNotes);
+    }
+
+    // オシロスコープへの描画書き込み
+    for (int i = 0; i < numSamples; ++i) {
         tempScopeBuffer[(size_t)scopeWriteIndex] = (left[i] + right[i]) * 0.5f;
         scopeWriteIndex++;
         if (scopeWriteIndex >= 512) {

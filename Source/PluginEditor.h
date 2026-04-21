@@ -86,8 +86,13 @@ private:
     juce::Slider ottDepthSlider, ottTimeSlider, ottUpSlider, ottDownSlider, ottGainSlider;
     juce::Label ottDepthLabel, ottTimeLabel, ottUpLabel, ottDownLabel, ottGainLabel;
 
+    // Block 3: Sparkle Arp (★新規追加)
+    juce::ComboBox arpWaveCombo, arpModeCombo, arpRateCombo, arpPitchCombo;
+    juce::Label arpWaveLabel, arpModeLabel, arpRateLabel, arpPitchLabel;
+    juce::Slider arpLevelSlider; juce::Label arpLevelLabel;
+
     std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>> atts;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> typeAtt;
+    std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment>> comboAtts;
 };
 
 // --- Main Editor Class ---

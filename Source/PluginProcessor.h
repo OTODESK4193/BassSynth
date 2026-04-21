@@ -122,6 +122,12 @@ private:
     std::atomic<float>* pOttDown = nullptr;
     std::atomic<float>* pOttGain = nullptr;
 
+    std::atomic<float>* pArpWave = nullptr;
+    std::atomic<float>* pArpMode = nullptr;
+    std::atomic<float>* pArpRate = nullptr;
+    std::atomic<float>* pArpPitch = nullptr;
+    std::atomic<float>* pArpLevel = nullptr;
+
     // Modulators Params
     std::array<std::atomic<float>*, 3> pModOn, pModAtk, pModDec, pModSus, pModRel, pModAmt;
     std::array<std::atomic<float>*, 3> pLfoOn, pLfoWave, pLfoSync, pLfoRate, pLfoBeat, pLfoAmt;
