@@ -114,15 +114,14 @@ class SparkleArp
 public:
     void prepare(double sr) { sampleRate = sr; }
 
-    void setParameters(int wave, int mode, int rateIdx, int octIdx, float level, double bpm) {
+    // ★ 変更：Rate(コンボボックス)を廃止し、Speed(Hz)を連続的に受け取るように変更
+    void setParameters(int wave, int mode, float speedHz, int octIdx, float level) {
         currentWave = wave; currentMode = mode;
         currentOctave = (octIdx + 1) * 12; // 0->+12, 1->+24, 2->+36
         targetLevel = level;
 
-        // Rate: 0=1/8, 1=1/16, 2=1/32, 3=1/64
-        float beats[4] = { 0.5f, 0.25f, 0.125f, 0.0625f };
-        float beat = beats[std::clamp(rateIdx, 0, 3)];
-        samplesPerStep = (int)((60.0 / std::max(10.0, bpm)) * 4.0 * beat * sampleRate);
+        // 指定されたHz（1秒あたりの回数）からステップごとのサンプル数を計算
+        samplesPerStep = (int)(sampleRate / std::max(1.0f, speedHz));
     }
 
     void updateChord(const std::vector<int>& learnedNotes) {
@@ -143,7 +142,7 @@ public:
         std::lock_guard<std::mutex> lock(arpMutex);
         if (intervals.empty()) return;
 
-        int baseNote = activeNotes.back(); // 最も新しく押されたベースノートに追従
+        int baseNote = activeNotes.back();
         const int numSamples = buffer.getNumSamples();
         auto* outL = buffer.getWritePointer(0); auto* outR = buffer.getWritePointer(1);
 
@@ -156,19 +155,17 @@ public:
             float freq = (float)juce::MidiMessage::getMidiNoteInHertz(note);
             float inc = freq / (float)sampleRate;
 
-            // ピュアな加算合成チップチューン波形
             float sample = generateOscillator(oscPhase, inc, currentWave);
             oscPhase += inc; if (oscPhase >= 1.0f) oscPhase -= 1.0f;
 
-            // パーカッシブなプラック・エンベロープ
             float env = std::max(0.0f, 1.0f - (envPhase / (float)(samplesPerStep)));
             env = std::pow(env, 4.0f);
             envPhase += 1.0f;
 
-            currentLevel = currentLevel * 0.999f + targetLevel * 0.001f; // スムージング
-            float val = sample * env * currentLevel * 0.2f; // マスター音量補正
+            currentLevel = currentLevel * 0.999f + targetLevel * 0.001f;
+            float val = sample * env * currentLevel * 0.2f;
 
-            outL[i] += val; outR[i] += val; // 既存のバッファに加算（パラレルミックス）
+            outL[i] += val; outR[i] += val;
             sampleCounter++;
         }
     }
@@ -206,23 +203,22 @@ private:
         }
     }
 
-    // ナイキスト限界を考慮したエイリアスフリー加算合成
     float generateOscillator(float phase, float inc, int wave) {
         float out = 0.0f;
         float pPi = phase * juce::MathConstants<float>::twoPi;
         int maxHarmonic = (int)(0.5f / inc);
-        if (maxHarmonic > 40) maxHarmonic = 40; // 負荷軽減のための上限
+        if (maxHarmonic > 40) maxHarmonic = 40;
 
-        if (wave == 0) { out = std::sin(pPi); } // Sine
-        else if (wave == 1) { // Saw
+        if (wave == 0) { out = std::sin(pPi); }
+        else if (wave == 1) {
             for (int h = 1; h <= maxHarmonic; ++h) out += std::sin(pPi * h) / (float)h;
             out *= 0.6366f;
         }
-        else if (wave == 2) { // Square
+        else if (wave == 2) {
             for (int h = 1; h <= maxHarmonic; h += 2) out += std::sin(pPi * h) / (float)h;
             out *= 1.273f;
         }
-        else if (wave == 3 || wave == 4) { // Pulse 25% or 12.5%
+        else if (wave == 3 || wave == 4) {
             float duty = (wave == 3) ? 0.25f : 0.125f;
             for (int h = 1; h <= maxHarmonic; ++h) out += std::sin(h * duty * juce::MathConstants<float>::pi) * std::cos(pPi * h) / (float)h;
             out *= 1.273f;
@@ -290,7 +286,7 @@ public:
         }
 
         std::sort(currentNotes.begin(), currentNotes.end());
-        sparkleArp.updateChord(currentNotes); // ★Arpエンジンにコード構成音のインターバルを登録
+        sparkleArp.updateChord(currentNotes);
 
         const int myJobId = ++irGenJobId;
         const double sr = currentSampleRate;
@@ -358,7 +354,8 @@ public:
     }
 
     void setOttParameters(float depth, float time, float up, float down, float gainDb) { trueOtt.setParameters(depth, time, up, down, gainDb); }
-    void setArpParameters(int wave, int mode, int rate, int pitch, float level, double bpm) { sparkleArp.setParameters(wave, mode, rate, pitch, level, bpm); }
+    // ★ 変更：speedHz を渡す
+    void setArpParameters(int wave, int mode, float speedHz, int pitch, float level) { sparkleArp.setParameters(wave, mode, speedHz, pitch, level); }
 
     void setParameters(float preCutoffHz, float postCutoffHz, float mixVal)
     {
@@ -408,11 +405,8 @@ public:
         trueOtt.process(buffer);
     }
 
-    // ★ Arpはマスターの出力バッファに直接加算（フィルターやOTTをバイパスする純粋なレイヤー）
     void processArp(juce::AudioBuffer<float>& masterBuffer, const std::vector<int>& activeNotes) {
-        if (state.load() == LearnState::Active) {
-            sparkleArp.process(masterBuffer, activeNotes);
-        }
+        if (state.load() == LearnState::Active) sparkleArp.process(masterBuffer, activeNotes);
     }
 
 private:
@@ -428,7 +422,7 @@ private:
     juce::AudioBuffer<float> wetBufferA, wetBufferB;
     juce::dsp::StateVariableTPTFilter<float> preFilterL, preFilterR, postFilterL, postFilterR;
     TrueOTT trueOtt;
-    SparkleArp sparkleArp; // ★ 新規組み込み
+    SparkleArp sparkleArp;
 
     std::atomic<bool> activeEngineIsA{ true };
     float fadeVolA = 1.0f, fadeVolB = 0.0f, fadeTargetA = 1.0f, fadeTargetB = 0.0f, mix = 0.0f;

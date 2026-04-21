@@ -209,21 +209,21 @@ ColorIrPanel::ColorIrPanel(LiquidDreamAudioProcessor& p) : processor(p), apvts(p
     atts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, "ott_time", ottTimeSlider));
     atts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, "ott_up", ottUpSlider));
     atts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, "ott_down", ottDownSlider));
-
-    // ★バグ原因の行を削除し、正しくSliderAttachmentのみをPushするように修正
     atts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, "ott_gain", ottGainSlider));
 
-    // Block 3: Sparkle Arp Params
+    // ★ Block 3: Sparkle Arp Params (Rate Combo を削除、Speed Slider を追加)
     setupCombo(arpWaveCombo, arpWaveLabel, "Arp Wave", { "Sine", "Saw", "Square", "Pulse 25%", "Pulse 12.5%" }, this);
     setupCombo(arpModeCombo, arpModeLabel, "Mode", { "Up", "Down", "Up/Down", "Random" }, this);
-    setupCombo(arpRateCombo, arpRateLabel, "Rate", { "1/8", "1/16", "1/32", "1/64" }, this);
     setupCombo(arpPitchCombo, arpPitchLabel, "Octave", { "+1 Oct", "+2 Oct", "+3 Oct" }, this);
+
+    setupS(arpSpeedSlider, arpSpeedLabel, "Speed(Hz)", this);
     setupS(arpLevelSlider, arpLevelLabel, "Level", this);
 
     comboAtts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(apvts, "arp_wave", arpWaveCombo));
     comboAtts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(apvts, "arp_mode", arpModeCombo));
-    comboAtts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(apvts, "arp_rate", arpRateCombo));
     comboAtts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(apvts, "arp_pitch", arpPitchCombo));
+
+    atts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, "arp_speed", arpSpeedSlider));
     atts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, "arp_level", arpLevelSlider));
 
     auto regenIR = [this]() {
@@ -280,14 +280,14 @@ void ColorIrPanel::resized() {
     placeKnob(155, b2y + 70, ottGainLabel, ottGainSlider);
 
     // --- Block 3: SPARKLE ARP (Y: 445 ~ 630) ---
+    // ★ 変更: 上段にコンボボックス、下段にノブをレイアウト
     int b3y = 480;
-    arpWaveLabel.setBounds(20, b3y, 100, 20); arpWaveCombo.setBounds(20, b3y + 20, 100, 24);
-    arpModeLabel.setBounds(130, b3y, 100, 20); arpModeCombo.setBounds(130, b3y + 20, 100, 24);
+    arpWaveLabel.setBounds(20, b3y, 90, 20); arpWaveCombo.setBounds(20, b3y + 20, 90, 24);
+    arpModeLabel.setBounds(120, b3y, 90, 20); arpModeCombo.setBounds(120, b3y + 20, 90, 24);
+    arpPitchLabel.setBounds(220, b3y, 90, 20); arpPitchCombo.setBounds(220, b3y + 20, 90, 24);
 
-    arpRateLabel.setBounds(20, b3y + 60, 100, 20); arpRateCombo.setBounds(20, b3y + 80, 100, 24);
-    arpPitchLabel.setBounds(130, b3y + 60, 100, 20); arpPitchCombo.setBounds(130, b3y + 80, 100, 24);
-
-    placeKnob(250, b3y + 30, arpLevelLabel, arpLevelSlider);
+    placeKnob(20, b3y + 60, arpSpeedLabel, arpSpeedSlider);
+    placeKnob(110, b3y + 60, arpLevelLabel, arpLevelSlider);
 }
 
 void ColorIrPanel::updateState(ColorIREngine::LearnState state, const juce::String& chordText, bool blinkFlag) {

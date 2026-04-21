@@ -122,9 +122,10 @@ private:
     std::atomic<float>* pOttDown = nullptr;
     std::atomic<float>* pOttGain = nullptr;
 
+    // ★ 変更：pArpRate -> pArpSpeed (連続ノブ)
     std::atomic<float>* pArpWave = nullptr;
     std::atomic<float>* pArpMode = nullptr;
-    std::atomic<float>* pArpRate = nullptr;
+    std::atomic<float>* pArpSpeed = nullptr;
     std::atomic<float>* pArpPitch = nullptr;
     std::atomic<float>* pArpLevel = nullptr;
 
