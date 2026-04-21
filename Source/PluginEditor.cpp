@@ -214,7 +214,7 @@ ColorIrPanel::ColorIrPanel(LiquidDreamAudioProcessor& p) : processor(p), apvts(p
     // ★ Block 3: Sparkle Arp Params (Rate Combo を削除、Speed Slider を追加)
     setupCombo(arpWaveCombo, arpWaveLabel, "Arp Wave", { "Sine", "Saw", "Square", "Pulse 25%", "Pulse 12.5%" }, this);
     setupCombo(arpModeCombo, arpModeLabel, "Mode", { "Up", "Down", "Up/Down", "Random" }, this);
-    setupCombo(arpPitchCombo, arpPitchLabel, "Octave", { "+1 Oct", "+2 Oct", "+3 Oct" }, this);
+    setupCombo(arpPitchCombo, arpPitchLabel, "Octave", { "+2 Oct", "+3 Oct", "+4 Oct" }, this);
 
     setupS(arpSpeedSlider, arpSpeedLabel, "Speed(Hz)", this);
     setupS(arpLevelSlider, arpLevelLabel, "Level", this);

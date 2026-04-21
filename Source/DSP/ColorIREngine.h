@@ -117,7 +117,7 @@ public:
     // ★ 変更：Rate(コンボボックス)を廃止し、Speed(Hz)を連続的に受け取るように変更
     void setParameters(int wave, int mode, float speedHz, int octIdx, float level) {
         currentWave = wave; currentMode = mode;
-        currentOctave = (octIdx + 1) * 12; // 0->+12, 1->+24, 2->+36
+        currentOctave = (octIdx + 2) * 12; // 0->+12, 1->+24, 2->+36
         targetLevel = level;
 
         // 指定されたHz（1秒あたりの回数）からステップごとのサンプル数を計算
