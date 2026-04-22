@@ -106,10 +106,10 @@ private:
     std::atomic<float>* pAAtk = nullptr; std::atomic<float>* pADec = nullptr; std::atomic<float>* pASus = nullptr; std::atomic<float>* pARel = nullptr;
     std::atomic<float>* pFAtk = nullptr; std::atomic<float>* pFDec = nullptr; std::atomic<float>* pFSus = nullptr; std::atomic<float>* pFRel = nullptr;
 
-    // ColorIR & True OTT & Soothe Params
     std::atomic<float>* pColorOn = nullptr;
     std::atomic<float>* pColorType = nullptr;
     std::atomic<float>* pColorMix = nullptr;
+    std::atomic<float>* pColorIrVol = nullptr; // ★ 追加
     std::atomic<float>* pColorPreHp = nullptr;
     std::atomic<float>* pColorPostHp = nullptr;
     std::atomic<float>* pColorAtk = nullptr;
@@ -121,7 +121,6 @@ private:
     std::atomic<float>* pOttDown = nullptr;
     std::atomic<float>* pOttGain = nullptr;
 
-    // ★ 追加: Soothe Params
     std::atomic<float>* pSootheSelectivity = nullptr;
     std::atomic<float>* pSootheSharpness = nullptr;
     std::atomic<float>* pSootheFocus = nullptr;
@@ -132,11 +131,8 @@ private:
     std::atomic<float>* pArpPitch = nullptr;
     std::atomic<float>* pArpLevel = nullptr;
 
-    // Modulators Params
     std::array<std::atomic<float>*, 3> pModOn, pModAtk, pModDec, pModSus, pModRel, pModAmt;
     std::array<std::atomic<float>*, 3> pLfoOn, pLfoWave, pLfoSync, pLfoRate, pLfoBeat, pLfoAmt;
-
-    // Mod Matrix Params
     std::array<std::array<std::atomic<float>*, 3>, 6> pMatrixDest;
     std::array<std::array<std::atomic<float>*, 3>, 6> pMatrixAmt;
 

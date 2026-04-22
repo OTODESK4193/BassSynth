@@ -28,6 +28,7 @@ LiquidDreamAudioProcessor::LiquidDreamAudioProcessor()
     pColorOn = apvts.getRawParameterValue("color_on");
     pColorType = apvts.getRawParameterValue("color_type");
     pColorMix = apvts.getRawParameterValue("color_mix");
+    pColorIrVol = apvts.getRawParameterValue("color_ir_vol");
     pColorPreHp = apvts.getRawParameterValue("color_pre_hp");
     pColorPostHp = apvts.getRawParameterValue("color_post_hp");
     pColorAtk = apvts.getRawParameterValue("color_atk");
@@ -39,7 +40,6 @@ LiquidDreamAudioProcessor::LiquidDreamAudioProcessor()
     pOttDown = apvts.getRawParameterValue("ott_down");
     pOttGain = apvts.getRawParameterValue("ott_gain");
 
-    // ★ 追加: Soothe用パラメーターの取得
     pSootheSelectivity = apvts.getRawParameterValue("soothe_sel");
     pSootheSharpness = apvts.getRawParameterValue("soothe_shp");
     pSootheFocus = apvts.getRawParameterValue("soothe_foc");
@@ -138,19 +138,19 @@ juce::AudioProcessorValueTreeState::ParameterLayout LiquidDreamAudioProcessor::c
     params.push_back(std::make_unique<juce::AudioParameterBool>("color_on", "Color On", false));
     params.push_back(std::make_unique<juce::AudioParameterInt>("color_type", "IR Type", 0, 3, 0));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("color_mix", "Color Mix", 0.0f, 1.0f, 0.5f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("color_ir_vol", "IR Vol", -24.0f, 24.0f, 0.0f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("color_pre_hp", "Pre HPF", 20.0f, 2000.0f, 150.0f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("color_post_hp", "Post HPF", 20.0f, 2000.0f, 150.0f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("color_atk", "IR Attack", 2.0f, 100.0f, 5.0f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("color_dec", "IR Decay", 10.0f, 500.0f, 100.0f));
 
-    // True OTT Params
+    // True OTT & Soothe Params
     params.push_back(std::make_unique<juce::AudioParameterFloat>("ott_depth", "OTT Depth", 0.0f, 1.0f, 0.5f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("ott_time", "OTT Time", 0.0f, 1.0f, 0.5f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("ott_up", "Upward %", 0.0f, 1.0f, 0.5f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("ott_down", "Downward %", 0.0f, 1.0f, 0.5f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("ott_gain", "Out Gain", -12.0f, 24.0f, 0.0f));
 
-    // ★ 追加: Soothe Params
     params.push_back(std::make_unique<juce::AudioParameterFloat>("soothe_sel", "Selectivity", 0.0f, 1.0f, 0.5f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("soothe_shp", "Sharpness", 0.0f, 1.0f, 0.5f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("soothe_foc", "Focus", -1.0f, 1.0f, 0.0f));
@@ -406,7 +406,7 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         tempEnvBuffer.setSample(1, i, fVal);
         tempEnvBuffer.setSample(2, i, destMods[9]);
         tempEnvBuffer.setSample(3, i, destMods[10]);
-        tempEnvBuffer.setSample(4, i, destMods[11]);
+        tempEnvBuffer.setSample(4, i, destMods[11]); // Gain Mod
 
         float oL = 0.0f, oR = 0.0f, subL = 0.0f, subR = 0.0f;
         oscillator.getSampleStereo(oL, oR, subL, subR);
@@ -426,19 +426,18 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
 
     if (pColorOn->load() > 0.5f) {
         colorEngine.setOttParameters(pOttDepth->load(), pOttTime->load(), pOttUp->load(), pOttDown->load(), pOttGain->load());
-        // ★ 追加: Soothe用パラメータを渡し、Depth/Timeを共有する
         colorEngine.setSootheParameters(pOttDepth->load(), pOttTime->load(), pSootheSelectivity->load(), pSootheSharpness->load(), pSootheFocus->load());
-        colorEngine.setParameters(pColorPreHp->load(), pColorPostHp->load(), pColorMix->load());
+        colorEngine.setParameters(pColorPreHp->load(), pColorPostHp->load(), pColorMix->load(), pColorIrVol->load());
         colorEngine.process(tempWavetableBuffer);
     }
 
+    // ★ 修正1: フィルターとVCA (Master Gainはまだ掛けない)
     for (int i = 0; i < numSamples; ++i) {
-        float cc = smoothedCutoff.getNextValue(), cr = smoothedReso.getNextValue(), ce = pFltEnvAmt->load(), cg = smoothedGain.getNextValue();
+        float cc = smoothedCutoff.getNextValue(), cr = smoothedReso.getNextValue(), ce = pFltEnvAmt->load();
         float aVal = tempEnvBuffer.getSample(0, i);
         float fVal = tempEnvBuffer.getSample(1, i);
         float cutoffMod = tempEnvBuffer.getSample(2, i);
         float resoMod = tempEnvBuffer.getSample(3, i);
-        float gainMod = tempEnvBuffer.getSample(4, i);
 
         float sL = wtL[i] + tempSubBuffer.getSample(0, i);
         float sR = wtR[i] + tempSubBuffer.getSample(1, i);
@@ -449,10 +448,11 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
 
         sL = filter.processSample(sL); sR = filter.processSample(sR);
 
-        float finalGain = juce::jlimit(0.0f, 1.0f, cg + gainMod) * aVal;
-        left[i] = sL * finalGain; right[i] = sR * finalGain;
+        // ここではまだAmp Envのみを掛ける
+        left[i] = sL * aVal; right[i] = sR * aVal;
     }
 
+    // ★ 修正2: Sparkle Arpの加算 (Amp Envを渡して発音させる)
     if (pColorOn->load() > 0.5f) {
         colorEngine.setArpParameters((int)pArpWave->load(), (int)pArpMode->load(), pArpSpeed->load(), (int)pArpPitch->load(), pArpLevel->load());
 
@@ -461,10 +461,19 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
             std::lock_guard<std::mutex> lock(midiNotesMutex);
             currentNotes = activeMidiNotes;
         }
-        colorEngine.processArp(buffer, currentNotes);
+        colorEngine.processArp(buffer, currentNotes, tempEnvBuffer.getReadPointer(0));
     }
 
+    // ★ 修正3: 真のMaster Gain Pass (Arp加算後のすべての音量に適用)
     for (int i = 0; i < numSamples; ++i) {
+        float cg = smoothedGain.getNextValue();
+        float gainMod = tempEnvBuffer.getSample(4, i);
+        float finalGain = juce::jlimit(0.0f, 1.0f, cg + gainMod);
+
+        left[i] *= finalGain;
+        right[i] *= finalGain;
+
+        // スコープの描画更新
         tempScopeBuffer[(size_t)scopeWriteIndex] = (left[i] + right[i]) * 0.5f;
         scopeWriteIndex++;
         if (scopeWriteIndex >= 512) {

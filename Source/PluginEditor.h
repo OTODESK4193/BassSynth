@@ -8,6 +8,7 @@
 #include "UI/WavetableBrowser.h"
 #include "UI/DualScopeComponent.h"
 
+// --- Custom Tab Components for Modulation ---
 class LfoTab : public juce::Component {
 public:
     LfoTab(juce::AudioProcessorValueTreeState& vts);
@@ -59,6 +60,7 @@ private:
     std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment>> comboAtts;
 };
 
+// --- ColorIR Vertical Rack Panel ---
 class ColorIrPanel : public juce::Component {
 public:
     ColorIrPanel(LiquidDreamAudioProcessor& p);
@@ -75,27 +77,31 @@ private:
 
     // Block 1: Generator
     juce::ComboBox typeCombo; juce::Label typeLabel;
-    juce::Slider mixSlider, preHpSlider, postHpSlider, atkSlider, decSlider;
-    juce::Label mixLabel, preHpLabel, postHpLabel, atkLabel, decLabel;
+    juce::Slider mixSlider, irVolSlider, preHpSlider, postHpSlider, atkSlider, decSlider;
+    juce::Label mixLabel, irVolLabel, preHpLabel, postHpLabel, atkLabel, decLabel;
 
     // Block 2: True OTT & Soothe
     juce::Slider ottDepthSlider, ottTimeSlider, ottUpSlider, ottDownSlider, ottGainSlider;
     juce::Label ottDepthLabel, ottTimeLabel, ottUpLabel, ottDownLabel, ottGainLabel;
 
-    // ★ 追加: Soothe用UIコンポーネント
     juce::Slider sootheSelSlider, sootheShpSlider, sootheFocSlider;
     juce::Label sootheSelLabel, sootheShpLabel, sootheFocLabel;
 
-    // Block 3: Sparkle Arp
+    // Block 3: Sparkle Arp & Master Gain
     juce::ComboBox arpWaveCombo, arpModeCombo, arpPitchCombo;
     juce::Label arpWaveLabel, arpModeLabel, arpPitchLabel;
     juce::Slider arpSpeedSlider, arpLevelSlider;
     juce::Label arpSpeedLabel, arpLevelLabel;
 
+    // ★ 最終段のマスターゲイン（Color編集時用）
+    juce::Slider masterGainSlider;
+    juce::Label masterGainLabel;
+
     std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>> atts;
     std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment>> comboAtts;
 };
 
+// --- Main Editor Class ---
 class LiquidDreamAudioProcessorEditor : public juce::AudioProcessorEditor, public juce::Timer
 {
 public:
@@ -110,15 +116,18 @@ private:
     DualScopeComponent dualScope;
     WavetableBrowser browser;
 
+    // Nav
     juce::TextButton openBrowserButton{ "BROWSE" };
     juce::TextButton prevWaveButton{ juce::String::fromUTF8("\xe2\x97\x80") };
     juce::TextButton nextWaveButton{ juce::String::fromUTF8("\xe2\x96\xb6") };
     juce::TextButton rndWaveButton{ "RND" };
     juce::ToggleButton colorButton{ "COLOR" };
 
+    // Overlays & Groups
     ColorIrPanel colorPanel;
     juce::GroupComponent oscGroup, subGroup, shaperGroup, filterGroup, ampEnvGroup, filterEnvGroup, controlGroup;
 
+    // Osc Params
     juce::ToggleButton oscOnButton{ "ON" };
     juce::Slider wtLevelSlider, wtPosSlider, oscPitchSlider, uniCountSlider, detuneSlider, widthSlider, driftSlider;
     juce::Label  wtLevelLabel, wtPosLabel, oscPitchLabel, uniCountLabel, detuneLabel, widthLabel, driftLabel;
@@ -126,6 +135,7 @@ private:
     juce::Label  pitchDecayAmtLabel, pitchDecayTimeLabel, fmAmtLabel;
     juce::ComboBox fmWaveCombo; juce::Label fmWaveLabel;
 
+    // Morph Params
     juce::ComboBox morphAModeCombo, morphBModeCombo, morphCModeCombo;
     juce::Label    morphAModeLabel, morphBModeLabel, morphCModeLabel;
     juce::Slider   morphAAmtSlider, morphBAmtSlider, morphCAmtSlider;
@@ -133,29 +143,35 @@ private:
     juce::Slider   morphAShiftSlider, morphBShiftSlider, morphCShiftSlider;
     juce::Label    morphAShiftLabel, morphBShiftLabel, morphCShiftLabel;
 
+    // Sub Osc
     juce::ToggleButton subOnButton{ "ON" };
     juce::ComboBox subWaveCombo; juce::Label subVolLabel;
     juce::Slider subVolSlider, subPitchSlider; juce::Label subPitchLabel;
 
+    // Shaper & Filter
     juce::Slider distDriveSlider, shpAmtSlider, bitSlider, rateSlider;
     juce::Label  distDriveLabel, shpAmtLabel, bitLabel, rateLabel;
     juce::Slider cutoffSlider, resSlider, fltEnvAmtSlider;
     juce::Label  cutoffLabel, resLabel, fltEnvAmtLabel;
 
+    // Core Envelopes
     juce::Slider ampAtkSlider, ampDecSlider, ampSusSlider, ampRelSlider;
     juce::Label  ampAtkLabel, ampDecLabel, ampSusLabel, ampRelLabel;
     juce::Slider fltAtkSlider, fltDecSlider, fltSusSlider, fltRelSlider;
     juce::Label  fltAtkLabel, fltDecLabel, fltSusLabel, fltRelLabel;
 
+    // Performance
     juce::ToggleButton legatoButton{ "LEGATO" };
     juce::Slider glideSlider, pitchSlider, gainSlider;
     juce::Label  glideLabel, pitchLabel, gainLabel;
 
+    // Modulation Tabs
     juce::TabbedComponent modTabs;
     LfoTab lfoTab;
     ModEnvTab modEnvTab;
     MatrixTab matrixTab;
 
+    // Attachments
     std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>> attachments;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> oscOnAtt, subOnAtt, legatoAtt, colorOnAtt;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> subWaveAtt, fmWaveAtt, morphAAtt, morphBAtt, morphCAtt;

@@ -4,6 +4,7 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 
+// --- Helpers ---
 static void setupS(juce::Slider& s, juce::Label& l, const char* txt, juce::Component* parent) {
     parent->addAndMakeVisible(s);
     s.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
@@ -31,8 +32,9 @@ static void setupCombo(juce::ComboBox& c, juce::Label& l, const char* txt, juce:
     }
 }
 
-// ... LfoTab, ModEnvTab, MatrixTab Implementation は既存のまま省略せず出力します ...
-// (※文字数制限への配慮のため、前出のLfoTab, ModEnvTab, MatrixTab のコードは変更がないため上記Snippetと同等です)
+// ==============================================================================
+// LfoTab Implementation
+// ==============================================================================
 LfoTab::LfoTab(juce::AudioProcessorValueTreeState& vts) : apvts(vts) {
     juce::StringArray waves = { "Sine", "Saw", "Pulse", "Random" };
     juce::StringArray beats = { "1/1", "1/2", "1/4", "1/8", "1/16", "1/32", "1/4T", "1/8T", "1/16T" };
@@ -53,6 +55,7 @@ LfoTab::LfoTab(juce::AudioProcessorValueTreeState& vts) : apvts(vts) {
         btnAtts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(apvts, pfx + "sync", lfos[i].sync));
     }
 }
+
 void LfoTab::paint(juce::Graphics& g) {
     g.fillAll(juce::Colour::fromString("FF1A1A1A"));
     for (int i = 0; i < 3; ++i) {
@@ -63,6 +66,7 @@ void LfoTab::paint(juce::Graphics& g) {
         g.drawText("LFO " + juce::String(i + 1), 20, 15 + i * 130, 50, 20, juce::Justification::centredLeft);
     }
 }
+
 void LfoTab::resized() {
     for (int i = 0; i < 3; ++i) {
         int y = 30 + i * 130;
@@ -75,6 +79,9 @@ void LfoTab::resized() {
     }
 }
 
+// ==============================================================================
+// ModEnvTab Implementation
+// ==============================================================================
 ModEnvTab::ModEnvTab(juce::AudioProcessorValueTreeState& vts) : apvts(vts) {
     for (int i = 0; i < 3; ++i) {
         addAndMakeVisible(envs[i].onBtn);
@@ -91,6 +98,7 @@ ModEnvTab::ModEnvTab(juce::AudioProcessorValueTreeState& vts) : apvts(vts) {
         sliderAtts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, pfx + "amt", envs[i].amt));
     }
 }
+
 void ModEnvTab::paint(juce::Graphics& g) {
     g.fillAll(juce::Colour::fromString("FF1A1A1A"));
     for (int i = 0; i < 3; ++i) {
@@ -101,6 +109,7 @@ void ModEnvTab::paint(juce::Graphics& g) {
         g.drawText("ENV " + juce::String(i + 1), 20, 15 + i * 130, 50, 20, juce::Justification::centredLeft);
     }
 }
+
 void ModEnvTab::resized() {
     for (int i = 0; i < 3; ++i) {
         int y = 30 + i * 130;
@@ -111,6 +120,9 @@ void ModEnvTab::resized() {
     }
 }
 
+// ==============================================================================
+// MatrixTab Implementation
+// ==============================================================================
 MatrixTab::MatrixTab(juce::AudioProcessorValueTreeState& vts) : apvts(vts) {
     juce::StringArray dests = {
         "None", "WT: Position", "WT: FM Amt", "WT: MorphA Amt", "WT: MorphA Shf",
@@ -131,6 +143,7 @@ MatrixTab::MatrixTab(juce::AudioProcessorValueTreeState& vts) : apvts(vts) {
         }
     }
 }
+
 void MatrixTab::paint(juce::Graphics& g) {
     g.fillAll(juce::Colour::fromString("FF1A1A1A"));
     juce::StringArray srcNames = { "MOD 1", "MOD 2", "MOD 3", "LFO 1", "LFO 2", "LFO 3" };
@@ -142,6 +155,7 @@ void MatrixTab::paint(juce::Graphics& g) {
         g.drawText(srcNames[i], 10, i * 65, 55, 65, juce::Justification::centredLeft);
     }
 }
+
 void MatrixTab::resized() {
     for (int src = 0; src < 6; ++src) {
         int y = src * 65 + 18;
@@ -154,7 +168,7 @@ void MatrixTab::resized() {
 }
 
 // ==============================================================================
-// ColorIrPanel Implementation (Vertical Rack Design)
+// ColorIrPanel Implementation
 // ==============================================================================
 ColorIrPanel::ColorIrPanel(LiquidDreamAudioProcessor& p) : processor(p), apvts(p.getAPVTS()) {
     addAndMakeVisible(learnButton);
@@ -174,23 +188,23 @@ ColorIrPanel::ColorIrPanel(LiquidDreamAudioProcessor& p) : processor(p), apvts(p
     chordLabel.setFont(juce::FontOptions(22.0f, juce::Font::bold));
     chordLabel.setColour(juce::Label::textColourId, juce::Colour::fromString("FF00FFCC"));
 
-    // Block 1: Generator Params
-    setupCombo(typeCombo, typeLabel, "IR Type", { "Pure Saw", "Pure Square", "FM Chime", "Resonant Noise" }, this);
+    setupCombo(typeCombo, typeLabel, "IR Type", { "Pure Saw", "Pure Square", "FM Chime", "Harmonic Resonator" }, this);
     comboAtts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(apvts, "color_type", typeCombo));
 
     setupS(mixSlider, mixLabel, "Mix", this);
+    setupS(irVolSlider, irVolLabel, "IR Vol", this);
     setupS(atkSlider, atkLabel, "Attack", this);
     setupS(decSlider, decLabel, "Decay", this);
     setupS(preHpSlider, preHpLabel, "Pre HPF", this);
     setupS(postHpSlider, postHpLabel, "Post HPF", this);
 
     atts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, "color_mix", mixSlider));
+    atts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, "color_ir_vol", irVolSlider));
     atts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, "color_atk", atkSlider));
     atts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, "color_dec", decSlider));
     atts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, "color_pre_hp", preHpSlider));
     atts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, "color_post_hp", postHpSlider));
 
-    // Block 2: True OTT & Soothe Params (★ 名称変更とSoothe追加)
     setupS(ottDepthSlider, ottDepthLabel, "Depth", this);
     setupS(ottTimeSlider, ottTimeLabel, "Speed", this);
     setupS(ottUpSlider, ottUpLabel, "Upward %", this);
@@ -211,14 +225,16 @@ ColorIrPanel::ColorIrPanel(LiquidDreamAudioProcessor& p) : processor(p), apvts(p
     atts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, "soothe_shp", sootheShpSlider));
     atts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, "soothe_foc", sootheFocSlider));
 
-
-    // Block 3: Sparkle Arp Params
     setupCombo(arpWaveCombo, arpWaveLabel, "Arp Wave", { "Sine", "Saw", "Square", "Pulse 25%", "Pulse 12.5%" }, this);
     setupCombo(arpModeCombo, arpModeLabel, "Mode", { "Up", "Down", "Up/Down", "Random" }, this);
     setupCombo(arpPitchCombo, arpPitchLabel, "Octave", { "+2 Oct", "+3 Oct", "+4 Oct" }, this);
 
     setupS(arpSpeedSlider, arpSpeedLabel, "Speed(Hz)", this);
     setupS(arpLevelSlider, arpLevelLabel, "Level", this);
+
+    // ★ Colorパネル用 Master Gain のセットアップと "m_gain" へのアタッチ
+    setupS(masterGainSlider, masterGainLabel, "Master Vol", this);
+    atts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, "m_gain", masterGainSlider));
 
     comboAtts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(apvts, "arp_wave", arpWaveCombo));
     comboAtts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(apvts, "arp_mode", arpModeCombo));
@@ -250,16 +266,13 @@ void ColorIrPanel::paint(juce::Graphics& g) {
         g.drawLine(15, y + 25, getWidth() - 15, y + 25, 1.0f);
         };
 
-    // Block 1: Generator
     drawBlock(5, 255, "1. COLOR IR GENERATOR", juce::Colour::fromString("FFFF764D"));
-    // ★ 変更: Block 2 タイトルを OTT & SOOTHE へ
     drawBlock(265, 175, "2. DYNAMICS (OTT & SOOTHE)", juce::Colour::fromString("FF00FFCC"));
-    // Block 3: Sparkle Arp
-    drawBlock(445, 185, "3. SPARKLE ARP (CHIPTUNE)", juce::Colour::fromString("FFFFD700"));
+    // ★ Block 3 タイトルに MASTER を追加
+    drawBlock(445, 185, "3. SPARKLE ARP & MASTER", juce::Colour::fromString("FFFFD700"));
 }
 
 void ColorIrPanel::resized() {
-    // --- Block 1: GENERATOR (Y: 5 ~ 260) ---
     learnButton.setBounds(20, 35, 310, 30);
     chordLabel.setBounds(20, 70, 310, 30);
 
@@ -267,12 +280,11 @@ void ColorIrPanel::resized() {
     placeKnob(160, 110, atkLabel, atkSlider);
     placeKnob(250, 110, decLabel, decSlider);
 
-    placeKnob(20, 180, mixLabel, mixSlider);
-    placeKnob(160, 180, preHpLabel, preHpSlider);
-    placeKnob(250, 180, postHpLabel, postHpSlider);
+    placeKnob(15, 180, mixLabel, mixSlider);
+    placeKnob(90, 180, irVolLabel, irVolSlider);
+    placeKnob(165, 180, preHpLabel, preHpSlider);
+    placeKnob(240, 180, postHpLabel, postHpSlider);
 
-    // --- Block 2: OTT & SOOTHE (Y: 265 ~ 440) ---
-    // ★ 変更: 4×2ノブレイアウト
     int b2y = 295;
     placeKnob(15, b2y, ottDepthLabel, ottDepthSlider);
     placeKnob(90, b2y, ottTimeLabel, ottTimeSlider);
@@ -285,7 +297,6 @@ void ColorIrPanel::resized() {
     placeKnob(165, b2y2, sootheFocLabel, sootheFocSlider);
     placeKnob(240, b2y2, ottGainLabel, ottGainSlider);
 
-    // --- Block 3: SPARKLE ARP (Y: 445 ~ 630) ---
     int b3y = 480;
     arpWaveLabel.setBounds(20, b3y, 90, 20); arpWaveCombo.setBounds(20, b3y + 20, 90, 24);
     arpModeLabel.setBounds(120, b3y, 90, 20); arpModeCombo.setBounds(120, b3y + 20, 90, 24);
@@ -293,6 +304,9 @@ void ColorIrPanel::resized() {
 
     placeKnob(20, b3y + 60, arpSpeedLabel, arpSpeedSlider);
     placeKnob(110, b3y + 60, arpLevelLabel, arpLevelSlider);
+
+    // ★ Master Gain ノブのレイアウト (Arpの右側に配置)
+    placeKnob(240, b3y + 60, masterGainLabel, masterGainSlider);
 }
 
 void ColorIrPanel::updateState(ColorIREngine::LearnState state, const juce::String& chordText, bool blinkFlag) {
@@ -533,7 +547,6 @@ void LiquidDreamAudioProcessorEditor::resized()
         placeKnob(sbX + 240, sbY, subPitchLabel, subPitchSlider);
     }
 
-    // --- 右側エリア (920px) ---
     area.removeFromLeft(15);
     auto rightArea = area;
     browser.setBounds(rightArea);

@@ -31,7 +31,6 @@ public:
         lp2.prepare(spec); hp2.prepare(spec);
         ap2.prepare(spec);
 
-        // ★ 変更: Subの濁りを除去するためLow-Midのクロスオーバーを150Hzに変更
         lp1.setCutoffFrequency(150.0f); hp1.setCutoffFrequency(150.0f);
         lp2.setCutoffFrequency(2500.0f); hp2.setCutoffFrequency(2500.0f);
         ap2.setCutoffFrequency(2500.0f);
@@ -89,7 +88,6 @@ private:
         float inputDb = juce::Decibels::gainToDecibels(std::abs(inputAbs) + 1e-6f);
         float targetDb = inputDb;
 
-        // ★ 変更: Mid帯域のDownward Threshを -5.0f に引き上げ（ステレオ感の維持）
         float threshDown = (bandIndex == 1) ? -5.0f : -20.0f;
         float threshUp = (bandIndex == 1) ? -40.0f : -35.0f;
         float activeRange = -80.0f;
@@ -98,7 +96,6 @@ private:
             targetDb = threshDown + (inputDb - threshDown) / (1.0f + 4.0f * downwardAmount);
         }
         else if (inputDb < threshUp && inputDb > activeRange) {
-            // ★ 変更: High帯域のUpward Ratioを強烈に(最大0.1倍まで圧縮)
             float upRatio = (bandIndex == 2) ? 0.9f : 0.7f;
             targetDb = threshUp - (threshUp - inputDb) * (1.0f - upRatio * upwardAmount);
         }
@@ -112,7 +109,7 @@ private:
 };
 
 // ==============================================================================
-// Sparkle Arp Module (Alias-Free Chiptune Synthesizer)
+// Sparkle Arp Module
 // ==============================================================================
 class SparkleArp
 {
@@ -121,9 +118,8 @@ public:
 
     void setParameters(int wave, int mode, float speedHz, int octIdx, float level) {
         currentWave = wave; currentMode = mode;
-        currentOctave = (octIdx + 2) * 12; // 0->+12, 1->+24, 2->+36
+        currentOctave = (octIdx + 2) * 12;
         targetLevel = level;
-
         samplesPerStep = (int)(sampleRate / std::max(1.0f, speedHz));
     }
 
@@ -137,7 +133,8 @@ public:
         intervals.erase(std::unique(intervals.begin(), intervals.end()), intervals.end());
     }
 
-    void process(juce::AudioBuffer<float>& buffer, const std::vector<int>& activeNotes) {
+    // ★ 変更: mainAmpEnvBuffer を受け取り、最終出力に乗算する
+    void process(juce::AudioBuffer<float>& buffer, const std::vector<int>& activeNotes, const float* mainAmpEnvBuffer) {
         if (targetLevel <= 0.001f || activeNotes.empty() || samplesPerStep <= 0) {
             currentLevel = 0.0f; return;
         }
@@ -166,7 +163,9 @@ public:
             envPhase += 1.0f;
 
             currentLevel = currentLevel * 0.999f + targetLevel * 0.001f;
-            float val = sample * env * currentLevel * 0.2f;
+
+            // ★ 変更: 音量感を1.2倍(0.24f)にし、メインのADSRカーブ(mainAmpEnvBuffer)を掛ける
+            float val = sample * env * currentLevel * 0.24f * mainAmpEnvBuffer[i];
 
             outL[i] += val; outR[i] += val;
             sampleCounter++;
@@ -303,12 +302,11 @@ public:
 
             juce::AudioBuffer<float> tempIR(2, numSamples); tempIR.clear();
             std::vector<float> phases(currentNotes.size(), 0.0f), incs(currentNotes.size(), 0.0f);
-            std::vector<int> delayLengths(currentNotes.size(), 0);
             auto& random = juce::Random::getSystemRandom();
 
             for (size_t n = 0; n < currentNotes.size(); ++n) {
                 float freq = (float)juce::MidiMessage::getMidiNoteInHertz(currentNotes[n]);
-                incs[n] = freq / (float)sr; phases[n] = 0.0f; delayLengths[n] = (int)(sr / freq);
+                incs[n] = freq / (float)sr; phases[n] = 0.0f;
             }
 
             float atkSamples = std::max(1.0f, (attackMs / 1000.0f) * (float)sr);
@@ -322,10 +320,19 @@ public:
                 float sample = 0.0f;
 
                 if (irType == 3) {
+                    // ★ 変更: Harmonic Resonator (Ableton Resonator的アプローチ)
                     for (size_t n = 0; n < currentNotes.size(); ++n) {
-                        sample += ((i < 100) ? (random.nextFloat() * 2.0f - 1.0f) : 0.0f) + ((i >= delayLengths[n]) ? outL[i - delayLengths[n]] : 0.0f) * 0.995f;
+                        float phase = phases[n];
+                        // 基本のサイン波レゾナンス
+                        float val = std::sin(phase * juce::MathConstants<float>::twoPi);
+                        // 指数関数的減衰を個別に適用し、弦の響きをシミュレート
+                        float currentDecay = std::exp(-(float)i / (sr * (actualDecayMs / 1000.0f) * 0.4f));
+                        sample += val * currentDecay;
+                        phases[n] += incs[n]; if (phases[n] >= 1.0f) phases[n] -= 1.0f;
                     }
-                    sample *= (norm * 0.15f);
+                    sample *= (norm * 0.8f);
+                    // ごく僅かなノイズインパルスをアタックに付加して輪郭を強調
+                    sample += (random.nextFloat() * 2.0f - 1.0f) * 0.08f * std::exp(-(float)i / (sr * 0.05f));
                 }
                 else {
                     for (size_t n = 0; n < currentNotes.size(); ++n) {
@@ -343,7 +350,7 @@ public:
                     if (i < noiseSamples) sample += (random.nextFloat() * 2.0f - 1.0f) * (1.0f - ((float)i / noiseSamples)) * 0.3f;
                 }
 
-                sample = std::tanh(sample * ((irType == 3) ? 1.0f : 4.0f));
+                sample = std::tanh(sample * ((irType == 3) ? 1.5f : 4.0f));
                 float env = (i < atkSamples) ? ((float)i / atkSamples) : std::pow(std::max(0.0f, 1.0f - ((float)(i - atkSamples) / decSamples)), 4.0f);
                 outL[i] = sample * env * 0.025f; outR[i] = sample * env * 0.025f;
             }
@@ -358,22 +365,20 @@ public:
 
     void setOttParameters(float depth, float time, float up, float down, float gainDb) { trueOtt.setParameters(depth, time, up, down, gainDb); }
 
-    // ★ 追加: Soothe用パラメーターの受け取り
     void setSootheParameters(float depth, float time, float selectivity, float sharpness, float focus) {
-        sootheDepth = depth;
-        sootheTime = time;
-        sootheSelectivity = selectivity;
-        sootheSharpness = sharpness;
-        sootheFocus = focus;
+        sootheDepth = depth; sootheTime = time;
+        sootheSelectivity = selectivity; sootheSharpness = sharpness; sootheFocus = focus;
     }
 
     void setArpParameters(int wave, int mode, float speedHz, int pitch, float level) { sparkleArp.setParameters(wave, mode, speedHz, pitch, level); }
 
-    void setParameters(float preCutoffHz, float postCutoffHz, float mixVal)
+    // ★ 変更: IR Volを受け取る
+    void setParameters(float preCutoffHz, float postCutoffHz, float mixVal, float irVolDb)
     {
         preFilterL.setCutoffFrequency(std::clamp(preCutoffHz, 20.0f, 2000.0f)); preFilterR.setCutoffFrequency(std::clamp(preCutoffHz, 20.0f, 2000.0f));
         postFilterL.setCutoffFrequency(std::clamp(postCutoffHz, 20.0f, 2000.0f)); postFilterR.setCutoffFrequency(std::clamp(postCutoffHz, 20.0f, 2000.0f));
         mix = std::clamp(mixVal, 0.0f, 1.0f);
+        irVolumeLinear = juce::Decibels::decibelsToGain(irVolDb);
     }
 
     void process(juce::AudioBuffer<float>& buffer)
@@ -411,16 +416,18 @@ public:
 
             currentWetL = postFilterL.processSample(0, currentWetL); currentWetR = postFilterR.processSample(1, currentWetR);
 
+            // ★ 変更: IR Vol を適用
+            currentWetL *= irVolumeLinear; currentWetR *= irVolumeLinear;
+
             outL[i] = inL[i] * (1.0f - mix) + currentWetL * mix; outR[i] = inR[i] * (1.0f - mix) + currentWetR * mix;
         }
-
-        // 次期フェーズでここにSoothe（Spectral Suppressor）のprocessを挿入予定
 
         trueOtt.process(buffer);
     }
 
-    void processArp(juce::AudioBuffer<float>& masterBuffer, const std::vector<int>& activeNotes) {
-        if (state.load() == LearnState::Active) sparkleArp.process(masterBuffer, activeNotes);
+    // ★ 変更: AmpEnvBufferを引数に追加
+    void processArp(juce::AudioBuffer<float>& masterBuffer, const std::vector<int>& activeNotes, const float* mainAmpEnvBuffer) {
+        if (state.load() == LearnState::Active) sparkleArp.process(masterBuffer, activeNotes, mainAmpEnvBuffer);
     }
 
 private:
@@ -440,8 +447,8 @@ private:
 
     std::atomic<bool> activeEngineIsA{ true };
     float fadeVolA = 1.0f, fadeVolB = 0.0f, fadeTargetA = 1.0f, fadeTargetB = 0.0f, mix = 0.0f;
+    float irVolumeLinear = 1.0f; // ★ 追加: IR Vol内部値
 
-    // ★ 追加: Soothe DSP用内部ステート保持変数
     float sootheDepth = 0.0f, sootheTime = 0.0f;
     float sootheSelectivity = 0.5f, sootheSharpness = 0.5f, sootheFocus = 0.0f;
 
