@@ -39,6 +39,11 @@ LiquidDreamAudioProcessor::LiquidDreamAudioProcessor()
     pOttDown = apvts.getRawParameterValue("ott_down");
     pOttGain = apvts.getRawParameterValue("ott_gain");
 
+    // ★ 追加: Soothe用パラメーターの取得
+    pSootheSelectivity = apvts.getRawParameterValue("soothe_sel");
+    pSootheSharpness = apvts.getRawParameterValue("soothe_shp");
+    pSootheFocus = apvts.getRawParameterValue("soothe_foc");
+
     pArpWave = apvts.getRawParameterValue("arp_wave");
     pArpMode = apvts.getRawParameterValue("arp_mode");
     pArpSpeed = apvts.getRawParameterValue("arp_speed");
@@ -145,6 +150,11 @@ juce::AudioProcessorValueTreeState::ParameterLayout LiquidDreamAudioProcessor::c
     params.push_back(std::make_unique<juce::AudioParameterFloat>("ott_down", "Downward %", 0.0f, 1.0f, 0.5f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("ott_gain", "Out Gain", -12.0f, 24.0f, 0.0f));
 
+    // ★ 追加: Soothe Params
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("soothe_sel", "Selectivity", 0.0f, 1.0f, 0.5f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("soothe_shp", "Sharpness", 0.0f, 1.0f, 0.5f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("soothe_foc", "Focus", -1.0f, 1.0f, 0.0f));
+
     // Sparkle Arp Params
     auto speedRange = juce::NormalisableRange<float>(1.0f, 100.0f, 0.1f, 0.3f);
     params.push_back(std::make_unique<juce::AudioParameterInt>("arp_wave", "Arp Wave", 0, 4, 2));
@@ -217,7 +227,6 @@ void LiquidDreamAudioProcessor::prepareToPlay(double sampleRate, int samplesPerB
     smoothedMorphBAmt.reset(sampleRate, st); smoothedMorphBShift.reset(sampleRate, st);
     smoothedMorphCAmt.reset(sampleRate, st); smoothedMorphCShift.reset(sampleRate, st);
 
-    // ★ Initialize the target values on prepare
     smoothedWtLevel.setCurrentAndTargetValue(pOscLevel->load(std::memory_order_relaxed));
     smoothedWtPitch.setCurrentAndTargetValue(pOscPitch->load(std::memory_order_relaxed));
     smoothedPDecayAmt.setCurrentAndTargetValue(pPDecayAmt->load(std::memory_order_relaxed));
@@ -256,7 +265,6 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     int currentModeB = updateSmoothTime(pMorphBMode, lastModeB, smoothedMorphBAmt, smoothedMorphBShift);
     int currentModeC = updateSmoothTime(pMorphCMode, lastModeC, smoothedMorphCAmt, smoothedMorphCShift);
 
-    // ★ UPDATE TARGETS FOR PITCH AND DRIFT
     smoothedWtPos.setTargetValue(pPos->load(std::memory_order_relaxed)); smoothedFm.setTargetValue(pFm->load(std::memory_order_relaxed));
     smoothedWtPitch.setTargetValue(pOscPitch->load(std::memory_order_relaxed));
     smoothedPDecayAmt.setTargetValue(pPDecayAmt->load(std::memory_order_relaxed));
@@ -373,7 +381,6 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         oscillator.setWavetablePosition(modPos);
         oscillator.setFMAmount(modFm);
 
-        // ★ PASS PITCH, PITCH ENV, AND DRIFT TO OSCILLATOR
         oscillator.setWavetablePitchOffset(smoothedWtPitch.getNextValue());
         oscillator.setPitchDecay(smoothedPDecayAmt.getNextValue(), smoothedPDecayTime.getNextValue());
         oscillator.setDriftAmount(smoothedDrift.getNextValue());
@@ -393,8 +400,6 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         float fVal = filterEnv.getNextSample();
         if (ampEnv.popJustReset()) {
             oscillator.resetPhase();
-            // SpectralMorphのバッファクリア（あれば）
-            // spectralMorph.reset();
         }
 
         tempEnvBuffer.setSample(0, i, aVal);
@@ -421,6 +426,8 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
 
     if (pColorOn->load() > 0.5f) {
         colorEngine.setOttParameters(pOttDepth->load(), pOttTime->load(), pOttUp->load(), pOttDown->load(), pOttGain->load());
+        // ★ 追加: Soothe用パラメータを渡し、Depth/Timeを共有する
+        colorEngine.setSootheParameters(pOttDepth->load(), pOttTime->load(), pSootheSelectivity->load(), pSootheSharpness->load(), pSootheFocus->load());
         colorEngine.setParameters(pColorPreHp->load(), pColorPostHp->load(), pColorMix->load());
         colorEngine.process(tempWavetableBuffer);
     }

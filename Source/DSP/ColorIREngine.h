@@ -31,7 +31,8 @@ public:
         lp2.prepare(spec); hp2.prepare(spec);
         ap2.prepare(spec);
 
-        lp1.setCutoffFrequency(250.0f); hp1.setCutoffFrequency(250.0f);
+        // ★ 変更: Subの濁りを除去するためLow-Midのクロスオーバーを150Hzに変更
+        lp1.setCutoffFrequency(150.0f); hp1.setCutoffFrequency(150.0f);
         lp2.setCutoffFrequency(2500.0f); hp2.setCutoffFrequency(2500.0f);
         ap2.setCutoffFrequency(2500.0f);
 
@@ -87,7 +88,9 @@ private:
     {
         float inputDb = juce::Decibels::gainToDecibels(std::abs(inputAbs) + 1e-6f);
         float targetDb = inputDb;
-        float threshDown = (bandIndex == 1) ? -10.0f : -20.0f;
+
+        // ★ 変更: Mid帯域のDownward Threshを -5.0f に引き上げ（ステレオ感の維持）
+        float threshDown = (bandIndex == 1) ? -5.0f : -20.0f;
         float threshUp = (bandIndex == 1) ? -40.0f : -35.0f;
         float activeRange = -80.0f;
 
@@ -95,7 +98,9 @@ private:
             targetDb = threshDown + (inputDb - threshDown) / (1.0f + 4.0f * downwardAmount);
         }
         else if (inputDb < threshUp && inputDb > activeRange) {
-            targetDb = threshUp - (threshUp - inputDb) * (1.0f - 0.7f * upwardAmount);
+            // ★ 変更: High帯域のUpward Ratioを強烈に(最大0.1倍まで圧縮)
+            float upRatio = (bandIndex == 2) ? 0.9f : 0.7f;
+            targetDb = threshUp - (threshUp - inputDb) * (1.0f - upRatio * upwardAmount);
         }
 
         float targetGain = juce::Decibels::decibelsToGain(targetDb - inputDb);
@@ -114,13 +119,11 @@ class SparkleArp
 public:
     void prepare(double sr) { sampleRate = sr; }
 
-    // ★ 変更：Rate(コンボボックス)を廃止し、Speed(Hz)を連続的に受け取るように変更
     void setParameters(int wave, int mode, float speedHz, int octIdx, float level) {
         currentWave = wave; currentMode = mode;
         currentOctave = (octIdx + 2) * 12; // 0->+12, 1->+24, 2->+36
         targetLevel = level;
 
-        // 指定されたHz（1秒あたりの回数）からステップごとのサンプル数を計算
         samplesPerStep = (int)(sampleRate / std::max(1.0f, speedHz));
     }
 
@@ -354,7 +357,16 @@ public:
     }
 
     void setOttParameters(float depth, float time, float up, float down, float gainDb) { trueOtt.setParameters(depth, time, up, down, gainDb); }
-    // ★ 変更：speedHz を渡す
+
+    // ★ 追加: Soothe用パラメーターの受け取り
+    void setSootheParameters(float depth, float time, float selectivity, float sharpness, float focus) {
+        sootheDepth = depth;
+        sootheTime = time;
+        sootheSelectivity = selectivity;
+        sootheSharpness = sharpness;
+        sootheFocus = focus;
+    }
+
     void setArpParameters(int wave, int mode, float speedHz, int pitch, float level) { sparkleArp.setParameters(wave, mode, speedHz, pitch, level); }
 
     void setParameters(float preCutoffHz, float postCutoffHz, float mixVal)
@@ -402,6 +414,8 @@ public:
             outL[i] = inL[i] * (1.0f - mix) + currentWetL * mix; outR[i] = inR[i] * (1.0f - mix) + currentWetR * mix;
         }
 
+        // 次期フェーズでここにSoothe（Spectral Suppressor）のprocessを挿入予定
+
         trueOtt.process(buffer);
     }
 
@@ -426,6 +440,10 @@ private:
 
     std::atomic<bool> activeEngineIsA{ true };
     float fadeVolA = 1.0f, fadeVolB = 0.0f, fadeTargetA = 1.0f, fadeTargetB = 0.0f, mix = 0.0f;
+
+    // ★ 追加: Soothe DSP用内部ステート保持変数
+    float sootheDepth = 0.0f, sootheTime = 0.0f;
+    float sootheSelectivity = 0.5f, sootheSharpness = 0.5f, sootheFocus = 0.0f;
 
     void triggerCrossfade() {
         if (activeEngineIsA.load()) { activeEngineIsA.store(false); fadeTargetA = 0.0f; fadeTargetB = 1.0f; }

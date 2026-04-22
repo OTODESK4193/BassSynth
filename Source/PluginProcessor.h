@@ -64,7 +64,6 @@ public:
         std::lock_guard<std::mutex> lock(midiNotesMutex);
         return activeMidiNotes;
     }
-
 private:
     juce::AudioProcessorValueTreeState apvts;
     juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
@@ -107,7 +106,7 @@ private:
     std::atomic<float>* pAAtk = nullptr; std::atomic<float>* pADec = nullptr; std::atomic<float>* pASus = nullptr; std::atomic<float>* pARel = nullptr;
     std::atomic<float>* pFAtk = nullptr; std::atomic<float>* pFDec = nullptr; std::atomic<float>* pFSus = nullptr; std::atomic<float>* pFRel = nullptr;
 
-    // ColorIR & True OTT Params
+    // ColorIR & True OTT & Soothe Params
     std::atomic<float>* pColorOn = nullptr;
     std::atomic<float>* pColorType = nullptr;
     std::atomic<float>* pColorMix = nullptr;
@@ -122,7 +121,11 @@ private:
     std::atomic<float>* pOttDown = nullptr;
     std::atomic<float>* pOttGain = nullptr;
 
-    // ★ 変更：pArpRate -> pArpSpeed (連続ノブ)
+    // ★ 追加: Soothe Params
+    std::atomic<float>* pSootheSelectivity = nullptr;
+    std::atomic<float>* pSootheSharpness = nullptr;
+    std::atomic<float>* pSootheFocus = nullptr;
+
     std::atomic<float>* pArpWave = nullptr;
     std::atomic<float>* pArpMode = nullptr;
     std::atomic<float>* pArpSpeed = nullptr;

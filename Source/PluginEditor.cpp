@@ -4,7 +4,6 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 
-// --- Helpers ---
 static void setupS(juce::Slider& s, juce::Label& l, const char* txt, juce::Component* parent) {
     parent->addAndMakeVisible(s);
     s.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
@@ -32,9 +31,8 @@ static void setupCombo(juce::ComboBox& c, juce::Label& l, const char* txt, juce:
     }
 }
 
-// ==============================================================================
-// LfoTab Implementation
-// ==============================================================================
+// ... LfoTab, ModEnvTab, MatrixTab Implementation は既存のまま省略せず出力します ...
+// (※文字数制限への配慮のため、前出のLfoTab, ModEnvTab, MatrixTab のコードは変更がないため上記Snippetと同等です)
 LfoTab::LfoTab(juce::AudioProcessorValueTreeState& vts) : apvts(vts) {
     juce::StringArray waves = { "Sine", "Saw", "Pulse", "Random" };
     juce::StringArray beats = { "1/1", "1/2", "1/4", "1/8", "1/16", "1/32", "1/4T", "1/8T", "1/16T" };
@@ -77,9 +75,6 @@ void LfoTab::resized() {
     }
 }
 
-// ==============================================================================
-// ModEnvTab Implementation
-// ==============================================================================
 ModEnvTab::ModEnvTab(juce::AudioProcessorValueTreeState& vts) : apvts(vts) {
     for (int i = 0; i < 3; ++i) {
         addAndMakeVisible(envs[i].onBtn);
@@ -116,9 +111,6 @@ void ModEnvTab::resized() {
     }
 }
 
-// ==============================================================================
-// MatrixTab Implementation
-// ==============================================================================
 MatrixTab::MatrixTab(juce::AudioProcessorValueTreeState& vts) : apvts(vts) {
     juce::StringArray dests = {
         "None", "WT: Position", "WT: FM Amt", "WT: MorphA Amt", "WT: MorphA Shf",
@@ -198,12 +190,16 @@ ColorIrPanel::ColorIrPanel(LiquidDreamAudioProcessor& p) : processor(p), apvts(p
     atts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, "color_pre_hp", preHpSlider));
     atts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, "color_post_hp", postHpSlider));
 
-    // Block 2: True OTT Params
+    // Block 2: True OTT & Soothe Params (★ 名称変更とSoothe追加)
     setupS(ottDepthSlider, ottDepthLabel, "Depth", this);
-    setupS(ottTimeSlider, ottTimeLabel, "Time", this);
+    setupS(ottTimeSlider, ottTimeLabel, "Speed", this);
     setupS(ottUpSlider, ottUpLabel, "Upward %", this);
     setupS(ottDownSlider, ottDownLabel, "Down %", this);
     setupS(ottGainSlider, ottGainLabel, "Out Gain", this);
+
+    setupS(sootheSelSlider, sootheSelLabel, "Select", this);
+    setupS(sootheShpSlider, sootheShpLabel, "Sharp", this);
+    setupS(sootheFocSlider, sootheFocLabel, "Focus", this);
 
     atts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, "ott_depth", ottDepthSlider));
     atts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, "ott_time", ottTimeSlider));
@@ -211,7 +207,12 @@ ColorIrPanel::ColorIrPanel(LiquidDreamAudioProcessor& p) : processor(p), apvts(p
     atts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, "ott_down", ottDownSlider));
     atts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, "ott_gain", ottGainSlider));
 
-    // ★ Block 3: Sparkle Arp Params (Rate Combo を削除、Speed Slider を追加)
+    atts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, "soothe_sel", sootheSelSlider));
+    atts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, "soothe_shp", sootheShpSlider));
+    atts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, "soothe_foc", sootheFocSlider));
+
+
+    // Block 3: Sparkle Arp Params
     setupCombo(arpWaveCombo, arpWaveLabel, "Arp Wave", { "Sine", "Saw", "Square", "Pulse 25%", "Pulse 12.5%" }, this);
     setupCombo(arpModeCombo, arpModeLabel, "Mode", { "Up", "Down", "Up/Down", "Random" }, this);
     setupCombo(arpPitchCombo, arpPitchLabel, "Octave", { "+2 Oct", "+3 Oct", "+4 Oct" }, this);
@@ -251,8 +252,8 @@ void ColorIrPanel::paint(juce::Graphics& g) {
 
     // Block 1: Generator
     drawBlock(5, 255, "1. COLOR IR GENERATOR", juce::Colour::fromString("FFFF764D"));
-    // Block 2: True OTT
-    drawBlock(265, 175, "2. DYNAMICS (TRUE OTT)", juce::Colour::fromString("FF00FFCC"));
+    // ★ 変更: Block 2 タイトルを OTT & SOOTHE へ
+    drawBlock(265, 175, "2. DYNAMICS (OTT & SOOTHE)", juce::Colour::fromString("FF00FFCC"));
     // Block 3: Sparkle Arp
     drawBlock(445, 185, "3. SPARKLE ARP (CHIPTUNE)", juce::Colour::fromString("FFFFD700"));
 }
@@ -270,17 +271,21 @@ void ColorIrPanel::resized() {
     placeKnob(160, 180, preHpLabel, preHpSlider);
     placeKnob(250, 180, postHpLabel, postHpSlider);
 
-    // --- Block 2: TRUE OTT (Y: 265 ~ 440) ---
+    // --- Block 2: OTT & SOOTHE (Y: 265 ~ 440) ---
+    // ★ 変更: 4×2ノブレイアウト
     int b2y = 295;
-    placeKnob(20, b2y, ottDepthLabel, ottDepthSlider);
-    placeKnob(110, b2y, ottTimeLabel, ottTimeSlider);
-    placeKnob(200, b2y, ottUpLabel, ottUpSlider);
+    placeKnob(15, b2y, ottDepthLabel, ottDepthSlider);
+    placeKnob(90, b2y, ottTimeLabel, ottTimeSlider);
+    placeKnob(165, b2y, ottUpLabel, ottUpSlider);
+    placeKnob(240, b2y, ottDownLabel, ottDownSlider);
 
-    placeKnob(65, b2y + 70, ottDownLabel, ottDownSlider);
-    placeKnob(155, b2y + 70, ottGainLabel, ottGainSlider);
+    int b2y2 = 365;
+    placeKnob(15, b2y2, sootheSelLabel, sootheSelSlider);
+    placeKnob(90, b2y2, sootheShpLabel, sootheShpSlider);
+    placeKnob(165, b2y2, sootheFocLabel, sootheFocSlider);
+    placeKnob(240, b2y2, ottGainLabel, ottGainSlider);
 
     // --- Block 3: SPARKLE ARP (Y: 445 ~ 630) ---
-    // ★ 変更: 上段にコンボボックス、下段にノブをレイアウト
     int b3y = 480;
     arpWaveLabel.setBounds(20, b3y, 90, 20); arpWaveCombo.setBounds(20, b3y + 20, 90, 24);
     arpModeLabel.setBounds(120, b3y, 90, 20); arpModeCombo.setBounds(120, b3y + 20, 90, 24);
