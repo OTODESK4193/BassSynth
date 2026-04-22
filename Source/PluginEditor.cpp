@@ -4,7 +4,6 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 
-// --- Helpers ---
 static void setupS(juce::Slider& s, juce::Label& l, const char* txt, juce::Component* parent) {
     parent->addAndMakeVisible(s);
     s.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
@@ -232,7 +231,6 @@ ColorIrPanel::ColorIrPanel(LiquidDreamAudioProcessor& p) : processor(p), apvts(p
     setupS(arpSpeedSlider, arpSpeedLabel, "Speed(Hz)", this);
     setupS(arpLevelSlider, arpLevelLabel, "Level", this);
 
-    // ★ Colorパネル用 Master Gain のセットアップと "m_gain" へのアタッチ
     setupS(masterGainSlider, masterGainLabel, "Master Vol", this);
     atts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, "m_gain", masterGainSlider));
 
@@ -268,7 +266,6 @@ void ColorIrPanel::paint(juce::Graphics& g) {
 
     drawBlock(5, 255, "1. COLOR IR GENERATOR", juce::Colour::fromString("FFFF764D"));
     drawBlock(265, 175, "2. DYNAMICS (OTT & SOOTHE)", juce::Colour::fromString("FF00FFCC"));
-    // ★ Block 3 タイトルに MASTER を追加
     drawBlock(445, 185, "3. SPARKLE ARP & MASTER", juce::Colour::fromString("FFFFD700"));
 }
 
@@ -304,8 +301,6 @@ void ColorIrPanel::resized() {
 
     placeKnob(20, b3y + 60, arpSpeedLabel, arpSpeedSlider);
     placeKnob(110, b3y + 60, arpLevelLabel, arpLevelSlider);
-
-    // ★ Master Gain ノブのレイアウト (Arpの右側に配置)
     placeKnob(240, b3y + 60, masterGainLabel, masterGainSlider);
 }
 
@@ -421,6 +416,12 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     openBrowserButton.onClick = [this] { browser.setVisible(!browser.isVisible()); if (browser.isVisible()) browser.toFront(true); };
     prevWaveButton.onClick = [this] { browser.selectPrev(); }; nextWaveButton.onClick = [this] { browser.selectNext(); };
     rndWaveButton.onClick = [this] { browser.selectRandom(); };
+
+    // ★ 追加: ブラウザのコールバックをプロセッサーへ接続し、カスタムフォルダをロード
+    browser.onCustomFileSelected = [this](const juce::File& f) { audioProcessor.loadCustomWavetable(f); };
+    browser.onFactoryIndexSelected = [this](int idx) { audioProcessor.loadFactoryWavetable(idx); };
+    browser.onUserFoldersChanged = [this](const juce::StringArray& folders) { audioProcessor.setUserFolders(folders); };
+    browser.loadUserFolders(audioProcessor.getUserFolders());
 
     startTimerHz(30);
     setSize(1300, 700);

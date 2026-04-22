@@ -8,15 +8,21 @@
 class WavetableBrowser : public juce::Component
 {
 public:
+    // 上位クラス（Editor/Processor）へ通知するためのコールバック
+    std::function<void(const juce::File&)> onCustomFileSelected;
+    std::function<void(int)> onFactoryIndexSelected;
+    std::function<void(const juce::StringArray&)> onUserFoldersChanged;
+
     WavetableBrowser(juce::AudioProcessorValueTreeState& vts) : apvts(vts)
     {
         catModel.owner = this;
         subCatModel.owner = this;
         fileModel.owner = this;
 
-        categories.add("All");
-        // 【NEW】「Basic」カテゴリーを先頭に追加
+        // カテゴリーの初期化
         categories.add("Basic");
+        categories.add("User"); // 【NEW】ユーザーカスタムフォルダ用
+        categories.add("All");
 
         for (int i = 0; i < EmbeddedWavetables::numTables; ++i) {
             juce::StringArray tags;
@@ -42,27 +48,47 @@ public:
         addAndMakeVisible(subCatList);
         addAndMakeVisible(fileList);
 
-        currentWavetableIndex = (int)apvts.getRawParameterValue("osc_wave")->load();
+        // 【NEW】フォルダ追加ボタン
+        addAndMakeVisible(addFolderBtn);
+        addFolderBtn.setColour(juce::TextButton::buttonColourId, juce::Colour::fromString("FF2A2A2A"));
+        addFolderBtn.onClick = [this] { openFolderChooser(); };
+
+        currentFactoryIndex = (int)apvts.getRawParameterValue("osc_wave")->load();
         updateSubCategories();
+    }
+
+    // プロセッサー側でロードされた設定（パスリスト）を復元するメソッド
+    void loadUserFolders(const juce::StringArray& folderPaths) {
+        userFolders.clear();
+        for (auto& path : folderPaths) {
+            juce::File dir(path);
+            if (dir.isDirectory()) {
+                addUserFolderInternal(dir, false);
+            }
+        }
+        if (categories[selectedCategoryIdx] == "User") updateSubCategories();
     }
 
     void updateSubCategories()
     {
         subCategories.clear();
-        subCategories.add("All");
         juce::String selCat = categories[selectedCategoryIdx];
 
-        // 【NEW】Basicカテゴリー選択時はShapesサブカテゴリーを追加
-        if (selCat == "All" || selCat == "Basic") {
-            subCategories.add("Shapes");
+        if (selCat == "User") {
+            // ユーザーフォルダ名一覧をサブカテゴリーに表示
+            for (auto& uf : userFolders) subCategories.add(uf.name);
         }
+        else {
+            subCategories.add("All");
+            if (selCat == "All" || selCat == "Basic") subCategories.add("Shapes");
 
-        for (int i = 0; i < EmbeddedWavetables::numTables; ++i) {
-            juce::StringArray tags;
-            tags.addTokens(EmbeddedWavetables::allTags[i], "|", "");
-            if (selCat == "All" || (tags.size() > 0 && tags[0] == selCat)) {
-                for (int j = 1; j < tags.size(); ++j) {
-                    if (!subCategories.contains(tags[j])) subCategories.add(tags[j]);
+            for (int i = 0; i < EmbeddedWavetables::numTables; ++i) {
+                juce::StringArray tags;
+                tags.addTokens(EmbeddedWavetables::allTags[i], "|", "");
+                if (selCat == "All" || (tags.size() > 0 && tags[0] == selCat)) {
+                    for (int j = 1; j < tags.size(); ++j) {
+                        if (!subCategories.contains(tags[j])) subCategories.add(tags[j]);
+                    }
                 }
             }
         }
@@ -73,71 +99,76 @@ public:
 
     void updateFiles()
     {
-        filteredIndices.clear();
+        currentList.clear();
         juce::String selCat = categories[selectedCategoryIdx];
         juce::String selSub = (selectedSubCategoryIdx >= 0 && selectedSubCategoryIdx < subCategories.size())
-            ? subCategories[selectedSubCategoryIdx] : "All";
+            ? subCategories[selectedSubCategoryIdx] : "";
 
-        // 【NEW】条件に合致すれば -1 (Basic Shapes) をリストに追加
-        if ((selCat == "All" || selCat == "Basic") && (selSub == "All" || selSub == "Shapes")) {
-            filteredIndices.add(-1);
-        }
-
-        for (int i = 0; i < EmbeddedWavetables::numTables; ++i) {
-            juce::StringArray tags;
-            tags.addTokens(EmbeddedWavetables::allTags[i], "|", "");
-
-            bool matchCat = (selCat == "All") || (tags.size() > 0 && tags[0] == selCat);
-            bool matchSub = (selSub == "All");
-            if (!matchSub) {
-                for (int j = 1; j < tags.size(); ++j) {
-                    if (tags[j] == selSub) { matchSub = true; break; }
+        if (selCat == "User") {
+            // 選択されたユーザーフォルダ内のWAVファイルをリスト化
+            for (auto& uf : userFolders) {
+                if (uf.name == selSub) {
+                    for (auto& f : uf.files) {
+                        currentList.add({ false, -1, f, f.getFileNameWithoutExtension() });
+                    }
+                    break;
                 }
             }
+        }
+        else {
+            // ファクトリーファイルのリスト化
+            if ((selCat == "All" || selCat == "Basic") && (selSub == "All" || selSub == "Shapes" || selSub.isEmpty())) {
+                currentList.add({ true, -1, juce::File(), "Basic Shapes" });
+            }
 
-            if (matchCat && matchSub) filteredIndices.add(i);
+            for (int i = 0; i < EmbeddedWavetables::numTables; ++i) {
+                juce::StringArray tags;
+                tags.addTokens(EmbeddedWavetables::allTags[i], "|", "");
+
+                bool matchCat = (selCat == "All") || (tags.size() > 0 && tags[0] == selCat);
+                bool matchSub = (selSub == "All" || selSub.isEmpty());
+                if (!matchSub) {
+                    for (int j = 1; j < tags.size(); ++j) {
+                        if (tags[j] == selSub) { matchSub = true; break; }
+                    }
+                }
+
+                if (matchCat && matchSub) {
+                    currentList.add({ true, i, juce::File(), EmbeddedWavetables::allNames[i] });
+                }
+            }
         }
         fileList.updateContent();
     }
 
-    void applySelection(int dataIdx) {
-        currentWavetableIndex = dataIdx;
-        if (auto* param = apvts.getParameter("osc_wave"))
-            param->setValueNotifyingHost(param->getNormalisableRange().convertTo0to1((float)dataIdx));
-    }
+    void applySelection(int row) {
+        if (row < 0 || row >= currentList.size()) return;
+        auto& item = currentList.getReference(row);
 
-    void selectNext() {
-        if (filteredIndices.isEmpty()) return;
-        int currentListIdx = -1;
-        for (int i = 0; i < filteredIndices.size(); ++i) {
-            if (filteredIndices[i] == currentWavetableIndex) {
-                currentListIdx = i; break;
-            }
+        if (item.isFactory) {
+            currentFactoryIndex = item.factoryIndex;
+            currentCustomFile = juce::File();
+            // APVTSの更新（オートメーション同期用）
+            if (auto* param = apvts.getParameter("osc_wave"))
+                param->setValueNotifyingHost(param->getNormalisableRange().convertTo0to1((float)item.factoryIndex));
+
+            if (onFactoryIndexSelected) onFactoryIndexSelected(item.factoryIndex);
         }
-        int nextIdx = (currentListIdx + 1) % filteredIndices.size();
-        applySelection(filteredIndices[nextIdx]);
-        fileList.selectRow(nextIdx);
-        fileList.scrollToEnsureRowIsOnscreen(nextIdx);
-    }
-
-    void selectPrev() {
-        if (filteredIndices.isEmpty()) return;
-        int currentListIdx = -1;
-        for (int i = 0; i < filteredIndices.size(); ++i) {
-            if (filteredIndices[i] == currentWavetableIndex) {
-                currentListIdx = i; break;
-            }
+        else {
+            currentFactoryIndex = -2; // Custom flag
+            currentCustomFile = item.file;
+            // カスタムファイルはAPVTSを通さず直接プロセッサーへパスを投げる
+            if (onCustomFileSelected) onCustomFileSelected(item.file);
         }
-        int prevIdx = (currentListIdx - 1 + filteredIndices.size()) % filteredIndices.size();
-        applySelection(filteredIndices[prevIdx]);
-        fileList.selectRow(prevIdx);
-        fileList.scrollToEnsureRowIsOnscreen(prevIdx);
+        fileList.repaint();
     }
 
+    void selectNext() { moveSelection(1); }
+    void selectPrev() { moveSelection(-1); }
     void selectRandom() {
-        if (filteredIndices.isEmpty()) return;
-        int rndIdx = juce::Random::getSystemRandom().nextInt(filteredIndices.size());
-        applySelection(filteredIndices[rndIdx]);
+        if (currentList.isEmpty()) return;
+        int rndIdx = juce::Random::getSystemRandom().nextInt(currentList.size());
+        applySelection(rndIdx);
         fileList.selectRow(rndIdx);
         fileList.scrollToEnsureRowIsOnscreen(rndIdx);
     }
@@ -151,20 +182,88 @@ public:
     void resized() override {
         auto area = getLocalBounds().reduced(2);
         int w = area.getWidth() / 3;
-        catList.setBounds(area.removeFromLeft(w));
-        subCatList.setBounds(area.removeFromLeft(w));
+
+        auto catArea = area.removeFromLeft(w);
+        auto subArea = area.removeFromLeft(w);
+
+        addFolderBtn.setBounds(subArea.removeFromBottom(30).reduced(2));
+
+        catList.setBounds(catArea);
+        subCatList.setBounds(subArea);
         fileList.setBounds(area);
     }
 
 private:
     juce::AudioProcessorValueTreeState& apvts;
     juce::ListBox catList{ "Cat", nullptr }, subCatList{ "Sub", nullptr }, fileList{ "File", nullptr };
+    juce::TextButton addFolderBtn{ "+ Add User Folder" };
+    std::unique_ptr<juce::FileChooser> chooser;
 
     juce::StringArray categories, subCategories;
-    juce::Array<int> filteredIndices;
     int selectedCategoryIdx = 0;
     int selectedSubCategoryIdx = 0;
-    int currentWavetableIndex = -1;
+    int currentFactoryIndex = -1;
+    juce::File currentCustomFile;
+
+    // 統合リストアイテム構造体
+    struct ListItem {
+        bool isFactory;
+        int factoryIndex;
+        juce::File file;
+        juce::String name;
+    };
+    juce::Array<ListItem> currentList;
+
+    // ユーザーフォルダ管理構造体
+    struct CustomFolder {
+        juce::String name;
+        juce::File folder;
+        juce::Array<juce::File> files;
+    };
+    juce::Array<CustomFolder> userFolders;
+
+    void openFolderChooser() {
+        chooser = std::make_unique<juce::FileChooser>("Select Wavetable Folder", juce::File::getSpecialLocation(juce::File::userMusicDirectory), "");
+        auto flags = juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectDirectories;
+        chooser->launchAsync(flags, [this](const juce::FileChooser& fc) {
+            if (fc.getResult().isDirectory()) addUserFolderInternal(fc.getResult(), true);
+            });
+    }
+
+    void addUserFolderInternal(const juce::File& folder, bool triggerCallback) {
+        // 重複チェック
+        for (auto& uf : userFolders) {
+            if (uf.folder == folder) return;
+        }
+
+        CustomFolder cf;
+        cf.folder = folder;
+        cf.name = folder.getFileName();
+        auto files = folder.findChildFiles(juce::File::findFiles, false, "*.wav");
+        for (auto& f : files) cf.files.add(f);
+        userFolders.add(cf);
+
+        if (triggerCallback && onUserFoldersChanged) {
+            juce::StringArray paths;
+            for (auto& uf : userFolders) paths.add(uf.folder.getFullPathName());
+            onUserFoldersChanged(paths); // プロセッサーへパスリストを送信し、状態保存させる
+        }
+
+        if (categories[selectedCategoryIdx] == "User") updateSubCategories();
+    }
+
+    void moveSelection(int delta) {
+        if (currentList.isEmpty()) return;
+        int currentListIdx = 0; // 見つからない場合は先頭
+        for (int i = 0; i < currentList.size(); ++i) {
+            if (currentList[i].isFactory && currentList[i].factoryIndex == currentFactoryIndex) { currentListIdx = i; break; }
+            if (!currentList[i].isFactory && currentList[i].file == currentCustomFile) { currentListIdx = i; break; }
+        }
+        int nextIdx = (currentListIdx + delta + currentList.size()) % currentList.size();
+        applySelection(nextIdx);
+        fileList.selectRow(nextIdx);
+        fileList.scrollToEnsureRowIsOnscreen(nextIdx);
+    }
 
     struct CatModel : public juce::ListBoxModel {
         WavetableBrowser* owner = nullptr;
@@ -204,24 +303,23 @@ private:
 
     struct FileModel : public juce::ListBoxModel {
         WavetableBrowser* owner = nullptr;
-        int getNumRows() override { return owner ? owner->filteredIndices.size() : 0; }
+        int getNumRows() override { return owner ? owner->currentList.size() : 0; }
         void paintListBoxItem(int row, juce::Graphics& g, int w, int h, bool selected) override {
             if (!owner) return;
-            bool isActive = (owner->filteredIndices[row] == owner->currentWavetableIndex);
+            auto& item = owner->currentList.getReference(row);
+
+            bool isActive = false;
+            if (item.isFactory && item.factoryIndex == owner->currentFactoryIndex) isActive = true;
+            if (!item.isFactory && item.file == owner->currentCustomFile) isActive = true;
+
             if (isActive) g.fillAll(juce::Colour::fromString("FF6A6A6A"));
             g.setColour(isActive ? juce::Colours::white : juce::Colours::lightgrey);
             g.setFont(16.0f);
-            int dataIdx = owner->filteredIndices[row];
-
-            // 【NEW】 -1 の場合は名前を「Basic Shapes」として描画
-            juce::String displayName = (dataIdx == -1) ? "Basic Shapes" : EmbeddedWavetables::allNames[dataIdx];
-            g.drawText(displayName, 15, 0, w - 30, h, juce::Justification::centredLeft);
+            g.drawText(item.name, 15, 0, w - 30, h, juce::Justification::centredLeft);
         }
         void listBoxItemClicked(int row, const juce::MouseEvent&) override {
             if (!owner) return;
-            int dataIdx = owner->filteredIndices[row];
-            owner->applySelection(dataIdx);
-            owner->fileList.repaint();
+            owner->applySelection(row);
         }
     } fileModel;
 };

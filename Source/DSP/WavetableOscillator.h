@@ -105,6 +105,30 @@ public:
         runBandlimitingTask(myJobId, newSet, tempRaw);
     }
 
+    // ★ 追加: PC内の任意の絶対パスから直接ロードするためのメソッド
+    void loadCustomWavetableFile(const juce::File& file) {
+        const int myJobId = ++loadJobId;
+        if (!file.existsAsFile()) return;
+
+        std::unique_ptr<juce::AudioFormatReader> reader(formatManager.createReaderFor(file));
+        if (reader == nullptr) return;
+
+        WavetableSet::Ptr newSet = new WavetableSet();
+        juce::AudioBuffer<float> tempRaw(1, (int)reader->lengthInSamples);
+        reader->read(&tempRaw, 0, (int)reader->lengthInSamples, 0, true, false);
+
+        newSet->totalSamples = tempRaw.getNumSamples();
+        newSet->frameSize = (newSet->totalSamples >= 2048) ? 2048 : newSet->totalSamples;
+        newSet->numFrames = std::max(1, newSet->totalSamples / newSet->frameSize);
+
+        for (int lvl = 0; lvl < NumLevels; ++lvl) {
+            newSet->levels[lvl].setSize(1, newSet->totalSamples);
+            newSet->levels[lvl].makeCopyOf(tempRaw);
+        }
+        currentWavetableSet = newSet;
+        runBandlimitingTask(myJobId, newSet, tempRaw);
+    }
+
     void runBandlimitingTask(int myJobId, WavetableSet::Ptr newSet, juce::AudioBuffer<float> tempRaw) {
         backgroundPool.addJob([this, myJobId, newSet, tempRaw]() {
             juce::dsp::FFT fft(11);
@@ -218,7 +242,6 @@ public:
         for (int i = 0; i < MaxVoices; ++i) driftPhase[i] = random.nextFloat();
     }
 
-    // 【変更】SUBの出力を分離して返すように変更
     void getSampleStereo(float& outL, float& outR, float& subL, float& subR) {
         outL = 0.0f; outR = 0.0f; subL = 0.0f; subR = 0.0f;
         WavetableSet::Ptr set = currentWavetableSet.get();
@@ -304,7 +327,6 @@ public:
             case 3: rs = 2.0f * subPhase - 1.0f; break;
             }
             subLpfState += (juce::MathConstants<float>::twoPi * 250.0f / (float)sampleRate) * (rs - subLpfState);
-            // 【変更】outLに足さず、専用のsub変数に出力
             subL = subLpfState * subVolume;
             subR = subLpfState * subVolume;
         }

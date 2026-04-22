@@ -198,6 +198,54 @@ juce::AudioProcessorValueTreeState::ParameterLayout LiquidDreamAudioProcessor::c
     return { params.begin(), params.end() };
 }
 
+// ★ 追加: XMLを利用した状態の保存と復元（APVTS + カスタムファイル情報）
+void LiquidDreamAudioProcessor::getStateInformation(juce::MemoryBlock& destData)
+{
+    auto state = apvts.copyState();
+    std::unique_ptr<juce::XmlElement> xml(state.createXml());
+    if (xml != nullptr) {
+        xml->setAttribute("CustomWavePath", currentCustomWavetablePath);
+        xml->setAttribute("UserFolders", userWavetableFolders.joinIntoString("|"));
+        copyXmlToBinary(*xml, destData);
+    }
+}
+
+void LiquidDreamAudioProcessor::setStateInformation(const void* data, int sizeInBytes)
+{
+    std::unique_ptr<juce::XmlElement> xmlState(getXmlFromBinary(data, sizeInBytes));
+    if (xmlState != nullptr) {
+        if (xmlState->hasTagName(apvts.state.getType())) {
+            apvts.replaceState(juce::ValueTree::fromXml(*xmlState));
+        }
+        userWavetableFolders.clear();
+        juce::String foldersStr = xmlState->getStringAttribute("UserFolders", "");
+        if (foldersStr.isNotEmpty()) userWavetableFolders.addTokens(foldersStr, "|", "");
+
+        juce::String customPath = xmlState->getStringAttribute("CustomWavePath", "");
+        if (customPath.isNotEmpty() && juce::File(customPath).existsAsFile()) {
+            loadCustomWavetable(juce::File(customPath));
+        }
+    }
+}
+
+// ★ 追加: カスタムWavetableおよびファクトリーのロード制御
+void LiquidDreamAudioProcessor::loadCustomWavetable(const juce::File& file) {
+    currentCustomWavetablePath = file.getFullPathName();
+    customWavetableLoaded.store(true);
+    oscillator.loadCustomWavetableFile(file);
+}
+
+void LiquidDreamAudioProcessor::loadFactoryWavetable(int index) {
+    currentCustomWavetablePath = "";
+    customWavetableLoaded.store(false);
+    if (index >= 0 && index < EmbeddedWavetables::numTables) oscillator.loadWavetableFile(EmbeddedWavetables::allNames[index]);
+    else oscillator.createDefaultBasicShapes();
+}
+
+void LiquidDreamAudioProcessor::setUserFolders(const juce::StringArray& folders) {
+    userWavetableFolders = folders;
+}
+
 void LiquidDreamAudioProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
     oscillator.prepare(sampleRate);
@@ -282,12 +330,22 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     smoothedShpRate.setTargetValue(pShpRate->load(std::memory_order_relaxed)); smoothedShpBit.setTargetValue(pShpBit->load(std::memory_order_relaxed));
     smoothedSubVol.setTargetValue(pSubVol->load(std::memory_order_relaxed));
 
+    // ★ 変更: カスタム波形フラグとAPVTSの競合回避ロジック
     int waveIdx = (int)pWave->load(std::memory_order_relaxed);
     static int lastWaveIdx = -2;
     if (waveIdx != lastWaveIdx) {
-        if (waveIdx >= 0 && waveIdx < EmbeddedWavetables::numTables) oscillator.loadWavetableFile(EmbeddedWavetables::allNames[waveIdx]);
-        else if (waveIdx == -1) oscillator.createDefaultBasicShapes();
-        lastWaveIdx = waveIdx;
+        if (lastWaveIdx == -2 && customWavetableLoaded.load()) {
+            // プロジェクトロード直後の同期のみ行い、カスタム波形を維持する
+            lastWaveIdx = waveIdx;
+        }
+        else {
+            // オートメーション等でAPVTSが変更された場合はファクトリー波形を強制ロード
+            lastWaveIdx = waveIdx;
+            customWavetableLoaded.store(false);
+            currentCustomWavetablePath = "";
+            if (waveIdx >= 0 && waveIdx < EmbeddedWavetables::numTables) oscillator.loadWavetableFile(EmbeddedWavetables::allNames[waveIdx]);
+            else if (waveIdx == -1) oscillator.createDefaultBasicShapes();
+        }
     }
 
     voiceManager.setLegatoMode(pLegato->load(std::memory_order_relaxed) > 0.5f);
@@ -431,7 +489,6 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         colorEngine.process(tempWavetableBuffer);
     }
 
-    // ★ 修正1: フィルターとVCA (Master Gainはまだ掛けない)
     for (int i = 0; i < numSamples; ++i) {
         float cc = smoothedCutoff.getNextValue(), cr = smoothedReso.getNextValue(), ce = pFltEnvAmt->load();
         float aVal = tempEnvBuffer.getSample(0, i);
@@ -448,11 +505,9 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
 
         sL = filter.processSample(sL); sR = filter.processSample(sR);
 
-        // ここではまだAmp Envのみを掛ける
         left[i] = sL * aVal; right[i] = sR * aVal;
     }
 
-    // ★ 修正2: Sparkle Arpの加算 (Amp Envを渡して発音させる)
     if (pColorOn->load() > 0.5f) {
         colorEngine.setArpParameters((int)pArpWave->load(), (int)pArpMode->load(), pArpSpeed->load(), (int)pArpPitch->load(), pArpLevel->load());
 
@@ -464,7 +519,6 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         colorEngine.processArp(buffer, currentNotes, tempEnvBuffer.getReadPointer(0));
     }
 
-    // ★ 修正3: 真のMaster Gain Pass (Arp加算後のすべての音量に適用)
     for (int i = 0; i < numSamples; ++i) {
         float cg = smoothedGain.getNextValue();
         float gainMod = tempEnvBuffer.getSample(4, i);
@@ -473,7 +527,6 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         left[i] *= finalGain;
         right[i] *= finalGain;
 
-        // スコープの描画更新
         tempScopeBuffer[(size_t)scopeWriteIndex] = (left[i] + right[i]) * 0.5f;
         scopeWriteIndex++;
         if (scopeWriteIndex >= 512) {

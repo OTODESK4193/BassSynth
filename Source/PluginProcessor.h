@@ -38,8 +38,10 @@ public:
     void setCurrentProgram(int index) override {}
     const juce::String getProgramName(int index) override { return {}; }
     void changeProgramName(int index, const juce::String& newName) override {}
-    void getStateInformation(juce::MemoryBlock& destData) override {}
-    void setStateInformation(const void* data, int sizeInBytes) override {}
+
+    // ★ 変更: XMLによるプロジェクトの保存とロード
+    void getStateInformation(juce::MemoryBlock& destData) override;
+    void setStateInformation(const void* data, int sizeInBytes) override;
 
     juce::AudioProcessorValueTreeState& getAPVTS() { return apvts; }
     float* getOutputScopePtr() { return outputScopeData.data(); }
@@ -64,6 +66,13 @@ public:
         std::lock_guard<std::mutex> lock(midiNotesMutex);
         return activeMidiNotes;
     }
+
+    // ★ 追加: ブラウザからのファイルパスとフォルダ管理メソッド
+    void loadCustomWavetable(const juce::File& file);
+    void loadFactoryWavetable(int index);
+    void setUserFolders(const juce::StringArray& folders);
+    juce::StringArray getUserFolders() const { return userWavetableFolders; }
+
 private:
     juce::AudioProcessorValueTreeState apvts;
     juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
@@ -90,6 +99,11 @@ private:
     std::vector<int> activeMidiNotes;
     std::mutex midiNotesMutex;
 
+    // ★ 追加: カスタムファイル関連のステート変数
+    juce::String currentCustomWavetablePath;
+    juce::StringArray userWavetableFolders;
+    std::atomic<bool> customWavetableLoaded{ false };
+
     // Core Params
     std::atomic<float>* pOscOn = nullptr; std::atomic<float>* pWave = nullptr; std::atomic<float>* pPos = nullptr;
     std::atomic<float>* pOscLevel = nullptr; std::atomic<float>* pOscPitch = nullptr;
@@ -109,7 +123,7 @@ private:
     std::atomic<float>* pColorOn = nullptr;
     std::atomic<float>* pColorType = nullptr;
     std::atomic<float>* pColorMix = nullptr;
-    std::atomic<float>* pColorIrVol = nullptr; // ★ 追加
+    std::atomic<float>* pColorIrVol = nullptr;
     std::atomic<float>* pColorPreHp = nullptr;
     std::atomic<float>* pColorPostHp = nullptr;
     std::atomic<float>* pColorAtk = nullptr;
