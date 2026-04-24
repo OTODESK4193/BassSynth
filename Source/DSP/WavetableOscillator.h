@@ -50,7 +50,7 @@ public:
 
     ~WavetableOscillator() {
         loadJobId++;
-        // ★ 変更: ポインタ経由でのアクセス
+        // ★ 修正: ポインタアクセスへ変更
         backgroundPool->removeAllJobs(true, 1000);
     }
 
@@ -130,7 +130,7 @@ public:
     }
 
     void runBandlimitingTask(int myJobId, WavetableSet::Ptr newSet, juce::AudioBuffer<float> tempRaw) {
-        // ★ 変更: ポインタ経由でのアクセス
+        // ★ 修正: ポインタアクセスへ変更
         backgroundPool->addJob([this, myJobId, newSet, tempRaw]() {
             juce::dsp::FFT fft(11);
             juce::AudioBuffer<float> workBuf(1, 4096);
@@ -183,7 +183,8 @@ public:
         int f1_base = (int)(std::min(frameIdx + 1, set->numFrames - 1) * set->frameSize);
 
         for (int i = 0; i < 512; ++i) {
-            float phase = i / 512.0f;
+            float originalPhase = i / 512.0f;
+            float phase = originalPhase;
             float mod = 0.0f;
             if (fmWaveform == 0) mod = std::sin(phase * juce::MathConstants<float>::twoPi);
             else if (fmWaveform == 1) mod = phase * 2.0f - 1.0f;
@@ -194,9 +195,9 @@ public:
             tp -= (int)tp; if (tp < 0) tp += 1.0f;
 
             float syncA = 1.0f, syncB = 1.0f, syncC = 1.0f;
-            tp = applyPhaseWarp(tp, morphAMode, morphAAmount, morphAShift, syncA);
-            tp = applyPhaseWarp(tp, morphBMode, morphBAmount, morphBShift, syncB);
-            tp = applyPhaseWarp(tp, morphCMode, morphCAmount, morphCShift, syncC);
+            tp = applyPhaseWarp(tp, morphAMode, morphAAmount, morphAShift, syncA, originalPhase);
+            tp = applyPhaseWarp(tp, morphBMode, morphBAmount, morphBShift, syncB, originalPhase);
+            tp = applyPhaseWarp(tp, morphCMode, morphCAmount, morphCShift, syncC, originalPhase);
 
             float floatPos = tp * set->frameSize;
             int pos = (int)floatPos;
@@ -204,9 +205,9 @@ public:
             float val = (getHermiteSample(ptr, f0_base, set->frameSize, pos, frac) * (1.0f - frameFrac) +
                 getHermiteSample(ptr, f1_base, set->frameSize, pos, frac) * frameFrac);
             val *= (syncA * syncB * syncC);
-            val = applyAmpWarp(val, morphAMode, morphAAmount, morphAShift);
-            val = applyAmpWarp(val, morphBMode, morphBAmount, morphBShift);
-            val = applyAmpWarp(val, morphCMode, morphCAmount, morphCShift);
+            val = applyAmpWarp(val, morphAMode, morphAAmount, morphAShift, originalPhase);
+            val = applyAmpWarp(val, morphBMode, morphBAmount, morphBShift, originalPhase);
+            val = applyAmpWarp(val, morphCMode, morphCAmount, morphCShift, originalPhase);
             displayBuffer[i] = val;
         }
     }
@@ -284,6 +285,9 @@ public:
             for (int i = 0; i < SimdWidth; ++i) {
                 int vIdx = b * SimdWidth + i;
                 if (vIdx >= unisonCount) { nextP.set(i, p.get(i)); continue; }
+
+                float originalPhase = p.get(i); // ★ ゼロスナップ判定用
+
                 driftPhase[vIdx] += driftRate[vIdx] / (float)sampleRate;
                 if (driftPhase[vIdx] >= 1.0f) driftPhase[vIdx] -= 1.0f;
                 float drift = std::sin(driftPhase[vIdx] * juce::MathConstants<float>::twoPi) * driftAmount * 0.01f;
@@ -296,18 +300,22 @@ public:
                 float tp = tp_simd.get(i);
                 tp -= (int)tp; if (tp < 0) tp += 1.0f;
                 float sA = 1.0f, sB = 1.0f, sC = 1.0f;
-                tp = applyPhaseWarp(tp, morphAMode, morphAAmount, morphAShift, sA);
-                tp = applyPhaseWarp(tp, morphBMode, morphBAmount, morphBShift, sB);
-                tp = applyPhaseWarp(tp, morphCMode, morphCAmount, morphCShift, sC);
+
+                // ★ 第6引数にオリジナル位相を渡し、厳格にゼロスナップさせる
+                tp = applyPhaseWarp(tp, morphAMode, morphAAmount, morphAShift, sA, originalPhase);
+                tp = applyPhaseWarp(tp, morphBMode, morphBAmount, morphBShift, sB, originalPhase);
+                tp = applyPhaseWarp(tp, morphCMode, morphCAmount, morphCShift, sC, originalPhase);
 
                 float fPos = tp * set->frameSize; int pos = (int)fPos; float frac = fPos - (float)pos;
                 auto* p0 = set->levels[lvl0].getReadPointer(0); auto* p1 = set->levels[lvl0 + 1].getReadPointer(0);
                 float v0 = getHermiteSample(p0, f0_base, set->frameSize, pos, frac) * (1.0f - frameFrac) + getHermiteSample(p0, f1_base, set->frameSize, pos, frac) * frameFrac;
                 float v1 = getHermiteSample(p1, f0_base, set->frameSize, pos, frac) * (1.0f - frameFrac) + getHermiteSample(p1, f1_base, set->frameSize, pos, frac) * frameFrac;
                 float val = (v0 * (1.0f - lvlFrac) + v1 * lvlFrac) * (sA * sB * sC);
-                val = applyAmpWarp(val, morphAMode, morphAAmount, morphAShift);
-                val = applyAmpWarp(val, morphBMode, morphBAmount, morphBShift);
-                val = applyAmpWarp(val, morphCMode, morphCAmount, morphCShift);
+
+                // ★ 振幅もゼロスナップ
+                val = applyAmpWarp(val, morphAMode, morphAAmount, morphAShift, originalPhase);
+                val = applyAmpWarp(val, morphBMode, morphBAmount, morphBShift, originalPhase);
+                val = applyAmpWarp(val, morphCMode, morphCAmount, morphCShift, originalPhase);
 
                 vAmp.set(i, oscOn ? val * amp[b].get(i) : 0.0f);
                 float pNext = p.get(i) + step; pNext -= (int)pNext; nextP.set(i, pNext);
@@ -346,60 +354,82 @@ private:
     std::array<float, MaxVoices> driftPhase = { 0 }, driftRate = { 0 };
     juce::AudioFormatManager formatManager;
 
-    // ★ 変更: 全インスタンスでスレッドを共有する
+    // ★ 修正: マルチインスタンス時のCPUスパイクを防ぐためのシングルトン共有スレッド
     juce::SharedResourcePointer<juce::ThreadPool> backgroundPool;
 
     std::atomic<int> loadJobId{ 0 };
     juce::ReferenceCountedObjectPtr<WavetableSet> currentWavetableSet;
     std::array<SIMDFloat, MaxBlocks> phases, increments, panL, panR, amp;
 
-    inline float applyPhaseWarp(float p, int mode, float amt, float shift, float& sOut) const {
+    // ★ 修正: ゼロスナップ（境界でのジャンプを強制補間）の追加
+    inline float applyPhaseWarp(float p, int mode, float amt, float shift, float& sOut, float originalPhase) const {
+        if (mode == 0) return p;
+
+        float warped = p;
         if (mode == 1) {
             float sym = std::clamp(0.5f + shift * 0.49f, 0.01f, 0.99f);
             float b = std::exp(-std::clamp(amt, -0.99f, 0.99f) * 2.0f);
-            if (p < sym) return sym * std::pow(p / sym, b);
-            return sym + (1.0f - sym) * (1.0f - std::pow((1.0f - p) / (1.0f - sym), b));
+            if (p < sym) warped = sym * std::pow(p / sym, b);
+            else warped = sym + (1.0f - sym) * (1.0f - std::pow((1.0f - p) / (1.0f - sym), b));
         }
-        if (mode == 2) {
+        else if (mode == 2) {
             float c = std::clamp(0.5f + shift * 0.4f, 0.1f, 0.9f);
             float pw = std::clamp(0.01f + (amt * 0.5f + 0.5f) * 0.98f, 0.01f, 0.99f);
             float ps = p + (0.5f - c); ps -= (int)(ps + 10.0f) - 10;
             float w = (ps < pw) ? (ps / pw * 0.5f) : (0.5f + (ps - pw) / (1.0f - pw) * 0.5f);
-            float res = w + (c - 0.5f); res -= (int)(res + 10.0f) - 10; return res;
+            warped = w + (c - 0.5f); warped -= (int)(warped + 10.0f) - 10;
         }
-        if (mode == 3) {
+        else if (mode == 3) {
             float ratio = 1.0f + std::abs(amt) * 7.0f;
             float res = (p + shift * 0.5f) * ratio; res -= (int)res;
             if (res > 0.985f) sOut *= (1.0f - res) / 0.015f; else if (res < 0.015f) sOut *= res / 0.015f;
-            float finalR = res - shift * 0.5f; finalR -= (int)(finalR + 10.0f) - 10; return finalR;
+            warped = res - shift * 0.5f; warped -= (int)(warped + 10.0f) - 10;
         }
-        if (mode == 4) {
+        else if (mode == 4) {
             float pt = std::clamp(0.5f + shift * 0.4f, 0.1f, 0.9f);
             float m = (p < pt) ? p * (0.5f / pt) : 1.0f - (p - pt) * (0.5f / (1.0f - pt));
             if (amt < 0.0f) m = (p > pt) ? (p - pt) * (0.5f / (1.0f - pt)) : 1.0f - p * (0.5f / pt);
-            return p * (1.0f - std::abs(amt)) + m * std::abs(amt);
+            warped = p * (1.0f - std::abs(amt)) + m * std::abs(amt);
         }
-        return p;
+
+        // ★ ゼロスナップ: 両端0.5%で元の位相に強制クロスフェードさせ、不連続ジャンプを完全に消し去る
+        if (originalPhase < 0.005f) {
+            float mix = originalPhase / 0.005f;
+            return warped * mix + originalPhase * (1.0f - mix);
+        }
+        else if (originalPhase > 0.995f) {
+            float mix = (1.0f - originalPhase) / 0.005f;
+            return warped * mix + originalPhase * (1.0f - mix);
+        }
+        return warped;
     }
 
-    inline float applyAmpWarp(float v, int mode, float amt, float shift) const {
+    inline float applyAmpWarp(float v, int mode, float amt, float shift, float originalPhase) const {
+        if (mode < 5 || mode > 7) return v;
+
+        float warped = v;
         if (mode == 5) {
             float d = 0.05f, out = 0.0f;
             if (v > shift + d) out = shift - (v - shift);
             else if (v < shift - d) out = shift + (shift - v);
             else { float t = (v - (shift - d)) / (2.0f * d); out = (shift + d) + (t * t * (3.0f - 2.0f * t)) * (-2.0f * d); }
-            return v * (1.0f - std::abs(amt)) + out * std::abs(amt);
+            warped = v * (1.0f - std::abs(amt)) + out * std::abs(amt);
         }
-        if (mode == 6) {
+        else if (mode == 6) {
             float st = std::pow(2.0f, 2.0f + (1.0f - std::abs(amt)) * 14.0f);
             float sc = (v + shift) * st, bs = std::floor(sc), fr = sc - bs, ed = 0.1f, sm = (fr > 1.0f - ed) ? (fr - (1.0f - ed)) / ed : 0.0f;
-            return v * (1.0f - std::abs(amt)) + ((bs + (sm * sm * (3.0f - 2.0f * sm))) / st - shift) * std::abs(amt);
+            warped = v * (1.0f - std::abs(amt)) + ((bs + (sm * sm * (3.0f - 2.0f * sm))) / st - shift) * std::abs(amt);
         }
-        if (mode == 7) {
+        else if (mode == 7) {
             float dr = (v + shift * 0.5f) * (1.0f + std::abs(amt) * 4.0f);
-            return (amt >= 0.0f ? std::tanh(dr) : std::sin(dr * 1.570796f)) - (shift * 0.5f);
+            warped = (amt >= 0.0f ? std::tanh(dr) : std::sin(dr * 1.570796f)) - (shift * 0.5f);
         }
-        return v;
+
+        // ★ ゼロスナップ: 振幅も両端で0に収束させクリックノイズを除去
+        if (originalPhase < 0.005f) return warped * (originalPhase / 0.005f);
+        else if (originalPhase > 0.995f) return warped * ((1.0f - originalPhase) / 0.005f);
+
+        return warped;
     }
 
     static inline float hermite(float t, float y0, float y1, float y2, float y3) {

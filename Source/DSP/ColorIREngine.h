@@ -244,7 +244,7 @@ public:
 
     ~ColorIREngine() {
         irGenJobId++;
-        // ★ 変更: ポインタ経由でのアクセス
+        // ★ 修正: ポインタアクセスへ変更
         threadPool->removeAllJobs(true, 1000);
     }
 
@@ -294,7 +294,7 @@ public:
         const int myJobId = ++irGenJobId;
         const double sr = currentSampleRate;
 
-        // ★ 変更: ポインタ経由でのアクセス
+        // ★ 修正: ポインタアクセスへ変更
         threadPool->addJob([this, currentNotes, attackMs, decayMs, irType, sr, myJobId]() {
             if (myJobId != irGenJobId.load()) return;
 
@@ -304,21 +304,14 @@ public:
 
             juce::AudioBuffer<float> tempIR(2, numSamples); tempIR.clear();
             std::vector<float> phases(currentNotes.size(), 0.0f), incs(currentNotes.size(), 0.0f);
-
-            std::vector<float> svfBp(currentNotes.size(), 0.0f);
-            std::vector<float> svfLp(currentNotes.size(), 0.0f);
-            std::vector<float> vibPhases(currentNotes.size(), 0.0f);
-            std::vector<float> vibIncs(currentNotes.size(), 0.0f);
-
             auto& random = juce::Random::getSystemRandom();
             float baseFreq = (float)juce::MidiMessage::getMidiNoteInHertz(currentNotes[0]);
 
+            // ★ 修正: すべての初期位相を0.0fで同期させ、強烈なコード感（Zero-Phase）を確保
             for (size_t n = 0; n < currentNotes.size(); ++n) {
                 float freq = (float)juce::MidiMessage::getMidiNoteInHertz(currentNotes[n]);
                 incs[n] = freq / (float)sr;
-                phases[n] = random.nextFloat();
-                vibPhases[n] = random.nextFloat();
-                vibIncs[n] = (4.0f + random.nextFloat() * 2.0f) / (float)sr;
+                phases[n] = 0.0f;
             }
 
             float atkSamples = std::max(1.0f, (attackMs / 1000.0f) * (float)sr);
@@ -329,26 +322,18 @@ public:
             for (int i = 0; i < numSamples; ++i) {
                 if (myJobId != irGenJobId.load()) return;
                 float sample = 0.0f;
-                float timeRatio = (float)i / (float)numSamples;
-                float globalNoise = random.nextFloat() * 2.0f - 1.0f;
 
                 if (irType == 0) {
                     for (size_t n = 0; n < currentNotes.size(); ++n) {
-                        float phase = phases[n];
-                        float saw = 2.0f * phase - 1.0f;
-                        sample += saw * (1.0f + 0.15f * globalNoise);
+                        float saw = 2.0f * phases[n] - 1.0f;
+                        sample += saw;
                         phases[n] += incs[n]; if (phases[n] >= 1.0f) phases[n] -= 1.0f;
                     }
                     sample *= norm;
                 }
                 else if (irType == 1) {
-                    float duty = 0.5f - 0.45f * timeRatio;
                     for (size_t n = 0; n < currentNotes.size(); ++n) {
-                        float phase = phases[n];
-                        float sq = (phase < duty) ? 1.0f : -1.0f;
-                        if (phase < 0.02f || std::abs(phase - duty) < 0.02f) {
-                            sq += globalNoise * 0.8f;
-                        }
+                        float sq = (phases[n] < 0.5f) ? 1.0f : -1.0f;
                         sample += sq;
                         phases[n] += incs[n]; if (phases[n] >= 1.0f) phases[n] -= 1.0f;
                     }
@@ -358,8 +343,7 @@ public:
                     for (size_t n = 0; n < currentNotes.size(); ++n) {
                         float freq = (float)juce::MidiMessage::getMidiNoteInHertz(currentNotes[n]);
                         float ratio = freq / baseFreq;
-                        float phase = phases[n];
-                        float pPi = phase * juce::MathConstants<float>::twoPi;
+                        float pPi = phases[n] * juce::MathConstants<float>::twoPi;
 
                         float overtoneMix = std::min(1.0f, (ratio - 1.0f) * 0.4f);
                         float decayMult = std::exp(-(float)i / (sr * (actualDecayMs / 1000.0f) * (1.0f / std::sqrt(ratio))));
@@ -374,23 +358,22 @@ public:
                     sample *= norm;
                 }
                 else if (irType == 3) {
+                    // ★ 修正: 発散しないピュアなAdditive Resonator（倍音加算）へ進化
                     for (size_t n = 0; n < currentNotes.size(); ++n) {
-                        float baseF = (float)juce::MidiMessage::getMidiNoteInHertz(currentNotes[n]);
-                        float vib = 1.0f + 0.005f * std::sin(vibPhases[n] * juce::MathConstants<float>::twoPi);
-
-                        float f = 2.0f * std::sin(juce::MathConstants<float>::pi * (baseF * vib) / (float)sr);
-                        float q = 0.01f;
-
-                        float hp = globalNoise - svfLp[n] - q * svfBp[n];
-                        svfBp[n] += f * hp;
-                        svfLp[n] += f * svfBp[n];
-
-                        float currentDecay = std::exp(-(float)i / (sr * (actualDecayMs / 1000.0f) * 0.5f));
-                        sample += svfBp[n] * currentDecay * 12.0f;
-
-                        vibPhases[n] += vibIncs[n]; if (vibPhases[n] >= 1.0f) vibPhases[n] -= 1.0f;
+                        float val = 0.0f;
+                        // 1倍音（基音）から5倍音までのサイン波を合成
+                        for (int h = 1; h <= 5; ++h) {
+                            float hPhase = std::fmod(phases[n] * h, 1.0f);
+                            // 高次倍音ほど早く減衰させる
+                            float hDecay = std::exp(-(float)i / (sr * (actualDecayMs / 1000.0f) / (float)h));
+                            val += std::sin(hPhase * juce::MathConstants<float>::twoPi) * hDecay * (1.0f / (float)h);
+                        }
+                        sample += val;
+                        phases[n] += incs[n]; if (phases[n] >= 1.0f) phases[n] -= 1.0f;
                     }
-                    sample *= norm;
+                    sample *= (norm * 0.8f);
+                    // アタックの瞬間にのみ、微量の煌めきノイズを付与
+                    sample += (random.nextFloat() * 2.0f - 1.0f) * 0.1f * std::exp(-(float)i / (sr * 0.02f));
                 }
 
                 sample = std::tanh(sample * ((irType == 3) ? 1.5f : 4.0f));
@@ -426,42 +409,42 @@ public:
 
     void process(juce::AudioBuffer<float>& buffer)
     {
-        if (mix <= 0.001f || state.load() != LearnState::Active) return;
+        if (mix > 0.001f && state.load() == LearnState::Active) {
+            const int numSamples = buffer.getNumSamples();
+            if (wetBufferA.getNumSamples() < numSamples) {
+                wetBufferA.setSize(2, numSamples, false, false, true); wetBufferB.setSize(2, numSamples, false, false, true);
+            }
 
-        const int numSamples = buffer.getNumSamples();
-        if (wetBufferA.getNumSamples() < numSamples) {
-            wetBufferA.setSize(2, numSamples, false, false, true); wetBufferB.setSize(2, numSamples, false, false, true);
-        }
+            for (int ch = 0; ch < 2; ++ch) wetBufferA.copyFrom(ch, 0, buffer, ch, 0, numSamples);
 
-        for (int ch = 0; ch < 2; ++ch) wetBufferA.copyFrom(ch, 0, buffer, ch, 0, numSamples);
+            auto* wAL = wetBufferA.getWritePointer(0); auto* wAR = wetBufferA.getWritePointer(1);
+            for (int i = 0; i < numSamples; ++i) {
+                wAL[i] = preFilterL.processSample(0, wAL[i]); wAR[i] = preFilterR.processSample(1, wAR[i]);
+            }
 
-        auto* wAL = wetBufferA.getWritePointer(0); auto* wAR = wetBufferA.getWritePointer(1);
-        for (int i = 0; i < numSamples; ++i) {
-            wAL[i] = preFilterL.processSample(0, wAL[i]); wAR[i] = preFilterR.processSample(1, wAR[i]);
-        }
+            for (int ch = 0; ch < 2; ++ch) wetBufferB.copyFrom(ch, 0, wetBufferA, ch, 0, numSamples);
 
-        for (int ch = 0; ch < 2; ++ch) wetBufferB.copyFrom(ch, 0, wetBufferA, ch, 0, numSamples);
+            juce::dsp::AudioBlock<float> blockA(wetBufferA); juce::dsp::ProcessContextReplacing<float> contextA(blockA); convEngineA.process(contextA);
+            juce::dsp::AudioBlock<float> blockB(wetBufferB); juce::dsp::ProcessContextReplacing<float> contextB(blockB); convEngineB.process(contextB);
 
-        juce::dsp::AudioBlock<float> blockA(wetBufferA); juce::dsp::ProcessContextReplacing<float> contextA(blockA); convEngineA.process(contextA);
-        juce::dsp::AudioBlock<float> blockB(wetBufferB); juce::dsp::ProcessContextReplacing<float> contextB(blockB); convEngineB.process(contextB);
+            auto* inL = buffer.getReadPointer(0); auto* inR = buffer.getReadPointer(1);
+            auto* outL = buffer.getWritePointer(0); auto* outR = buffer.getWritePointer(1);
+            auto* wBL = wetBufferB.getReadPointer(0); auto* wBR = wetBufferB.getReadPointer(1);
 
-        auto* inL = buffer.getReadPointer(0); auto* inR = buffer.getReadPointer(1);
-        auto* outL = buffer.getWritePointer(0); auto* outR = buffer.getWritePointer(1);
-        auto* wBL = wetBufferB.getReadPointer(0); auto* wBR = wetBufferB.getReadPointer(1);
+            float fadeInc = 1.0f / (float)(currentSampleRate * 0.05);
+            for (int i = 0; i < numSamples; ++i) {
+                if (fadeVolA < fadeTargetA) fadeVolA = std::min(fadeVolA + fadeInc, fadeTargetA); else if (fadeVolA > fadeTargetA) fadeVolA = std::max(fadeVolA - fadeInc, fadeTargetA);
+                if (fadeVolB < fadeTargetB) fadeVolB = std::min(fadeVolB + fadeInc, fadeTargetB); else if (fadeVolB > fadeTargetB) fadeVolB = std::max(fadeVolB - fadeInc, fadeTargetB);
 
-        float fadeInc = 1.0f / (float)(currentSampleRate * 0.05);
-        for (int i = 0; i < numSamples; ++i) {
-            if (fadeVolA < fadeTargetA) fadeVolA = std::min(fadeVolA + fadeInc, fadeTargetA); else if (fadeVolA > fadeTargetA) fadeVolA = std::max(fadeVolA - fadeInc, fadeTargetA);
-            if (fadeVolB < fadeTargetB) fadeVolB = std::min(fadeVolB + fadeInc, fadeTargetB); else if (fadeVolB > fadeTargetB) fadeVolB = std::max(fadeVolB - fadeInc, fadeTargetB);
+                float currentWetL = std::tanh(wAL[i] * fadeVolA + wBL[i] * fadeVolB);
+                float currentWetR = std::tanh(wAR[i] * fadeVolA + wBR[i] * fadeVolB);
 
-            float currentWetL = std::tanh(wAL[i] * fadeVolA + wBL[i] * fadeVolB);
-            float currentWetR = std::tanh(wAR[i] * fadeVolA + wBR[i] * fadeVolB);
+                currentWetL = postFilterL.processSample(0, currentWetL); currentWetR = postFilterR.processSample(1, currentWetR);
 
-            currentWetL = postFilterL.processSample(0, currentWetL); currentWetR = postFilterR.processSample(1, currentWetR);
+                currentWetL *= irVolumeLinear; currentWetR *= irVolumeLinear;
 
-            currentWetL *= irVolumeLinear; currentWetR *= irVolumeLinear;
-
-            outL[i] = inL[i] * (1.0f - mix) + currentWetL * mix; outR[i] = inR[i] * (1.0f - mix) + currentWetR * mix;
+                outL[i] = inL[i] * (1.0f - mix) + currentWetL * mix; outR[i] = inR[i] * (1.0f - mix) + currentWetR * mix;
+            }
         }
 
         trueOtt.process(buffer);
@@ -479,7 +462,7 @@ private:
 
     juce::dsp::Convolution convEngineA, convEngineB;
 
-    // ★ 変更: 全インスタンスでスレッドを共有する
+    // ★ 修正: マルチインスタンス時のCPUスパイクを防ぐためのシングルトン共有スレッド
     juce::SharedResourcePointer<juce::ThreadPool> threadPool;
 
     std::atomic<int> irGenJobId{ 0 };
