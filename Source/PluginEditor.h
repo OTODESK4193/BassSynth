@@ -75,19 +75,16 @@ private:
     juce::AudioProcessorValueTreeState& apvts;
     juce::Label chordLabel;
 
-    // Block 1: Generator
     juce::ComboBox typeCombo; juce::Label typeLabel;
     juce::Slider mixSlider, irVolSlider, preHpSlider, postHpSlider, atkSlider, decSlider;
     juce::Label mixLabel, irVolLabel, preHpLabel, postHpLabel, atkLabel, decLabel;
 
-    // Block 2: True OTT & Soothe
     juce::Slider ottDepthSlider, ottTimeSlider, ottUpSlider, ottDownSlider, ottGainSlider;
     juce::Label ottDepthLabel, ottTimeLabel, ottUpLabel, ottDownLabel, ottGainLabel;
 
     juce::Slider sootheSelSlider, sootheShpSlider, sootheFocSlider;
     juce::Label sootheSelLabel, sootheShpLabel, sootheFocLabel;
 
-    // Block 3: Sparkle Arp & Master Gain
     juce::ComboBox arpWaveCombo, arpModeCombo, arpPitchCombo;
     juce::Label arpWaveLabel, arpModeLabel, arpPitchLabel;
     juce::Slider arpSpeedSlider, arpLevelSlider;
@@ -109,8 +106,6 @@ public:
     void paint(juce::Graphics&) override;
     void resized() override;
     void timerCallback() override;
-
-    // ★ 追加: プリセットスキャン用メソッド
     void scanPresets();
 
 private:
@@ -128,7 +123,8 @@ private:
 
     // Overlays & Groups
     ColorIrPanel colorPanel;
-    juce::GroupComponent oscGroup, subGroup, shaperGroup, filterGroup, ampEnvGroup, filterEnvGroup, controlGroup, presetGroup;
+    // ★修正: 誤って削除していた ampEnvGroup を復元しました
+    juce::GroupComponent oscGroup, subGroup, shaperGroup, filterGroup, ampEnvGroup, controlGroup, presetGroup;
 
     // Osc Params
     juce::ToggleButton oscOnButton{ "ON" };
@@ -151,11 +147,17 @@ private:
     juce::ComboBox subWaveCombo; juce::Label subVolLabel;
     juce::Slider subVolSlider, subPitchSlider; juce::Label subPitchLabel;
 
-    // Shaper & Filter
+    // Shaper
     juce::Slider distDriveSlider, shpAmtSlider, bitSlider, rateSlider;
     juce::Label  distDriveLabel, shpAmtLabel, bitLabel, rateLabel;
-    juce::Slider cutoffSlider, resSlider, fltEnvAmtSlider;
-    juce::Label  cutoffLabel, resLabel, fltEnvAmtLabel;
+
+    // Dual Filter UI
+    juce::TextButton fltABtn{ "A" }, fltBBtn{ "B" };
+    juce::ComboBox fltATypeCombo, fltBTypeCombo, fltRoutingCombo;
+    juce::Slider fltACutoffSlider, fltBCutoffSlider, fltAResSlider, fltBResSlider;
+    juce::Label  fltACutoffLabel, fltBCutoffLabel, fltAResLabel, fltBResLabel;
+    juce::Slider fltMixSlider, fltEnvAmtSlider;
+    juce::Label  fltMixLabel, fltEnvAmtLabel;
 
     // Core Envelopes
     juce::Slider ampAtkSlider, ampDecSlider, ampSusSlider, ampRelSlider;
@@ -172,8 +174,6 @@ private:
     juce::ComboBox presetCombo;
     juce::TextButton savePresetBtn{ "Save" };
     juce::TextButton loadPresetBtn{ "Load" };
-
-    // ★ 追加: プリセットファイル管理配列
     juce::Array<juce::File> presetFiles;
 
     // Modulation Tabs
@@ -187,7 +187,13 @@ private:
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> oscOnAtt, subOnAtt, legatoAtt, colorOnAtt;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> subWaveAtt, fmWaveAtt, morphAAtt, morphBAtt, morphCAtt;
 
+    // Filter Attachments
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> fltATypeAtt, fltBTypeAtt, fltRoutingAtt;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> fltACutoffAtt, fltBCutoffAtt, fltAResAtt, fltBResAtt, fltMixAtt, fltEnvAmtAtt;
+
     int blinkCounter = 0;
+
+    void updateFilterUI();
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(LiquidDreamAudioProcessorEditor)
 };

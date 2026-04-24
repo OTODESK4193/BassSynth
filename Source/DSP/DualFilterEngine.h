@@ -3,12 +3,13 @@
 // ==============================================================================
 #pragma once
 #include <JuceHeader.h>
+#include "LadderFilter.h"
 
 class DualFilterEngine
 {
 public:
-    enum FilterType { LPF, HPF, BPF, Notch, Comb };
-    enum Routing { Serial, Parallel };
+    enum FilterType { LPF = 0, HPF, BPF, Notch, Comb, LadderLPF };
+    enum Routing { Serial = 0, Parallel };
 
     DualFilterEngine() {
         filterA.setType(juce::dsp::StateVariableTPTFilterType::lowpass);
@@ -17,28 +18,44 @@ public:
 
     void prepare(double sr, int samplesPerBlock) {
         sampleRate = sr;
-        juce::dsp::ProcessSpec spec{ sr, (juce::uint32)samplesPerBlock, 1 };
+        juce::dsp::ProcessSpec spec{ sr, static_cast<juce::uint32>(samplesPerBlock), 2 };
 
         filterA.prepare(spec);
         filterB.prepare(spec);
 
-        // Combフィルター用のディレイライン (最大50ms = 最低20Hzまで対応)
-        combDelayA.prepare(spec); combDelayA.setMaximumDelayInSamples((int)(sr * 0.05));
-        combDelayB.prepare(spec); combDelayB.setMaximumDelayInSamples((int)(sr * 0.05));
+        ladderA_L.prepare(sr); ladderA_R.prepare(sr);
+        ladderB_L.prepare(sr); ladderB_R.prepare(sr);
+
+        combDelayA.prepare(spec); combDelayA.setMaximumDelayInSamples(static_cast<int>(sr * 0.05));
+        combDelayB.prepare(spec); combDelayB.setMaximumDelayInSamples(static_cast<int>(sr * 0.05));
     }
 
     void setFilterA(int type, float cutoff, float res) {
         typeA = static_cast<FilterType>(type);
         freqA = juce::jlimit(20.0f, 20000.0f, cutoff);
-        resA = juce::jlimit(0.0f, 0.99f, res); // Combのフィードバックにも使用
-        updateSVF(filterA, typeA, freqA, resA);
+        resA = juce::jlimit(0.0f, 1.0f, res);
+
+        if (typeA != LadderLPF) {
+            updateSVF(filterA, typeA, freqA, resA);
+        }
+        else {
+            ladderA_L.setParameters(freqA, resA);
+            ladderA_R.setParameters(freqA, resA);
+        }
     }
 
     void setFilterB(int type, float cutoff, float res) {
         typeB = static_cast<FilterType>(type);
         freqB = juce::jlimit(20.0f, 20000.0f, cutoff);
-        resB = juce::jlimit(0.0f, 0.99f, res);
-        updateSVF(filterB, typeB, freqB, resB);
+        resB = juce::jlimit(0.0f, 1.0f, res);
+
+        if (typeB != LadderLPF) {
+            updateSVF(filterB, typeB, freqB, resB);
+        }
+        else {
+            ladderB_L.setParameters(freqB, resB);
+            ladderB_R.setParameters(freqB, resB);
+        }
     }
 
     void setRouting(int routingMode, float mixVal) {
@@ -46,57 +63,71 @@ public:
         mix = juce::jlimit(0.0f, 1.0f, mixVal);
     }
 
-    float processSample(float input) {
-        float outA = processSingle(input, typeA, filterA, combDelayA, freqA, resA);
+    void processStereo(float& inL, float& inR) {
+        // Filter A
+        float aL = processSingle(0, inL, typeA, filterA, ladderA_L, combDelayA, freqA, resA);
+        float aR = processSingle(1, inR, typeA, filterA, ladderA_R, combDelayA, freqA, resA);
 
         if (currentRouting == Serial) {
-            // 直列: Aの出力をBに入力 (MixはAとBのバランスではなく、Bの適用量として機能)
-            float outB = processSingle(outA, typeB, filterB, combDelayB, freqB, resB);
-            return outA * (1.0f - mix) + outB * mix;
+            // 直列: Aの出力をBへ (MixはBのWet量)
+            float bL = processSingle(0, aL, typeB, filterB, ladderB_L, combDelayB, freqB, resB);
+            float bR = processSingle(1, aR, typeB, filterB, ladderB_R, combDelayB, freqB, resB);
+            inL = aL * (1.0f - mix) + bL * mix;
+            inR = aR * (1.0f - mix) + bR * mix;
         }
         else {
-            // 並列: 入力を分配し、AとBをMixでブレンド
-            float outB = processSingle(input, typeB, filterB, combDelayB, freqB, resB);
-            return outA * (1.0f - mix) + outB * mix;
+            // 並列: 原音をBにも入れ、AとBの結果をブレンド
+            float bL = processSingle(0, inL, typeB, filterB, ladderB_L, combDelayB, freqB, resB);
+            float bR = processSingle(1, inR, typeB, filterB, ladderB_R, combDelayB, freqB, resB);
+
+            inL = aL * (1.0f - mix) + bL * mix;
+            inR = aR * (1.0f - mix) + bR * mix;
         }
     }
 
 private:
-    double sampleRate = 44100.0;
+    double sampleRate{ 44100.0 };
     juce::dsp::StateVariableTPTFilter<float> filterA, filterB;
+    LadderFilter ladderA_L, ladderA_R, ladderB_L, ladderB_R;
     juce::dsp::DelayLine<float, juce::dsp::DelayLineInterpolationTypes::Linear> combDelayA, combDelayB;
 
-    FilterType typeA = LPF, typeB = LPF;
-    Routing currentRouting = Serial;
-    float freqA = 20000.0f, resA = 0.0f, freqB = 20000.0f, resB = 0.0f, mix = 0.5f;
+    FilterType typeA{ LPF }, typeB{ LPF };
+    Routing currentRouting{ Serial };
+    float freqA{ 20000.0f }, resA{ 0.0f }, freqB{ 20000.0f }, resB{ 0.0f }, mix{ 0.5f };
 
-    void updateSVF(juce::dsp::StateVariableTPTFilter<float>& f, FilterType t, float freq, float r) {
+    // const 化および Notch の BPF 割り当てロジック
+    void updateSVF(juce::dsp::StateVariableTPTFilter<float>& f, FilterType t, float freq, float r) const {
         if (t == LPF) f.setType(juce::dsp::StateVariableTPTFilterType::lowpass);
         else if (t == HPF) f.setType(juce::dsp::StateVariableTPTFilterType::highpass);
-        else if (t == BPF) f.setType(juce::dsp::StateVariableTPTFilterType::bandpass);
-        else if (t == Notch) f.setType(juce::dsp::StateVariableTPTFilterType::bandstop);
+        else if (t == BPF || t == Notch) f.setType(juce::dsp::StateVariableTPTFilterType::bandpass); // Notch時は内部をBPFに設定
 
         f.setCutoffFrequency(freq);
-        f.setResonance(juce::jmap(r, 0.0f, 1.0f, 0.707f, 10.0f)); // Q値のマッピング
+        f.setResonance(juce::jmap(r, 0.0f, 1.0f, 0.707f, 10.0f));
     }
 
-    float processSingle(float in, FilterType t, juce::dsp::StateVariableTPTFilter<float>& svf,
+    float processSingle(int ch, float in, FilterType t,
+        juce::dsp::StateVariableTPTFilter<float>& svf,
+        LadderFilter& ladder,
         juce::dsp::DelayLine<float, juce::dsp::DelayLineInterpolationTypes::Linear>& comb,
-        float freq, float res) {
-        if (t == Comb) {
-            // Combフィルター計算 (Delay時間 = 1.0 / 周波数)
-            float delaySamples = (float)sampleRate / freq;
+        float freq, float res)
+    {
+        if (t == LadderLPF) {
+            return ladder.processSample(in);
+        }
+        else if (t == Comb) {
+            float delaySamples = static_cast<float>(sampleRate) / freq;
             comb.setDelay(delaySamples);
-            float delayed = comb.popSample(0);
-
-            // フィードバックとソフトクリップ (発散防止)
-            float out = in + delayed * (res * 0.95f);
-            out = std::tanh(out);
-            comb.pushSample(0, out);
+            float delayed = comb.popSample(ch);
+            float out = std::tanh(in + delayed * (res * 0.98f));
+            comb.pushSample(ch, out);
             return out;
         }
+        else if (t == Notch) {
+            // TPTフィルターの特性を利用: Notch = Input - Bandpass
+            return in - svf.processSample(ch, in);
+        }
         else {
-            return svf.processSample(0, in);
+            return svf.processSample(ch, in);
         }
     }
 };

@@ -8,7 +8,7 @@
 #include <mutex>
 #include "DSP/WavetableOscillator.h"
 #include "DSP/SpectralMorphProcessor.h"
-#include "DSP/LadderFilter.h"
+#include "DSP/DualFilterEngine.h" // 変更: LadderFilterから置き換え
 #include "DSP/SineShaper.h"
 #include "DSP/ColorIREngine.h"
 #include "Logic/MonoVoiceManager.h"
@@ -39,7 +39,6 @@ public:
     const juce::String getProgramName(int index) override { return {}; }
     void changeProgramName(int index, const juce::String& newName) override {}
 
-    // ★ 変更: XMLによるプロジェクトの保存とロード
     void getStateInformation(juce::MemoryBlock& destData) override;
     void setStateInformation(const void* data, int sizeInBytes) override;
 
@@ -67,7 +66,6 @@ public:
         return activeMidiNotes;
     }
 
-    // ★ 追加: ブラウザからのファイルパスとフォルダ管理メソッド
     void loadCustomWavetable(const juce::File& file);
     void loadFactoryWavetable(int index);
     void setUserFolders(const juce::StringArray& folders);
@@ -79,7 +77,7 @@ private:
 
     WavetableOscillator oscillator;
     SpectralMorphProcessor spectralMorph;
-    LadderFilter filter;
+    DualFilterEngine dualFilter; // 変更点
     SineShaper shaper;
     ColorIREngine colorEngine;
     MonoVoiceManager voiceManager;
@@ -99,7 +97,6 @@ private:
     std::vector<int> activeMidiNotes;
     std::mutex midiNotesMutex;
 
-    // ★ 追加: カスタムファイル関連のステート変数
     juce::String currentCustomWavetablePath;
     juce::StringArray userWavetableFolders;
     std::atomic<bool> customWavetableLoaded{ false };
@@ -114,35 +111,29 @@ private:
     std::atomic<float>* pMorphCMode = nullptr; std::atomic<float>* pMorphCAmt = nullptr; std::atomic<float>* pMorphCShift = nullptr;
     std::atomic<float>* pUni = nullptr; std::atomic<float>* pDetune = nullptr; std::atomic<float>* pWidth = nullptr; std::atomic<float>* pDrift = nullptr;
     std::atomic<float>* pSubOn = nullptr; std::atomic<float>* pSubWave = nullptr; std::atomic<float>* pSubVol = nullptr; std::atomic<float>* pSubPitch = nullptr;
-    std::atomic<float>* pCutoff = nullptr; std::atomic<float>* pReso = nullptr; std::atomic<float>* pFltEnvAmt = nullptr;
+
+    // Filter Params (Dual化に伴い拡張)
+    std::atomic<float>* pFltAType = nullptr; std::atomic<float>* pFltACutoff = nullptr; std::atomic<float>* pFltAReso = nullptr;
+    std::atomic<float>* pFltBType = nullptr; std::atomic<float>* pFltBCutoff = nullptr; std::atomic<float>* pFltBReso = nullptr;
+    std::atomic<float>* pFltRouting = nullptr; std::atomic<float>* pFltMix = nullptr;
+    std::atomic<float>* pFltEnvAmt = nullptr;
+
     std::atomic<float>* pDrive = nullptr; std::atomic<float>* pShpAmt = nullptr; std::atomic<float>* pShpRate = nullptr; std::atomic<float>* pShpBit = nullptr;
     std::atomic<float>* pGain = nullptr; std::atomic<float>* pGlide = nullptr; std::atomic<float>* pLegato = nullptr;
     std::atomic<float>* pAAtk = nullptr; std::atomic<float>* pADec = nullptr; std::atomic<float>* pASus = nullptr; std::atomic<float>* pARel = nullptr;
     std::atomic<float>* pFAtk = nullptr; std::atomic<float>* pFDec = nullptr; std::atomic<float>* pFSus = nullptr; std::atomic<float>* pFRel = nullptr;
 
-    std::atomic<float>* pColorOn = nullptr;
-    std::atomic<float>* pColorType = nullptr;
-    std::atomic<float>* pColorMix = nullptr;
-    std::atomic<float>* pColorIrVol = nullptr;
-    std::atomic<float>* pColorPreHp = nullptr;
-    std::atomic<float>* pColorPostHp = nullptr;
-    std::atomic<float>* pColorAtk = nullptr;
-    std::atomic<float>* pColorDec = nullptr;
-
-    std::atomic<float>* pOttDepth = nullptr;
-    std::atomic<float>* pOttTime = nullptr;
-    std::atomic<float>* pOttUp = nullptr;
-    std::atomic<float>* pOttDown = nullptr;
+    // Color/Dynamics
+    std::atomic<float>* pColorOn = nullptr; std::atomic<float>* pColorType = nullptr;
+    std::atomic<float>* pColorMix = nullptr; std::atomic<float>* pColorIrVol = nullptr;
+    std::atomic<float>* pColorPreHp = nullptr; std::atomic<float>* pColorPostHp = nullptr;
+    std::atomic<float>* pColorAtk = nullptr; std::atomic<float>* pColorDec = nullptr;
+    std::atomic<float>* pOttDepth = nullptr; std::atomic<float>* pOttTime = nullptr;
+    std::atomic<float>* pOttUp = nullptr; std::atomic<float>* pOttDown = nullptr;
     std::atomic<float>* pOttGain = nullptr;
-
-    std::atomic<float>* pSootheSelectivity = nullptr;
-    std::atomic<float>* pSootheSharpness = nullptr;
-    std::atomic<float>* pSootheFocus = nullptr;
-
-    std::atomic<float>* pArpWave = nullptr;
-    std::atomic<float>* pArpMode = nullptr;
-    std::atomic<float>* pArpSpeed = nullptr;
-    std::atomic<float>* pArpPitch = nullptr;
+    std::atomic<float>* pSootheSelectivity = nullptr; std::atomic<float>* pSootheSharpness = nullptr; std::atomic<float>* pSootheFocus = nullptr;
+    std::atomic<float>* pArpWave = nullptr; std::atomic<float>* pArpMode = nullptr;
+    std::atomic<float>* pArpSpeed = nullptr; std::atomic<float>* pArpPitch = nullptr;
     std::atomic<float>* pArpLevel = nullptr;
 
     std::array<std::atomic<float>*, 3> pModOn, pModAtk, pModDec, pModSus, pModRel, pModAmt;
@@ -151,7 +142,8 @@ private:
     std::array<std::array<std::atomic<float>*, 3>, 6> pMatrixAmt;
 
     juce::SmoothedValue<float> smoothedWtLevel, smoothedWtPitch, smoothedPDecayAmt, smoothedPDecayTime;
-    juce::SmoothedValue<float> smoothedCutoff, smoothedReso, smoothedFltEnvAmt, smoothedDrive, smoothedShpAmt, smoothedShpRate, smoothedShpBit, smoothedGain;
+    juce::SmoothedValue<float> smoothedFltACutoff, smoothedFltAReso, smoothedFltBCutoff, smoothedFltBReso, smoothedFltMix;
+    juce::SmoothedValue<float> smoothedDrive, smoothedShpAmt, smoothedShpRate, smoothedShpBit, smoothedGain;
     juce::SmoothedValue<float> smoothedWtPos, smoothedFm, smoothedDrift, smoothedSubVol, smoothedSubPitch, smoothedWidth;
     juce::SmoothedValue<float> smoothedMorphAAmt, smoothedMorphAShift, smoothedMorphBAmt, smoothedMorphBShift, smoothedMorphCAmt, smoothedMorphCShift;
 

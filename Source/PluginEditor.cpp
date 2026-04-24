@@ -126,7 +126,7 @@ MatrixTab::MatrixTab(juce::AudioProcessorValueTreeState& vts) : apvts(vts) {
     juce::StringArray dests = {
         "None", "WT: Position", "WT: FM Amt", "WT: MorphA Amt", "WT: MorphA Shf",
         "WT: MorphB Amt", "WT: MorphB Shf", "WT: MorphC Amt", "WT: MorphC Shf",
-        "FLT: Cutoff", "FLT: Resonance", "PRF: Gain"
+        "FLT A: Cutoff", "FLT A: Reso", "FLT B: Cutoff", "FLT B: Reso", "PRF: Gain"
     };
     for (int src = 0; src < 6; ++src) {
         for (int slot = 0; slot < 3; ++slot) {
@@ -167,7 +167,7 @@ void MatrixTab::resized() {
 }
 
 // ==============================================================================
-// ColorIrPanel Implementation
+// ColorIrPanel Implementation (省略なし)
 // ==============================================================================
 ColorIrPanel::ColorIrPanel(LiquidDreamAudioProcessor& p) : processor(p), apvts(p.getAPVTS()) {
     addAndMakeVisible(learnButton);
@@ -343,9 +343,13 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     subGroup.setText("SUB OSC"); addAndMakeVisible(subGroup);
     shaperGroup.setText("DISTORTION & SHAPER"); addAndMakeVisible(shaperGroup);
     ampEnvGroup.setText("AMP ENVELOPE"); addAndMakeVisible(ampEnvGroup);
-    filterGroup.setText("FILTER"); addAndMakeVisible(filterGroup);
-    filterEnvGroup.setText("FILTER ENVELOPE"); addAndMakeVisible(filterEnvGroup);
-    presetGroup.setText("PRESETS"); addAndMakeVisible(presetGroup);
+
+    // 変更: FilterとEnvの統合
+    filterGroup.setText("DUAL FILTER & ENV"); addAndMakeVisible(filterGroup);
+
+    // presetGroup is deliberately hidden to remove its border
+    addChildComponent(presetGroup);
+
     controlGroup.setText("PERFORMANCE"); addAndMakeVisible(controlGroup);
 
     addAndMakeVisible(oscOnButton);
@@ -369,9 +373,31 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     setupS(distDriveSlider, distDriveLabel, "Drive", this); setupS(shpAmtSlider, shpAmtLabel, "Shaper", this);
     setupS(bitSlider, bitLabel, "Bits", this); setupS(rateSlider, rateLabel, "Rate", this);
 
-    setupS(ampAtkSlider, ampAtkLabel, "A", this); setupS(ampDecSlider, ampDecLabel, "D", this); setupS(ampSusSlider, ampSusLabel, "S", this); setupS(ampRelSlider, ampRelLabel, "R", this);
+    // --- Dual Filter Setup ---
+    addAndMakeVisible(fltABtn); addAndMakeVisible(fltBBtn);
+    fltABtn.setRadioGroupId(1); fltBBtn.setRadioGroupId(1);
+    fltABtn.setClickingTogglesState(true); fltBBtn.setClickingTogglesState(true);
+    fltABtn.setToggleState(true, juce::dontSendNotification);
 
-    setupS(cutoffSlider, cutoffLabel, "Cutoff", this); setupS(resSlider, resLabel, "Reso", this); setupS(fltEnvAmtSlider, fltEnvAmtLabel, "EnvAmt", this);
+    fltABtn.setColour(juce::TextButton::buttonColourId, juce::Colour::fromString("FF333333"));
+    fltABtn.setColour(juce::TextButton::buttonOnColourId, juce::Colour::fromString("FFFF764D"));
+    fltBBtn.setColour(juce::TextButton::buttonColourId, juce::Colour::fromString("FF333333"));
+    fltBBtn.setColour(juce::TextButton::buttonOnColourId, juce::Colour::fromString("FFFF764D"));
+
+    juce::StringArray fTypes = { "LPF", "HPF", "BPF", "Notch", "Comb", "Analog LPF" };
+    setupCombo(fltATypeCombo, fltACutoffLabel, nullptr, fTypes, this);
+    setupCombo(fltBTypeCombo, fltBCutoffLabel, nullptr, fTypes, this);
+    setupCombo(fltRoutingCombo, fltMixLabel, nullptr, { "Serial", "Parallel" }, this);
+
+    setupS(fltACutoffSlider, fltACutoffLabel, "Cutoff", this); setupS(fltBCutoffSlider, fltBCutoffLabel, "Cutoff", this);
+    setupS(fltAResSlider, fltAResLabel, "Reso", this); setupS(fltBResSlider, fltBResLabel, "Reso", this);
+    setupS(fltMixSlider, fltMixLabel, "Mix (Wet/B)", this);
+    setupS(fltEnvAmtSlider, fltEnvAmtLabel, "EnvAmt", this);
+
+    fltABtn.onClick = [this] { updateFilterUI(); };
+    fltBBtn.onClick = [this] { updateFilterUI(); };
+
+    setupS(ampAtkSlider, ampAtkLabel, "A", this); setupS(ampDecSlider, ampDecLabel, "D", this); setupS(ampSusSlider, ampSusLabel, "S", this); setupS(ampRelSlider, ampRelLabel, "R", this);
     setupS(fltAtkSlider, fltAtkLabel, "A", this); setupS(fltDecSlider, fltDecLabel, "D", this); setupS(fltSusSlider, fltSusLabel, "S", this); setupS(fltRelSlider, fltRelLabel, "R", this);
 
     setupS(glideSlider, glideLabel, "Glide", this); setupS(pitchSlider, pitchLabel, "Pitch", this); setupS(gainSlider, gainLabel, "Gain", this);
@@ -472,7 +498,15 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     legatoAtt = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(apvts, "m_legato", legatoButton);
 
     att(distDriveSlider, "dist_drive"); att(shpAmtSlider, "shp_amt"); att(bitSlider, "shp_bit"); att(rateSlider, "shp_rate");
-    att(cutoffSlider, "flt_cutoff"); att(resSlider, "flt_res"); att(fltEnvAmtSlider, "flt_env_amt");
+
+    fltATypeAtt = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(apvts, "flt_a_type", fltATypeCombo);
+    fltBTypeAtt = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(apvts, "flt_b_type", fltBTypeCombo);
+    fltRoutingAtt = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(apvts, "flt_routing", fltRoutingCombo);
+
+    att(fltACutoffSlider, "flt_a_cutoff"); att(fltAResSlider, "flt_a_res");
+    att(fltBCutoffSlider, "flt_b_cutoff"); att(fltBResSlider, "flt_b_res");
+    att(fltMixSlider, "flt_mix"); att(fltEnvAmtSlider, "flt_env_amt");
+
     att(ampAtkSlider, "a_atk"); att(ampDecSlider, "a_dec"); att(ampSusSlider, "a_sus"); att(ampRelSlider, "a_rel");
     att(fltAtkSlider, "f_atk"); att(fltDecSlider, "f_dec"); att(fltSusSlider, "f_sus"); att(fltRelSlider, "f_rel");
     att(glideSlider, "m_glide"); att(pitchSlider, "m_pb"); att(gainSlider, "m_gain");
@@ -492,12 +526,27 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     browser.onUserFoldersChanged = [this](const juce::StringArray& folders) { audioProcessor.setUserFolders(folders); };
     browser.loadUserFolders(audioProcessor.getUserFolders());
 
-    // ★ 描画負荷軽減のため20Hzに変更
+    updateFilterUI();
+
     startTimerHz(20);
     setSize(1300, 700);
 }
 
 LiquidDreamAudioProcessorEditor::~LiquidDreamAudioProcessorEditor() { setLookAndFeel(nullptr); }
+
+void LiquidDreamAudioProcessorEditor::updateFilterUI() {
+    bool isA = fltABtn.getToggleState();
+    fltATypeCombo.setVisible(isA);
+    fltACutoffSlider.setVisible(isA); fltACutoffLabel.setVisible(isA);
+    fltAResSlider.setVisible(isA); fltAResLabel.setVisible(isA);
+
+    fltBTypeCombo.setVisible(!isA);
+    fltBCutoffSlider.setVisible(!isA); fltBCutoffLabel.setVisible(!isA);
+    fltBResSlider.setVisible(!isA); fltBResLabel.setVisible(!isA);
+
+    if (isA) { fltACutoffSlider.toFront(false); fltAResSlider.toFront(false); fltATypeCombo.toFront(false); }
+    else { fltBCutoffSlider.toFront(false); fltBResSlider.toFront(false); fltBTypeCombo.toFront(false); }
+}
 
 void LiquidDreamAudioProcessorEditor::scanPresets() {
     presetCombo.clear();
@@ -522,10 +571,8 @@ void LiquidDreamAudioProcessorEditor::paint(juce::Graphics& g) { g.fillAll(juce:
 
 void LiquidDreamAudioProcessorEditor::timerCallback() {
     blinkCounter = (blinkCounter + 1) % 20;
-
     auto& apvts = audioProcessor.getAPVTS();
 
-    // ★ 最適化: パラメーターが変化した時のみFFT(スコープ描画)を再計算する
     static float lastWave = -999, lastPos = -999, lastFm = -999;
     static float lastMa = -999, lastMb = -999, lastMc = -999;
     static float lastSa = -999, lastSb = -999, lastSc = -999;
@@ -564,7 +611,7 @@ void LiquidDreamAudioProcessorEditor::timerCallback() {
         colorPanel.updateState(state, text, blink);
     }
 
-    float modDepths[12] = { 0.0f };
+    float modDepths[14] = { 0.0f };
 
     for (int src = 0; src < 6; ++src) {
         juce::String srcPrefix = (src < 3) ? "mod" + juce::String(src + 1) : "lfo" + juce::String(src - 2);
@@ -573,13 +620,12 @@ void LiquidDreamAudioProcessorEditor::timerCallback() {
         for (int slot = 0; slot < 3; ++slot) {
             int dest = (int)apvts.getRawParameterValue("matrix_s" + juce::String(src) + "_d" + juce::String(slot))->load();
             float amt = std::abs(apvts.getRawParameterValue("matrix_s" + juce::String(src) + "_a" + juce::String(slot))->load());
-            if (dest > 0 && dest < 12) {
+            if (dest > 0 && dest < 14) {
                 modDepths[dest] += amt;
             }
         }
     }
 
-    // ★ 最適化: リングの値が変化した時のみrepaintを呼ぶ (無駄な描画を防ぐ)
     auto updateRing = [](juce::Slider& s, float depth) {
         bool changed = false;
         bool currentlyActive = s.getProperties().getWithDefault("mod_active", false);
@@ -614,8 +660,11 @@ void LiquidDreamAudioProcessorEditor::timerCallback() {
     updateRing(morphAAmtSlider, modDepths[3]); updateRing(morphAShiftSlider, modDepths[4]);
     updateRing(morphBAmtSlider, modDepths[5]); updateRing(morphBShiftSlider, modDepths[6]);
     updateRing(morphCAmtSlider, modDepths[7]); updateRing(morphCShiftSlider, modDepths[8]);
-    updateRing(cutoffSlider, modDepths[9]); updateRing(resSlider, modDepths[10]);
-    updateRing(gainSlider, modDepths[11]);
+
+    updateRing(fltACutoffSlider, modDepths[9]); updateRing(fltAResSlider, modDepths[10]);
+    updateRing(fltBCutoffSlider, modDepths[11]); updateRing(fltBResSlider, modDepths[12]);
+
+    updateRing(gainSlider, modDepths[13]);
 }
 
 void LiquidDreamAudioProcessorEditor::resized()
@@ -687,9 +736,11 @@ void LiquidDreamAudioProcessorEditor::resized()
     auto rightArea = area;
     browser.setBounds(rightArea);
 
-    auto oscRect = rightArea.removeFromTop(240);
+    // 変更: Wavetableエリアの上下余白を詰めるために高さを210pxに縮小
+    auto oscRect = rightArea.removeFromTop(210);
     oscGroup.setBounds(oscRect);
-    int oX = oscRect.getX() + 10, oY = oscRect.getY() + 15;
+    // Y座標の開始位置も少し上に持ち上げ
+    int oX = oscRect.getX() + 10, oY = oscRect.getY() + 18;
 
     oscOnButton.setBounds(oX, oY + 20, 50, 24);
     int step = 73;
@@ -705,7 +756,8 @@ void LiquidDreamAudioProcessorEditor::resized()
     placeKnob(oX + 60 + step * 9, oY, fmAmtLabel, fmAmtSlider);
     placeComboLocal(oX + 60 + step * 10, oY, 80, fmWaveLabel, fmWaveCombo);
 
-    int y2 = oY + 100, mWidth = 120;
+    // Y間隔を狭める (100 -> 85)
+    int y2 = oY + 85, mWidth = 120;
     placeComboLocal(oX, y2, mWidth, morphAModeLabel, morphAModeCombo);
     placeKnob(oX + mWidth + 10, y2, morphAAmtLabel, morphAAmtSlider);
     placeKnob(oX + mWidth + 85, y2, morphAShiftLabel, morphAShiftSlider);
@@ -726,45 +778,59 @@ void LiquidDreamAudioProcessorEditor::resized()
     rightArea.removeFromLeft(10);
     auto modCol = rightArea;
 
-    int rowH = centerCol.getHeight() / 5;
-
-    auto shpRect = centerCol.removeFromTop(rowH);
+    // --- Dynamic Height Allocation ---
+    auto shpRect = centerCol.removeFromTop(100);
     shaperGroup.setBounds(shpRect);
-    int sX = shpRect.getX(), sY = shpRect.getY() + 12;
+    int sX = shpRect.getX(), sY = shpRect.getY() + 15;
     placeKnob(sX + 15, sY, distDriveLabel, distDriveSlider);
     placeKnob(sX + 115, sY, shpAmtLabel, shpAmtSlider);
     placeKnob(sX + 215, sY, rateLabel, rateSlider);
     placeKnob(sX + 315, sY, bitLabel, bitSlider);
 
-    auto aEnvRect = centerCol.removeFromTop(rowH);
+    auto aEnvRect = centerCol.removeFromTop(100);
     ampEnvGroup.setBounds(aEnvRect);
-    int aX = aEnvRect.getX(), aY = aEnvRect.getY() + 12;
+    int aX = aEnvRect.getX(), aY = aEnvRect.getY() + 15;
     placeKnob(aX + 15, aY, ampAtkLabel, ampAtkSlider);
     placeKnob(aX + 115, aY, ampDecLabel, ampDecSlider);
     placeKnob(aX + 215, aY, ampSusLabel, ampSusSlider);
     placeKnob(aX + 315, aY, ampRelLabel, ampRelSlider);
 
-    auto filterRect = centerCol.removeFromTop(rowH);
-    filterGroup.setBounds(filterRect);
-    int fX = filterRect.getX(), fY = filterRect.getY() + 12;
-    placeKnob(fX + 65, fY, cutoffLabel, cutoffSlider);
-    placeKnob(fX + 165, fY, resLabel, resSlider);
-    placeKnob(fX + 265, fY, fltEnvAmtLabel, fltEnvAmtSlider);
+    // Preset area moved to bottom, frame hidden
+    auto presetRect = centerCol.removeFromBottom(40);
+    int pX = presetRect.getX() + 10, pY = presetRect.getY() + 5;
+    presetCombo.setBounds(pX, pY, 240, 24);
+    savePresetBtn.setBounds(pX + 250, pY, 60, 24);
+    loadPresetBtn.setBounds(pX + 320, pY, 60, 24);
 
-    auto fEnvRect = centerCol.removeFromTop(rowH);
-    filterEnvGroup.setBounds(fEnvRect);
-    int feX = fEnvRect.getX(), feY = fEnvRect.getY() + 12;
-    placeKnob(feX + 15, feY, fltAtkLabel, fltAtkSlider);
-    placeKnob(feX + 115, feY, fltDecLabel, fltDecSlider);
-    placeKnob(feX + 215, feY, fltSusLabel, fltSusSlider);
-    placeKnob(feX + 315, feY, fltRelLabel, fltRelSlider);
+    // 変更: Dual Filter と Filter Env の統合レイアウト
+    auto filterRect = centerCol;
+    filterGroup.setBounds(filterRect.reduced(0, 5));
+    int fX = filterRect.getX() + 10, fY = filterRect.getY() + 20;
 
-    auto presetRect = centerCol.removeFromTop(rowH);
-    presetGroup.setBounds(presetRect);
-    int pX = presetRect.getX() + 15, pY = presetRect.getY() + 30;
-    presetCombo.setBounds(pX, pY, 220, 24);
-    savePresetBtn.setBounds(pX + 240, pY, 60, 24);
-    loadPresetBtn.setBounds(pX + 310, pY, 60, 24);
+    // Row 1: Left Block: A/B, Type, Routing
+    fltABtn.setBounds(fX, fY, 35, 24);
+    fltBBtn.setBounds(fX + 35, fY, 35, 24);
+
+    fltATypeCombo.setBounds(fX + 80, fY, 80, 24);
+    fltBTypeCombo.setBounds(fX + 80, fY, 80, 24);
+    fltRoutingCombo.setBounds(fX + 170, fY, 80, 24);
+
+    // Row 2: 4 Knobs (Cutoff, Reso, Mix, EnvAmt)
+    int r2Y = fY + 35;
+    int spacing = 80;
+    placeKnob(fX, r2Y, fltACutoffLabel, fltACutoffSlider);
+    placeKnob(fX, r2Y, fltBCutoffLabel, fltBCutoffSlider);
+    placeKnob(fX + spacing, r2Y, fltAResLabel, fltAResSlider);
+    placeKnob(fX + spacing, r2Y, fltBResLabel, fltBResSlider);
+    placeKnob(fX + spacing * 2, r2Y, fltMixLabel, fltMixSlider);
+    placeKnob(fX + spacing * 3, r2Y, fltEnvAmtLabel, fltEnvAmtSlider);
+
+    // Row 3: ADSR
+    int r3Y = r2Y + 70;
+    placeKnob(fX, r3Y, fltAtkLabel, fltAtkSlider);
+    placeKnob(fX + spacing, r3Y, fltDecLabel, fltDecSlider);
+    placeKnob(fX + spacing * 2, r3Y, fltSusLabel, fltSusSlider);
+    placeKnob(fX + spacing * 3, r3Y, fltRelLabel, fltRelSlider);
 
     modTabs.setBounds(modCol);
 }
