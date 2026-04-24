@@ -187,7 +187,7 @@ ColorIrPanel::ColorIrPanel(LiquidDreamAudioProcessor& p) : processor(p), apvts(p
     chordLabel.setFont(juce::FontOptions(22.0f, juce::Font::bold));
     chordLabel.setColour(juce::Label::textColourId, juce::Colour::fromString("FF00FFCC"));
 
-    setupCombo(typeCombo, typeLabel, "IR Type", { "Pure Saw", "Pure Square", "FM Chime", "Harmonic Resonator" }, this);
+    setupCombo(typeCombo, typeLabel, "IR Type", { "Sizzle Saw", "Phaser Square", "Glassy FM", "Spectral Rain" }, this);
     comboAtts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(apvts, "color_type", typeCombo));
 
     setupS(mixSlider, mixLabel, "Mix", this);
@@ -219,7 +219,6 @@ ColorIrPanel::ColorIrPanel(LiquidDreamAudioProcessor& p) : processor(p), apvts(p
     atts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, "ott_up", ottUpSlider));
     atts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, "ott_down", ottDownSlider));
     atts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, "ott_gain", ottGainSlider));
-
     atts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, "soothe_sel", sootheSelSlider));
     atts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, "soothe_shp", sootheShpSlider));
     atts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, "soothe_foc", sootheFocSlider));
@@ -230,14 +229,12 @@ ColorIrPanel::ColorIrPanel(LiquidDreamAudioProcessor& p) : processor(p), apvts(p
 
     setupS(arpSpeedSlider, arpSpeedLabel, "Speed(Hz)", this);
     setupS(arpLevelSlider, arpLevelLabel, "Level", this);
-
     setupS(masterGainSlider, masterGainLabel, "Master Vol", this);
     atts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, "m_gain", masterGainSlider));
 
     comboAtts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(apvts, "arp_wave", arpWaveCombo));
     comboAtts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(apvts, "arp_mode", arpModeCombo));
     comboAtts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(apvts, "arp_pitch", arpPitchCombo));
-
     atts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, "arp_speed", arpSpeedSlider));
     atts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, "arp_level", arpLevelSlider));
 
@@ -344,10 +341,13 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
 
     oscGroup.setText("WAVETABLE"); addAndMakeVisible(oscGroup);
     subGroup.setText("SUB OSC"); addAndMakeVisible(subGroup);
+
     shaperGroup.setText("DISTORTION & SHAPER"); addAndMakeVisible(shaperGroup);
-    filterGroup.setText("FILTER"); addAndMakeVisible(filterGroup);
     ampEnvGroup.setText("AMP ENVELOPE"); addAndMakeVisible(ampEnvGroup);
+    filterGroup.setText("FILTER"); addAndMakeVisible(filterGroup);
     filterEnvGroup.setText("FILTER ENVELOPE"); addAndMakeVisible(filterEnvGroup);
+    presetGroup.setText("PRESETS"); addAndMakeVisible(presetGroup);
+
     controlGroup.setText("PERFORMANCE"); addAndMakeVisible(controlGroup);
 
     addAndMakeVisible(oscOnButton);
@@ -370,12 +370,95 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
 
     setupS(distDriveSlider, distDriveLabel, "Drive", this); setupS(shpAmtSlider, shpAmtLabel, "Shaper", this);
     setupS(bitSlider, bitLabel, "Bits", this); setupS(rateSlider, rateLabel, "Rate", this);
-    setupS(cutoffSlider, cutoffLabel, "Cutoff", this); setupS(resSlider, resLabel, "Reso", this); setupS(fltEnvAmtSlider, fltEnvAmtLabel, "EnvAmt", this);
 
     setupS(ampAtkSlider, ampAtkLabel, "A", this); setupS(ampDecSlider, ampDecLabel, "D", this); setupS(ampSusSlider, ampSusLabel, "S", this); setupS(ampRelSlider, ampRelLabel, "R", this);
+
+    setupS(cutoffSlider, cutoffLabel, "Cutoff", this); setupS(resSlider, resLabel, "Reso", this); setupS(fltEnvAmtSlider, fltEnvAmtLabel, "EnvAmt", this);
     setupS(fltAtkSlider, fltAtkLabel, "A", this); setupS(fltDecSlider, fltDecLabel, "D", this); setupS(fltSusSlider, fltSusLabel, "S", this); setupS(fltRelSlider, fltRelLabel, "R", this);
+
     setupS(glideSlider, glideLabel, "Glide", this); setupS(pitchSlider, pitchLabel, "Pitch", this); setupS(gainSlider, gainLabel, "Gain", this);
     addAndMakeVisible(legatoButton);
+
+    // ★ プリセット管理: BassSynthPresets フォルダのスキャンとComboBox実装
+    addAndMakeVisible(presetCombo);
+    presetCombo.setJustificationType(juce::Justification::centred);
+
+    addAndMakeVisible(savePresetBtn);
+    addAndMakeVisible(loadPresetBtn);
+    savePresetBtn.setColour(juce::TextButton::buttonColourId, juce::Colour::fromString("FF2A2A2A"));
+    loadPresetBtn.setColour(juce::TextButton::buttonColourId, juce::Colour::fromString("FF2A2A2A"));
+
+    // 初期スキャン
+    scanPresets();
+
+    // ComboBox から直接プリセットをロードする処理
+    presetCombo.onChange = [this]() {
+        int id = presetCombo.getSelectedId();
+        if (id > 1) {
+            int index = id - 2;
+            if (juce::isPositiveAndBelow(index, presetFiles.size())) {
+                juce::MemoryBlock mb;
+                presetFiles[index].loadFileAsData(mb);
+                audioProcessor.setStateInformation(mb.getData(), (int)mb.getSize());
+            }
+        }
+        };
+
+    // Save ボタン: プリセットを BassSynthPresets フォルダに保存
+    savePresetBtn.onClick = [this] {
+        auto presetDir = juce::File::getSpecialLocation(juce::File::userDocumentsDirectory).getChildFile("BassSynthPresets");
+        if (!presetDir.exists()) presetDir.createDirectory();
+
+        auto chooser = std::make_shared<juce::FileChooser>("Save Preset", presetDir, "*.xml");
+        auto flags = juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::canSelectFiles | juce::FileBrowserComponent::warnAboutOverwriting;
+
+        chooser->launchAsync(flags, [this, chooser](const juce::FileChooser& fc) {
+            auto file = fc.getResult();
+            if (file != juce::File{}) {
+                if (!file.hasFileExtension("xml")) file = file.withFileExtension("xml");
+                juce::MemoryBlock mb;
+                audioProcessor.getStateInformation(mb);
+                file.replaceWithData(mb.getData(), mb.getSize());
+
+                scanPresets(); // 保存後にリストを更新
+
+                // 保存したファイルを選択状態にする
+                for (int i = 0; i < presetFiles.size(); ++i) {
+                    if (presetFiles[i] == file) {
+                        presetCombo.setSelectedId(i + 2, juce::dontSendNotification);
+                        break;
+                    }
+                }
+            }
+            });
+        };
+
+    // Load ボタン: プリセットをダイアログから手動でロード（任意の場所からも可能）
+    loadPresetBtn.onClick = [this] {
+        auto presetDir = juce::File::getSpecialLocation(juce::File::userDocumentsDirectory).getChildFile("BassSynthPresets");
+        if (!presetDir.exists()) presetDir.createDirectory();
+
+        auto chooser = std::make_shared<juce::FileChooser>("Load Preset", presetDir, "*.xml");
+        auto flags = juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles;
+
+        chooser->launchAsync(flags, [this, chooser](const juce::FileChooser& fc) {
+            auto file = fc.getResult();
+            if (file.existsAsFile()) {
+                juce::MemoryBlock mb;
+                file.loadFileAsData(mb);
+                audioProcessor.setStateInformation(mb.getData(), (int)mb.getSize());
+
+                scanPresets(); // リストを更新
+
+                for (int i = 0; i < presetFiles.size(); ++i) {
+                    if (presetFiles[i] == file) {
+                        presetCombo.setSelectedId(i + 2, juce::dontSendNotification);
+                        break;
+                    }
+                }
+            }
+            });
+        };
 
     auto& apvts = audioProcessor.getAPVTS();
     auto att = [&](juce::Slider& s, const juce::String& id) { attachments.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, id, s)); };
@@ -417,7 +500,6 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     prevWaveButton.onClick = [this] { browser.selectPrev(); }; nextWaveButton.onClick = [this] { browser.selectNext(); };
     rndWaveButton.onClick = [this] { browser.selectRandom(); };
 
-    // ★ 追加: ブラウザのコールバックをプロセッサーへ接続し、カスタムフォルダをロード
     browser.onCustomFileSelected = [this](const juce::File& f) { audioProcessor.loadCustomWavetable(f); };
     browser.onFactoryIndexSelected = [this](int idx) { audioProcessor.loadFactoryWavetable(idx); };
     browser.onUserFoldersChanged = [this](const juce::StringArray& folders) { audioProcessor.setUserFolders(folders); };
@@ -428,6 +510,27 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
 }
 
 LiquidDreamAudioProcessorEditor::~LiquidDreamAudioProcessorEditor() { setLookAndFeel(nullptr); }
+
+// ★ 追加: プリセットフォルダのスキャンメソッド
+void LiquidDreamAudioProcessorEditor::scanPresets() {
+    presetCombo.clear();
+    presetCombo.addItem("Init", 1);
+
+    auto presetDir = juce::File::getSpecialLocation(juce::File::userDocumentsDirectory).getChildFile("BassSynthPresets");
+    if (!presetDir.exists()) presetDir.createDirectory();
+
+    presetFiles = presetDir.findChildFiles(juce::File::findFiles, false, "*.xml");
+
+    int id = 2;
+    for (auto& f : presetFiles) {
+        presetCombo.addItem(f.getFileNameWithoutExtension(), id++);
+    }
+
+    // デフォルトで Init を選択状態にする（通知は送らない）
+    if (presetCombo.getSelectedId() == 0) {
+        presetCombo.setSelectedId(1, juce::dontSendNotification);
+    }
+}
 
 void LiquidDreamAudioProcessorEditor::paint(juce::Graphics& g) { g.fillAll(juce::Colour::fromString("FF1E1E1E")); }
 
@@ -587,42 +690,49 @@ void LiquidDreamAudioProcessorEditor::resized()
 
     rightArea.removeFromTop(10);
 
-    auto col1 = rightArea.removeFromLeft(200);
+    auto centerCol = rightArea.removeFromLeft(410);
     rightArea.removeFromLeft(10);
-    auto col2 = rightArea.removeFromLeft(200);
-    rightArea.removeFromLeft(10);
-    auto col3 = rightArea;
+    auto modCol = rightArea;
 
-    auto shpRect = col1.removeFromTop(205);
+    int rowH = centerCol.getHeight() / 5;
+
+    auto shpRect = centerCol.removeFromTop(rowH);
     shaperGroup.setBounds(shpRect);
-    int sX = shpRect.getX() + 15, sY = shpRect.getY() + 15;
-    placeKnob(sX, sY, distDriveLabel, distDriveSlider);
-    placeKnob(sX + 80, sY, shpAmtLabel, shpAmtSlider);
-    placeKnob(sX, sY + 80, rateLabel, rateSlider);
-    placeKnob(sX + 80, sY + 80, bitLabel, bitSlider);
+    int sX = shpRect.getX(), sY = shpRect.getY() + 12;
+    placeKnob(sX + 15, sY, distDriveLabel, distDriveSlider);
+    placeKnob(sX + 115, sY, shpAmtLabel, shpAmtSlider);
+    placeKnob(sX + 215, sY, rateLabel, rateSlider);
+    placeKnob(sX + 315, sY, bitLabel, bitSlider);
 
-    col1.removeFromTop(10);
-    filterGroup.setBounds(col1);
-    int fX = col1.getX() + 15, fY = col1.getY() + 15;
-    placeKnob(fX, fY, cutoffLabel, cutoffSlider);
-    placeKnob(fX + 80, fY, resLabel, resSlider);
-    placeKnob(fX + 40, fY + 80, fltEnvAmtLabel, fltEnvAmtSlider);
-
-    auto aEnvRect = col2.removeFromTop(205);
+    auto aEnvRect = centerCol.removeFromTop(rowH);
     ampEnvGroup.setBounds(aEnvRect);
-    int aX = aEnvRect.getX() + 15, aY = aEnvRect.getY() + 15;
-    placeKnob(aX, aY, ampAtkLabel, ampAtkSlider);
-    placeKnob(aX + 80, aY, ampDecLabel, ampDecSlider);
-    placeKnob(aX, aY + 80, ampSusLabel, ampSusSlider);
-    placeKnob(aX + 80, aY + 80, ampRelLabel, ampRelSlider);
+    int aX = aEnvRect.getX(), aY = aEnvRect.getY() + 12;
+    placeKnob(aX + 15, aY, ampAtkLabel, ampAtkSlider);
+    placeKnob(aX + 115, aY, ampDecLabel, ampDecSlider);
+    placeKnob(aX + 215, aY, ampSusLabel, ampSusSlider);
+    placeKnob(aX + 315, aY, ampRelLabel, ampRelSlider);
 
-    col2.removeFromTop(10);
-    filterEnvGroup.setBounds(col2);
-    int feX = col2.getX() + 15, feY = col2.getY() + 15;
-    placeKnob(feX, feY, fltAtkLabel, fltAtkSlider);
-    placeKnob(feX + 80, feY, fltDecLabel, fltDecSlider);
-    placeKnob(feX, feY + 80, fltSusLabel, fltSusSlider);
-    placeKnob(feX + 80, feY + 80, fltRelLabel, fltRelSlider);
+    auto filterRect = centerCol.removeFromTop(rowH);
+    filterGroup.setBounds(filterRect);
+    int fX = filterRect.getX(), fY = filterRect.getY() + 12;
+    placeKnob(fX + 65, fY, cutoffLabel, cutoffSlider);
+    placeKnob(fX + 165, fY, resLabel, resSlider);
+    placeKnob(fX + 265, fY, fltEnvAmtLabel, fltEnvAmtSlider);
 
-    modTabs.setBounds(col3);
+    auto fEnvRect = centerCol.removeFromTop(rowH);
+    filterEnvGroup.setBounds(fEnvRect);
+    int feX = fEnvRect.getX(), feY = fEnvRect.getY() + 12;
+    placeKnob(feX + 15, feY, fltAtkLabel, fltAtkSlider);
+    placeKnob(feX + 115, feY, fltDecLabel, fltDecSlider);
+    placeKnob(feX + 215, feY, fltSusLabel, fltSusSlider);
+    placeKnob(feX + 315, feY, fltRelLabel, fltRelSlider);
+
+    auto presetRect = centerCol.removeFromTop(rowH);
+    presetGroup.setBounds(presetRect);
+    int pX = presetRect.getX() + 15, pY = presetRect.getY() + 30;
+    presetCombo.setBounds(pX, pY, 220, 24);
+    savePresetBtn.setBounds(pX + 240, pY, 60, 24);
+    loadPresetBtn.setBounds(pX + 310, pY, 60, 24);
+
+    modTabs.setBounds(modCol);
 }

@@ -133,7 +133,6 @@ public:
         intervals.erase(std::unique(intervals.begin(), intervals.end()), intervals.end());
     }
 
-    // ★ 変更: mainAmpEnvBuffer を受け取り、最終出力に乗算する
     void process(juce::AudioBuffer<float>& buffer, const std::vector<int>& activeNotes, const float* mainAmpEnvBuffer) {
         if (targetLevel <= 0.001f || activeNotes.empty() || samplesPerStep <= 0) {
             currentLevel = 0.0f; return;
@@ -163,8 +162,6 @@ public:
             envPhase += 1.0f;
 
             currentLevel = currentLevel * 0.999f + targetLevel * 0.001f;
-
-            // ★ 変更: 音量感を1.2倍(0.24f)にし、メインのADSRカーブ(mainAmpEnvBuffer)を掛ける
             float val = sample * env * currentLevel * 0.24f * mainAmpEnvBuffer[i];
 
             outL[i] += val; outR[i] += val;
@@ -245,7 +242,11 @@ public:
         postFilterL.setType(juce::dsp::StateVariableTPTFilterType::highpass); postFilterR.setType(juce::dsp::StateVariableTPTFilterType::highpass);
     }
 
-    ~ColorIREngine() { irGenJobId++; threadPool.removeAllJobs(true, 1000); }
+    ~ColorIREngine() {
+        irGenJobId++;
+        // ★ 変更: ポインタ経由でのアクセス
+        threadPool->removeAllJobs(true, 1000);
+    }
 
     void prepare(double sampleRate, int samplesPerBlock)
     {
@@ -293,7 +294,8 @@ public:
         const int myJobId = ++irGenJobId;
         const double sr = currentSampleRate;
 
-        threadPool.addJob([this, currentNotes, attackMs, decayMs, irType, sr, myJobId]() {
+        // ★ 変更: ポインタ経由でのアクセス
+        threadPool->addJob([this, currentNotes, attackMs, decayMs, irType, sr, myJobId]() {
             if (myJobId != irGenJobId.load()) return;
 
             float actualDecayMs = std::max(100.0f, decayMs);
@@ -302,55 +304,97 @@ public:
 
             juce::AudioBuffer<float> tempIR(2, numSamples); tempIR.clear();
             std::vector<float> phases(currentNotes.size(), 0.0f), incs(currentNotes.size(), 0.0f);
+
+            std::vector<float> svfBp(currentNotes.size(), 0.0f);
+            std::vector<float> svfLp(currentNotes.size(), 0.0f);
+            std::vector<float> vibPhases(currentNotes.size(), 0.0f);
+            std::vector<float> vibIncs(currentNotes.size(), 0.0f);
+
             auto& random = juce::Random::getSystemRandom();
+            float baseFreq = (float)juce::MidiMessage::getMidiNoteInHertz(currentNotes[0]);
 
             for (size_t n = 0; n < currentNotes.size(); ++n) {
                 float freq = (float)juce::MidiMessage::getMidiNoteInHertz(currentNotes[n]);
-                incs[n] = freq / (float)sr; phases[n] = 0.0f;
+                incs[n] = freq / (float)sr;
+                phases[n] = random.nextFloat();
+                vibPhases[n] = random.nextFloat();
+                vibIncs[n] = (4.0f + random.nextFloat() * 2.0f) / (float)sr;
             }
 
             float atkSamples = std::max(1.0f, (attackMs / 1000.0f) * (float)sr);
             float decSamples = (actualDecayMs / 1000.0f) * (float)sr;
-            float noiseSamples = sr * 0.02f;
             auto* outL = tempIR.getWritePointer(0); auto* outR = tempIR.getWritePointer(1);
             float norm = 1.0f / (float)currentNotes.size();
 
             for (int i = 0; i < numSamples; ++i) {
                 if (myJobId != irGenJobId.load()) return;
                 float sample = 0.0f;
+                float timeRatio = (float)i / (float)numSamples;
+                float globalNoise = random.nextFloat() * 2.0f - 1.0f;
 
-                if (irType == 3) {
-                    // ★ 変更: Harmonic Resonator (Ableton Resonator的アプローチ)
+                if (irType == 0) {
                     for (size_t n = 0; n < currentNotes.size(); ++n) {
                         float phase = phases[n];
-                        // 基本のサイン波レゾナンス
-                        float val = std::sin(phase * juce::MathConstants<float>::twoPi);
-                        // 指数関数的減衰を個別に適用し、弦の響きをシミュレート
-                        float currentDecay = std::exp(-(float)i / (sr * (actualDecayMs / 1000.0f) * 0.4f));
-                        sample += val * currentDecay;
-                        phases[n] += incs[n]; if (phases[n] >= 1.0f) phases[n] -= 1.0f;
-                    }
-                    sample *= (norm * 0.8f);
-                    // ごく僅かなノイズインパルスをアタックに付加して輪郭を強調
-                    sample += (random.nextFloat() * 2.0f - 1.0f) * 0.08f * std::exp(-(float)i / (sr * 0.05f));
-                }
-                else {
-                    for (size_t n = 0; n < currentNotes.size(); ++n) {
-                        float phase = phases[n]; float val = 0.0f;
-                        if (irType == 0) val = (2.0f * phase - 1.0f);
-                        else if (irType == 1) val = (phase < 0.5f) ? 1.0f : -1.0f;
-                        else if (irType == 2) {
-                            float pPi = phase * juce::MathConstants<float>::twoPi;
-                            val = (std::sin(pPi) + 0.6f * std::sin(pPi * 2.76f) + 0.4f * std::sin(pPi * 5.4f) + 0.2f * std::sin(pPi * 8.9f)) * 0.6f;
-                        }
-                        sample += val;
+                        float saw = 2.0f * phase - 1.0f;
+                        sample += saw * (1.0f + 0.15f * globalNoise);
                         phases[n] += incs[n]; if (phases[n] >= 1.0f) phases[n] -= 1.0f;
                     }
                     sample *= norm;
-                    if (i < noiseSamples) sample += (random.nextFloat() * 2.0f - 1.0f) * (1.0f - ((float)i / noiseSamples)) * 0.3f;
+                }
+                else if (irType == 1) {
+                    float duty = 0.5f - 0.45f * timeRatio;
+                    for (size_t n = 0; n < currentNotes.size(); ++n) {
+                        float phase = phases[n];
+                        float sq = (phase < duty) ? 1.0f : -1.0f;
+                        if (phase < 0.02f || std::abs(phase - duty) < 0.02f) {
+                            sq += globalNoise * 0.8f;
+                        }
+                        sample += sq;
+                        phases[n] += incs[n]; if (phases[n] >= 1.0f) phases[n] -= 1.0f;
+                    }
+                    sample *= norm;
+                }
+                else if (irType == 2) {
+                    for (size_t n = 0; n < currentNotes.size(); ++n) {
+                        float freq = (float)juce::MidiMessage::getMidiNoteInHertz(currentNotes[n]);
+                        float ratio = freq / baseFreq;
+                        float phase = phases[n];
+                        float pPi = phase * juce::MathConstants<float>::twoPi;
+
+                        float overtoneMix = std::min(1.0f, (ratio - 1.0f) * 0.4f);
+                        float decayMult = std::exp(-(float)i / (sr * (actualDecayMs / 1000.0f) * (1.0f / std::sqrt(ratio))));
+
+                        float val = std::sin(pPi);
+                        if (overtoneMix > 0.01f) {
+                            val += overtoneMix * (0.6f * std::sin(pPi * 2.76f) + 0.4f * std::sin(pPi * 5.4f) + 0.2f * std::sin(pPi * 8.9f));
+                        }
+                        sample += val * decayMult * 0.8f;
+                        phases[n] += incs[n]; if (phases[n] >= 1.0f) phases[n] -= 1.0f;
+                    }
+                    sample *= norm;
+                }
+                else if (irType == 3) {
+                    for (size_t n = 0; n < currentNotes.size(); ++n) {
+                        float baseF = (float)juce::MidiMessage::getMidiNoteInHertz(currentNotes[n]);
+                        float vib = 1.0f + 0.005f * std::sin(vibPhases[n] * juce::MathConstants<float>::twoPi);
+
+                        float f = 2.0f * std::sin(juce::MathConstants<float>::pi * (baseF * vib) / (float)sr);
+                        float q = 0.01f;
+
+                        float hp = globalNoise - svfLp[n] - q * svfBp[n];
+                        svfBp[n] += f * hp;
+                        svfLp[n] += f * svfBp[n];
+
+                        float currentDecay = std::exp(-(float)i / (sr * (actualDecayMs / 1000.0f) * 0.5f));
+                        sample += svfBp[n] * currentDecay * 12.0f;
+
+                        vibPhases[n] += vibIncs[n]; if (vibPhases[n] >= 1.0f) vibPhases[n] -= 1.0f;
+                    }
+                    sample *= norm;
                 }
 
                 sample = std::tanh(sample * ((irType == 3) ? 1.5f : 4.0f));
+
                 float env = (i < atkSamples) ? ((float)i / atkSamples) : std::pow(std::max(0.0f, 1.0f - ((float)(i - atkSamples) / decSamples)), 4.0f);
                 outL[i] = sample * env * 0.025f; outR[i] = sample * env * 0.025f;
             }
@@ -372,7 +416,6 @@ public:
 
     void setArpParameters(int wave, int mode, float speedHz, int pitch, float level) { sparkleArp.setParameters(wave, mode, speedHz, pitch, level); }
 
-    // ★ 変更: IR Volを受け取る
     void setParameters(float preCutoffHz, float postCutoffHz, float mixVal, float irVolDb)
     {
         preFilterL.setCutoffFrequency(std::clamp(preCutoffHz, 20.0f, 2000.0f)); preFilterR.setCutoffFrequency(std::clamp(preCutoffHz, 20.0f, 2000.0f));
@@ -416,7 +459,6 @@ public:
 
             currentWetL = postFilterL.processSample(0, currentWetL); currentWetR = postFilterR.processSample(1, currentWetR);
 
-            // ★ 変更: IR Vol を適用
             currentWetL *= irVolumeLinear; currentWetR *= irVolumeLinear;
 
             outL[i] = inL[i] * (1.0f - mix) + currentWetL * mix; outR[i] = inR[i] * (1.0f - mix) + currentWetR * mix;
@@ -425,7 +467,6 @@ public:
         trueOtt.process(buffer);
     }
 
-    // ★ 変更: AmpEnvBufferを引数に追加
     void processArp(juce::AudioBuffer<float>& masterBuffer, const std::vector<int>& activeNotes, const float* mainAmpEnvBuffer) {
         if (state.load() == LearnState::Active) sparkleArp.process(masterBuffer, activeNotes, mainAmpEnvBuffer);
     }
@@ -437,7 +478,10 @@ private:
     mutable std::mutex chordMutex;
 
     juce::dsp::Convolution convEngineA, convEngineB;
-    juce::ThreadPool threadPool{ 1 };
+
+    // ★ 変更: 全インスタンスでスレッドを共有する
+    juce::SharedResourcePointer<juce::ThreadPool> threadPool;
+
     std::atomic<int> irGenJobId{ 0 };
 
     juce::AudioBuffer<float> wetBufferA, wetBufferB;
@@ -447,7 +491,7 @@ private:
 
     std::atomic<bool> activeEngineIsA{ true };
     float fadeVolA = 1.0f, fadeVolB = 0.0f, fadeTargetA = 1.0f, fadeTargetB = 0.0f, mix = 0.0f;
-    float irVolumeLinear = 1.0f; // ★ 追加: IR Vol内部値
+    float irVolumeLinear = 1.0f;
 
     float sootheDepth = 0.0f, sootheTime = 0.0f;
     float sootheSelectivity = 0.5f, sootheSharpness = 0.5f, sootheFocus = 0.0f;

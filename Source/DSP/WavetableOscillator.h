@@ -50,7 +50,8 @@ public:
 
     ~WavetableOscillator() {
         loadJobId++;
-        backgroundPool.removeAllJobs(true, 1000);
+        // ★ 変更: ポインタ経由でのアクセス
+        backgroundPool->removeAllJobs(true, 1000);
     }
 
     void prepare(double sr) { sampleRate = std::max(1.0, sr); }
@@ -105,7 +106,6 @@ public:
         runBandlimitingTask(myJobId, newSet, tempRaw);
     }
 
-    // ★ 追加: PC内の任意の絶対パスから直接ロードするためのメソッド
     void loadCustomWavetableFile(const juce::File& file) {
         const int myJobId = ++loadJobId;
         if (!file.existsAsFile()) return;
@@ -130,7 +130,8 @@ public:
     }
 
     void runBandlimitingTask(int myJobId, WavetableSet::Ptr newSet, juce::AudioBuffer<float> tempRaw) {
-        backgroundPool.addJob([this, myJobId, newSet, tempRaw]() {
+        // ★ 変更: ポインタ経由でのアクセス
+        backgroundPool->addJob([this, myJobId, newSet, tempRaw]() {
             juce::dsp::FFT fft(11);
             juce::AudioBuffer<float> workBuf(1, 4096);
             for (int lvl = 1; lvl < NumLevels; ++lvl) {
@@ -343,7 +344,12 @@ private:
     float wtLevel = 1.0f, wtPitchOffset = 0.0f, pitchDecayAmt = 0.0f, pitchDecayCoef = 0.0f, pitchEnvState = 0.0f;
     int subWaveform = 0; float subVolume = 0.0f, subPitchOffset = -12.0f, subPhase = 0.0f, subLpfState = 0.0f;
     std::array<float, MaxVoices> driftPhase = { 0 }, driftRate = { 0 };
-    juce::AudioFormatManager formatManager; juce::ThreadPool backgroundPool{ 1 }; std::atomic<int> loadJobId{ 0 };
+    juce::AudioFormatManager formatManager;
+
+    // ★ 変更: 全インスタンスでスレッドを共有する
+    juce::SharedResourcePointer<juce::ThreadPool> backgroundPool;
+
+    std::atomic<int> loadJobId{ 0 };
     juce::ReferenceCountedObjectPtr<WavetableSet> currentWavetableSet;
     std::array<SIMDFloat, MaxBlocks> phases, increments, panL, panR, amp;
 

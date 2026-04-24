@@ -93,7 +93,6 @@ private:
     juce::Slider arpSpeedSlider, arpLevelSlider;
     juce::Label arpSpeedLabel, arpLevelLabel;
 
-    // ★ 最終段のマスターゲイン（Color編集時用）
     juce::Slider masterGainSlider;
     juce::Label masterGainLabel;
 
@@ -110,6 +109,10 @@ public:
     void paint(juce::Graphics&) override;
     void resized() override;
     void timerCallback() override;
+
+    // ★ 追加: プリセットスキャン用メソッド
+    void scanPresets();
+
 private:
     LiquidDreamAudioProcessor& audioProcessor;
     AbletonLookAndFeel abletonLnF;
@@ -125,7 +128,7 @@ private:
 
     // Overlays & Groups
     ColorIrPanel colorPanel;
-    juce::GroupComponent oscGroup, subGroup, shaperGroup, filterGroup, ampEnvGroup, filterEnvGroup, controlGroup;
+    juce::GroupComponent oscGroup, subGroup, shaperGroup, filterGroup, ampEnvGroup, filterEnvGroup, controlGroup, presetGroup;
 
     // Osc Params
     juce::ToggleButton oscOnButton{ "ON" };
@@ -164,6 +167,14 @@ private:
     juce::ToggleButton legatoButton{ "LEGATO" };
     juce::Slider glideSlider, pitchSlider, gainSlider;
     juce::Label  glideLabel, pitchLabel, gainLabel;
+
+    // Preset UI
+    juce::ComboBox presetCombo;
+    juce::TextButton savePresetBtn{ "Save" };
+    juce::TextButton loadPresetBtn{ "Load" };
+
+    // ★ 追加: プリセットファイル管理配列
+    juce::Array<juce::File> presetFiles;
 
     // Modulation Tabs
     juce::TabbedComponent modTabs;
