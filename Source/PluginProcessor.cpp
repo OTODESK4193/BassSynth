@@ -23,41 +23,25 @@ LiquidDreamAudioProcessor::LiquidDreamAudioProcessor()
     pFltAType = apvts.getRawParameterValue("flt_a_type"); pFltACutoff = apvts.getRawParameterValue("flt_a_cutoff"); pFltAReso = apvts.getRawParameterValue("flt_a_res");
     pFltBType = apvts.getRawParameterValue("flt_b_type"); pFltBCutoff = apvts.getRawParameterValue("flt_b_cutoff"); pFltBReso = apvts.getRawParameterValue("flt_b_res");
     pFltRouting = apvts.getRawParameterValue("flt_routing"); pFltMix = apvts.getRawParameterValue("flt_mix");
-
-    pFltAEnvAmt = apvts.getRawParameterValue("flt_a_env_amt");
-    pFltBEnvAmt = apvts.getRawParameterValue("flt_b_env_amt");
+    pFltAEnvAmt = apvts.getRawParameterValue("flt_a_env_amt"); pFltBEnvAmt = apvts.getRawParameterValue("flt_b_env_amt");
 
     pDrive = apvts.getRawParameterValue("dist_drive"); pShpAmt = apvts.getRawParameterValue("shp_amt"); pShpRate = apvts.getRawParameterValue("shp_rate"); pShpBit = apvts.getRawParameterValue("shp_bit");
     pGain = apvts.getRawParameterValue("m_gain"); pGlide = apvts.getRawParameterValue("m_glide"); pLegato = apvts.getRawParameterValue("m_legato");
     pAAtk = apvts.getRawParameterValue("a_atk"); pADec = apvts.getRawParameterValue("a_dec"); pASus = apvts.getRawParameterValue("a_sus"); pARel = apvts.getRawParameterValue("a_rel");
-
     pFAtkA = apvts.getRawParameterValue("f_a_atk"); pFDecA = apvts.getRawParameterValue("f_a_dec"); pFSusA = apvts.getRawParameterValue("f_a_sus"); pFRelA = apvts.getRawParameterValue("f_a_rel");
     pFAtkB = apvts.getRawParameterValue("f_b_atk"); pFDecB = apvts.getRawParameterValue("f_b_dec"); pFSusB = apvts.getRawParameterValue("f_b_sus"); pFRelB = apvts.getRawParameterValue("f_b_rel");
 
-    pColorOn = apvts.getRawParameterValue("color_on");
-    pColorType = apvts.getRawParameterValue("color_type");
-    pColorMix = apvts.getRawParameterValue("color_mix");
-    pColorIrVol = apvts.getRawParameterValue("color_ir_vol");
-    pColorPreHp = apvts.getRawParameterValue("color_pre_hp");
-    pColorPostHp = apvts.getRawParameterValue("color_post_hp");
-    pColorAtk = apvts.getRawParameterValue("color_atk");
-    pColorDec = apvts.getRawParameterValue("color_dec");
+    pColorOn = apvts.getRawParameterValue("color_on"); pColorType = apvts.getRawParameterValue("color_type");
+    pColorMix = apvts.getRawParameterValue("color_mix"); pColorIrVol = apvts.getRawParameterValue("color_ir_vol");
+    pColorPreHp = apvts.getRawParameterValue("color_pre_hp"); pColorPostHp = apvts.getRawParameterValue("color_post_hp");
+    pColorAtk = apvts.getRawParameterValue("color_atk"); pColorDec = apvts.getRawParameterValue("color_dec");
 
-    pOttDepth = apvts.getRawParameterValue("ott_depth");
-    pOttTime = apvts.getRawParameterValue("ott_time");
-    pOttUp = apvts.getRawParameterValue("ott_up");
-    pOttDown = apvts.getRawParameterValue("ott_down");
-    pOttGain = apvts.getRawParameterValue("ott_gain");
+    pOttDepth = apvts.getRawParameterValue("ott_depth"); pOttTime = apvts.getRawParameterValue("ott_time");
+    pOttUp = apvts.getRawParameterValue("ott_up"); pOttDown = apvts.getRawParameterValue("ott_down"); pOttGain = apvts.getRawParameterValue("ott_gain");
+    pSootheSelectivity = apvts.getRawParameterValue("soothe_sel"); pSootheSharpness = apvts.getRawParameterValue("soothe_shp"); pSootheFocus = apvts.getRawParameterValue("soothe_foc");
 
-    pSootheSelectivity = apvts.getRawParameterValue("soothe_sel");
-    pSootheSharpness = apvts.getRawParameterValue("soothe_shp");
-    pSootheFocus = apvts.getRawParameterValue("soothe_foc");
-
-    pArpWave = apvts.getRawParameterValue("arp_wave");
-    pArpMode = apvts.getRawParameterValue("arp_mode");
-    pArpSpeed = apvts.getRawParameterValue("arp_speed");
-    pArpPitch = apvts.getRawParameterValue("arp_pitch");
-    pArpLevel = apvts.getRawParameterValue("arp_level");
+    pArpWave = apvts.getRawParameterValue("arp_wave"); pArpMode = apvts.getRawParameterValue("arp_mode");
+    pArpSpeed = apvts.getRawParameterValue("arp_speed"); pArpPitch = apvts.getRawParameterValue("arp_pitch"); pArpLevel = apvts.getRawParameterValue("arp_level");
 
     for (int i = 0; i < 3; ++i) {
         juce::String ms = "mod" + juce::String(i + 1) + "_";
@@ -70,15 +54,14 @@ LiquidDreamAudioProcessor::LiquidDreamAudioProcessor()
         pLfoOn[i] = apvts.getRawParameterValue(ls + "on");
         pLfoWave[i] = apvts.getRawParameterValue(ls + "wave"); pLfoSync[i] = apvts.getRawParameterValue(ls + "sync");
         pLfoRate[i] = apvts.getRawParameterValue(ls + "rate"); pLfoBeat[i] = apvts.getRawParameterValue(ls + "beat");
-        pLfoAmt[i] = apvts.getRawParameterValue(ls + "amt");
-        pLfoTrig[i] = apvts.getRawParameterValue(ls + "trig");
+        pLfoAmt[i] = apvts.getRawParameterValue(ls + "amt"); pLfoTrig[i] = apvts.getRawParameterValue(ls + "trig");
     }
 
-    for (int src = 0; src < 6; ++src) {
-        for (int slot = 0; slot < 3; ++slot) {
-            pMatrixDest[src][slot] = apvts.getRawParameterValue("matrix_s" + juce::String(src) + "_d" + juce::String(slot));
-            pMatrixAmt[src][slot] = apvts.getRawParameterValue("matrix_s" + juce::String(src) + "_a" + juce::String(slot));
-        }
+    // ★ 変更: 8つの動的マトリックススロットをバインド
+    for (int i = 0; i < 8; ++i) {
+        pMatrixSrc[i] = apvts.getRawParameterValue("matrix_src_" + juce::String(i));
+        pMatrixDest[i] = apvts.getRawParameterValue("matrix_dest_" + juce::String(i));
+        pMatrixAmt[i] = apvts.getRawParameterValue("matrix_amt_" + juce::String(i));
     }
 }
 
@@ -96,10 +79,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout LiquidDreamAudioProcessor::c
     params.push_back(std::make_unique<juce::AudioParameterFloat>("osc_pdecay_amt", "P.Decay", -24.0f, 24.0f, 0.0f));
     auto timeRange = juce::NormalisableRange<float>(1.0f, 2000.0f, 1.0f, 0.3f);
     params.push_back(std::make_unique<juce::AudioParameterFloat>("osc_pdecay_time", "P.Time", timeRange, 100.0f));
-
     params.push_back(std::make_unique<juce::AudioParameterFloat>("osc_fm", "FM Amt", 0.0f, 3.0f, 0.0f));
     params.push_back(std::make_unique<juce::AudioParameterInt>("osc_fm_wave", "FM Wave", 0, 3, 0));
-
     params.push_back(std::make_unique<juce::AudioParameterInt>("osc_morph_a_mode", "Morph A", 0, 13, 0));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("osc_morph_a_amt", "Amount A", -1.0f, 1.0f, 0.0f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("osc_morph_a_shift", "Shift A", -1.0f, 1.0f, 0.0f));
@@ -109,23 +90,18 @@ juce::AudioProcessorValueTreeState::ParameterLayout LiquidDreamAudioProcessor::c
     params.push_back(std::make_unique<juce::AudioParameterInt>("osc_morph_c_mode", "Morph C", 0, 13, 0));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("osc_morph_c_amt", "Amount C", -1.0f, 1.0f, 0.0f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("osc_morph_c_shift", "Shift C", -1.0f, 1.0f, 0.0f));
-
     params.push_back(std::make_unique<juce::AudioParameterInt>("osc_uni", "Unison", 1, 12, 1));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("osc_detune", "Detune", 0.0f, 1.0f, 0.2f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("osc_width", "Width", 0.0f, 1.0f, 1.0f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("osc_drift", "Drift", 0.0f, 1.0f, 0.1f));
-
     params.push_back(std::make_unique<juce::AudioParameterBool>("sub_on", "Sub On", true));
     params.push_back(std::make_unique<juce::AudioParameterInt>("sub_wave", "Sub Wave", 0, 3, 0));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("sub_vol", "Sub Vol", 0.0f, 1.0f, 0.0f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("sub_pitch", "Sub Pitch", -24.0f, 0.0f, -12.0f));
-
     params.push_back(std::make_unique<juce::AudioParameterFloat>("dist_drive", "Drive", 1.0f, 10.0f, 1.0f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("shp_amt", "Sine Shaper", 0.0f, 1.0f, 0.0f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("shp_bit", "Bit Depth", 1.0f, 24.0f, 24.0f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("shp_rate", "DS Rate", 1.0f, 20.0f, 1.0f));
-
-    // Dual Filter
     params.push_back(std::make_unique<juce::AudioParameterInt>("flt_a_type", "Flt A Type", 0, 5, 0));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("flt_a_cutoff", "Flt A Cutoff", 20.0f, 20000.0f, 20000.0f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("flt_a_res", "Flt A Reso", 0.0f, 1.0f, 0.0f));
@@ -134,10 +110,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout LiquidDreamAudioProcessor::c
     params.push_back(std::make_unique<juce::AudioParameterFloat>("flt_b_res", "Flt B Reso", 0.0f, 1.0f, 0.0f));
     params.push_back(std::make_unique<juce::AudioParameterInt>("flt_routing", "Routing", 0, 1, 0));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("flt_mix", "Flt Mix", 0.0f, 1.0f, 0.5f));
-
     params.push_back(std::make_unique<juce::AudioParameterFloat>("flt_a_env_amt", "FltA Env Amt", 0.0f, 1.0f, 0.0f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("flt_b_env_amt", "FltB Env Amt", 0.0f, 1.0f, 0.0f));
-
     params.push_back(std::make_unique<juce::AudioParameterFloat>("m_gain", "Gain", 0.0f, 1.0f, 0.5f));
 
     auto glideRange = juce::NormalisableRange<float>(0.0f, 1000.0f, 1.0f, 0.3f);
@@ -150,8 +124,6 @@ juce::AudioProcessorValueTreeState::ParameterLayout LiquidDreamAudioProcessor::c
     params.push_back(std::make_unique<juce::AudioParameterFloat>("a_dec", "Amp Dec", attRange, 0.2f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("a_sus", "Amp Sus", 0.0f, 1.0f, 1.0f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("a_rel", "Amp Rel", attRange, 0.3f));
-
-    // Filter ADSR A/B
     params.push_back(std::make_unique<juce::AudioParameterFloat>("f_a_atk", "Flt A Atk", attRange, 0.01f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("f_a_dec", "Flt A Dec", attRange, 0.2f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("f_a_sus", "Flt A Sus", 0.0f, 1.0f, 0.5f));
@@ -161,7 +133,6 @@ juce::AudioProcessorValueTreeState::ParameterLayout LiquidDreamAudioProcessor::c
     params.push_back(std::make_unique<juce::AudioParameterFloat>("f_b_sus", "Flt B Sus", 0.0f, 1.0f, 0.5f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("f_b_rel", "Flt B Rel", attRange, 0.3f));
 
-    // ColorIR Params
     params.push_back(std::make_unique<juce::AudioParameterBool>("color_on", "Color On", false));
     params.push_back(std::make_unique<juce::AudioParameterInt>("color_type", "IR Type", 0, 3, 0));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("color_mix", "Color Mix", 0.0f, 1.0f, 0.5f));
@@ -171,7 +142,6 @@ juce::AudioProcessorValueTreeState::ParameterLayout LiquidDreamAudioProcessor::c
     params.push_back(std::make_unique<juce::AudioParameterFloat>("color_atk", "IR Attack", 2.0f, 100.0f, 5.0f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("color_dec", "IR Decay", 10.0f, 500.0f, 100.0f));
 
-    // True OTT & Soothe Params
     params.push_back(std::make_unique<juce::AudioParameterFloat>("ott_depth", "OTT Depth", 0.0f, 1.0f, 0.5f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("ott_time", "OTT Time", 0.0f, 1.0f, 0.5f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("ott_up", "Upward %", 0.0f, 1.0f, 0.5f));
@@ -182,7 +152,6 @@ juce::AudioProcessorValueTreeState::ParameterLayout LiquidDreamAudioProcessor::c
     params.push_back(std::make_unique<juce::AudioParameterFloat>("soothe_shp", "Sharpness", 0.0f, 1.0f, 0.5f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("soothe_foc", "Focus", -1.0f, 1.0f, 0.0f));
 
-    // Sparkle Arp Params
     auto speedRange = juce::NormalisableRange<float>(1.0f, 100.0f, 0.1f, 0.3f);
     params.push_back(std::make_unique<juce::AudioParameterInt>("arp_wave", "Arp Wave", 0, 4, 2));
     params.push_back(std::make_unique<juce::AudioParameterInt>("arp_mode", "Arp Mode", 0, 3, 0));
@@ -214,13 +183,12 @@ juce::AudioProcessorValueTreeState::ParameterLayout LiquidDreamAudioProcessor::c
         params.push_back(std::make_unique<juce::AudioParameterInt>(pfx + "trig", nm + "Trig", 0, 2, 0));
     }
 
-    for (int src = 0; src < 6; ++src) {
-        for (int slot = 0; slot < 3; ++slot) {
-            juce::String destId = "matrix_s" + juce::String(src) + "_d" + juce::String(slot);
-            juce::String amtId = "matrix_s" + juce::String(src) + "_a" + juce::String(slot);
-            params.push_back(std::make_unique<juce::AudioParameterInt>(destId, "Dest", 0, 13, 0));
-            params.push_back(std::make_unique<juce::AudioParameterFloat>(amtId, "Amt", -1.0f, 1.0f, 0.0f));
-        }
+    // ★ 変更: ダイナミックマトリックスの8スロット (Source 0~6, Dest 0~13)
+    for (int i = 0; i < 8; ++i) {
+        juce::String sIdx = juce::String(i);
+        params.push_back(std::make_unique<juce::AudioParameterInt>("matrix_src_" + sIdx, "Src", 0, 6, 0));
+        params.push_back(std::make_unique<juce::AudioParameterInt>("matrix_dest_" + sIdx, "Dest", 0, 13, 0));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>("matrix_amt_" + sIdx, "Amt", -1.0f, 1.0f, 0.0f));
     }
 
     return { params.begin(), params.end() };
@@ -293,11 +261,9 @@ void LiquidDreamAudioProcessor::prepareToPlay(double sampleRate, int samplesPerB
     double st = 0.02;
     smoothedWtLevel.reset(sampleRate, st); smoothedWtPitch.reset(sampleRate, st);
     smoothedPDecayAmt.reset(sampleRate, st); smoothedPDecayTime.reset(sampleRate, st);
-
     smoothedFltACutoff.reset(sampleRate, st); smoothedFltAReso.reset(sampleRate, st);
     smoothedFltBCutoff.reset(sampleRate, st); smoothedFltBReso.reset(sampleRate, st);
     smoothedFltMix.reset(sampleRate, st);
-
     smoothedDrive.reset(sampleRate, st); smoothedShpAmt.reset(sampleRate, st);
     smoothedShpRate.reset(sampleRate, st); smoothedShpBit.reset(sampleRate, st); smoothedGain.reset(sampleRate, st);
     smoothedWtPos.reset(sampleRate, st); smoothedFm.reset(sampleRate, st); smoothedDrift.reset(sampleRate, st);
@@ -349,18 +315,15 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     smoothedPDecayAmt.setTargetValue(pPDecayAmt->load(std::memory_order_relaxed));
     smoothedPDecayTime.setTargetValue(pPDecayTime->load(std::memory_order_relaxed));
     smoothedDrift.setTargetValue(pDrift->load(std::memory_order_relaxed));
-
     smoothedFltACutoff.setTargetValue(pFltACutoff->load(std::memory_order_relaxed));
     smoothedFltAReso.setTargetValue(pFltAReso->load(std::memory_order_relaxed));
     smoothedFltBCutoff.setTargetValue(pFltBCutoff->load(std::memory_order_relaxed));
     smoothedFltBReso.setTargetValue(pFltBReso->load(std::memory_order_relaxed));
     smoothedFltMix.setTargetValue(pFltMix->load(std::memory_order_relaxed));
-
     smoothedGain.setTargetValue(pGain->load(std::memory_order_relaxed));
     smoothedMorphAAmt.setTargetValue(pMorphAAmt->load(std::memory_order_relaxed)); smoothedMorphAShift.setTargetValue(pMorphAShift->load(std::memory_order_relaxed));
     smoothedMorphBAmt.setTargetValue(pMorphBAmt->load(std::memory_order_relaxed)); smoothedMorphBShift.setTargetValue(pMorphBShift->load(std::memory_order_relaxed));
     smoothedMorphCAmt.setTargetValue(pMorphCAmt->load(std::memory_order_relaxed)); smoothedMorphCShift.setTargetValue(pMorphCShift->load(std::memory_order_relaxed));
-
     smoothedWtLevel.setTargetValue(pOscLevel->load(std::memory_order_relaxed));
     smoothedDrive.setTargetValue(pDrive->load(std::memory_order_relaxed)); smoothedShpAmt.setTargetValue(pShpAmt->load(std::memory_order_relaxed));
     smoothedShpRate.setTargetValue(pShpRate->load(std::memory_order_relaxed)); smoothedShpBit.setTargetValue(pShpBit->load(std::memory_order_relaxed));
@@ -383,7 +346,6 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
 
     voiceManager.setLegatoMode(pLegato->load(std::memory_order_relaxed) > 0.5f);
 
-    // ★ MIDIイベントの安全な処理 (JUCE 6/7対応の最新イテレーション)
     for (const auto metadata : midiMessages) {
         auto msg = metadata.getMessage();
         if (msg.isNoteOn()) {
@@ -393,7 +355,6 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
             if (std::find(activeMidiNotes.begin(), activeMidiNotes.end(), msg.getNoteNumber()) == activeMidiNotes.end()) {
                 activeMidiNotes.push_back(msg.getNoteNumber());
             }
-
             if (voiceManager.noteOn(msg.getNoteNumber(), msg.getVelocity())) {
                 bool isLegato = voiceManager.isLegatoTransition();
                 ampEnv.noteOn(isLegato);
@@ -404,7 +365,6 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         }
         else if (msg.isNoteOff()) {
             activeMidiNotes.erase(std::remove(activeMidiNotes.begin(), activeMidiNotes.end(), msg.getNoteNumber()), activeMidiNotes.end());
-
             if (voiceManager.noteOff(msg.getNoteNumber())) {
                 ampEnv.noteOff();
                 filterEnvA.noteOff(); filterEnvB.noteOff();
@@ -441,30 +401,35 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     auto* wtL = tempWavetableBuffer.getWritePointer(0); auto* wtR = tempWavetableBuffer.getWritePointer(1);
     float stft_aA = 0.0f, stft_sA = 0.0f, stft_aB = 0.0f, stft_sB = 0.0f, stft_aC = 0.0f, stft_sC = 0.0f;
 
-    // --- STEP 1: Modulations & Envelopes ---
+    // --- STEP 1: Modulations & Envelopes (Dynamic Matrix) ---
     for (int i = 0; i < numSamples; ++i) {
-        float modValues[6] = {
-            (pModOn[0]->load(std::memory_order_relaxed) > 0.5f ? modEnvs[0].getNextSample() * pModAmt[0]->load(std::memory_order_relaxed) : 0.0f),
-            (pModOn[1]->load(std::memory_order_relaxed) > 0.5f ? modEnvs[1].getNextSample() * pModAmt[1]->load(std::memory_order_relaxed) : 0.0f),
-            (pModOn[2]->load(std::memory_order_relaxed) > 0.5f ? modEnvs[2].getNextSample() * pModAmt[2]->load(std::memory_order_relaxed) : 0.0f),
+
+        // ★ 変更: 全モジュレーションソースの現在値を配列に確保
+        float sources[7] = {
+            0.0f, // 0: None
+            (pModOn[0]->load(std::memory_order_relaxed) > 0.5f ? modEnvs[0].getNextSample() : 0.0f),
+            (pModOn[1]->load(std::memory_order_relaxed) > 0.5f ? modEnvs[1].getNextSample() : 0.0f),
+            (pModOn[2]->load(std::memory_order_relaxed) > 0.5f ? modEnvs[2].getNextSample() : 0.0f),
             (pLfoOn[0]->load(std::memory_order_relaxed) > 0.5f ? lfos[0].getNextSample(currentBpm) : 0.0f),
             (pLfoOn[1]->load(std::memory_order_relaxed) > 0.5f ? lfos[1].getNextSample(currentBpm) : 0.0f),
             (pLfoOn[2]->load(std::memory_order_relaxed) > 0.5f ? lfos[2].getNextSample(currentBpm) : 0.0f)
         };
 
         float destMods[14] = { 0 };
-        for (int src = 0; src < 6; ++src) {
-            for (int slot = 0; slot < 3; ++slot) {
-                int dest = (int)pMatrixDest[src][slot]->load(std::memory_order_relaxed);
-                if (dest > 0 && dest < 14) {
-                    destMods[dest] += modValues[src] * pMatrixAmt[src][slot]->load(std::memory_order_relaxed);
-                }
+
+        // ★ 変更: 8つの動的スロットをループ処理してターゲットに加算
+        for (int slot = 0; slot < 8; ++slot) {
+            int srcIdx = (int)pMatrixSrc[slot]->load(std::memory_order_relaxed);
+            int destIdx = (int)pMatrixDest[slot]->load(std::memory_order_relaxed);
+            float amt = pMatrixAmt[slot]->load(std::memory_order_relaxed);
+
+            if (srcIdx > 0 && srcIdx < 7 && destIdx > 0 && destIdx < 14) {
+                destMods[destIdx] += sources[srcIdx] * amt;
             }
         }
 
         float modPos = juce::jlimit(0.0f, 1.0f, smoothedWtPos.getNextValue() + destMods[1]);
         float modFm = juce::jlimit(0.0f, 3.0f, smoothedFm.getNextValue() + destMods[2] * 3.0f);
-
         float aA = juce::jlimit(-1.0f, 1.0f, smoothedMorphAAmt.getNextValue() + destMods[3]);
         float sA = juce::jlimit(-1.0f, 1.0f, smoothedMorphAShift.getNextValue() + destMods[4]);
         float aB = juce::jlimit(-1.0f, 1.0f, smoothedMorphBAmt.getNextValue() + destMods[5]);
@@ -476,15 +441,12 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
 
         oscillator.setWavetablePosition(modPos);
         oscillator.setFMAmount(modFm);
-
         oscillator.setWavetablePitchOffset(smoothedWtPitch.getNextValue());
         oscillator.setPitchDecay(smoothedPDecayAmt.getNextValue(), smoothedPDecayTime.getNextValue());
         oscillator.setDriftAmount(smoothedDrift.getNextValue());
-
         oscillator.setMorphA(currentModeA, aA, sA);
         oscillator.setMorphB(currentModeB, aB, sB);
         oscillator.setMorphC(currentModeC, aC, sC);
-
         oscillator.setWavetableLevel(smoothedWtLevel.getNextValue());
         oscillator.setSubVolume(smoothedSubVol.getNextValue());
 
@@ -510,10 +472,7 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         tempEnvBuffer.setSample(7, i, destMods[13]); // Gain
 
         float oL = 0.0f, oR = 0.0f, subL = 0.0f, subR = 0.0f;
-
-        // --- STEP 2: Generate Oscillators ---
         oscillator.getSampleStereo(oL, oR, subL, subR);
-
         wtL[i] = oL; wtR[i] = oR;
         tempSubBuffer.setSample(0, i, subL); tempSubBuffer.setSample(1, i, subR);
     }
@@ -529,7 +488,7 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         wtL[i] = sL; wtR[i] = sR;
     }
 
-    // --- STEP 5: Dual Filter Engine & Amp Envelope (Base Synth Completion) ---
+    // --- STEP 5: Dual Filter Engine & Amp Envelope ---
     for (int i = 0; i < numSamples; ++i) {
         float ccA = smoothedFltACutoff.getNextValue(), crA = smoothedFltAReso.getNextValue();
         float ccB = smoothedFltBCutoff.getNextValue(), crB = smoothedFltBReso.getNextValue();
@@ -542,11 +501,9 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         float cutModB = tempEnvBuffer.getSample(5, i);
         float resModB = tempEnvBuffer.getSample(6, i);
 
-        // Add Sub to WT
         float sL = wtL[i] + tempSubBuffer.getSample(0, i);
         float sR = wtR[i] + tempSubBuffer.getSample(1, i);
 
-        // Filter Param Calc
         float mcA = ccA * std::exp2(cutModA * 8.0f); mcA += (fValA * pFltAEnvAmt->load() * 10000.0f);
         float mcB = ccB * std::exp2(cutModB * 8.0f); mcB += (fValB * pFltBEnvAmt->load() * 10000.0f);
 
@@ -554,32 +511,21 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         dualFilter.setFilterB((int)pFltBType->load(), mcB, crB + resModB);
         dualFilter.setRouting((int)pFltRouting->load(), smoothedFltMix.getNextValue());
 
-        // Process Dual Filter
         dualFilter.processStereo(sL, sR);
 
-        // Apply Amp Envelope (Write to main buffer)
         left[i] = sL * aVal; right[i] = sR * aVal;
     }
 
-    // --- STEP 6: Color IR Addition ---
+    // --- STEP 6, 7, 8: ColorIR, Arp, Dynamics ---
     if (pColorOn->load() > 0.5f) {
         colorEngine.setParameters(pColorPreHp->load(), pColorPostHp->load(), pColorMix->load(), pColorIrVol->load());
         colorEngine.processIR(buffer);
-    }
 
-    // --- STEP 7: Sparkle Arp Addition ---
-    if (pColorOn->load() > 0.5f) {
         colorEngine.setArpParameters((int)pArpWave->load(), (int)pArpMode->load(), pArpSpeed->load(), (int)pArpPitch->load(), pArpLevel->load());
         std::vector<int> currentNotes;
-        {
-            std::lock_guard<std::mutex> lock(midiNotesMutex);
-            currentNotes = activeMidiNotes;
-        }
+        { std::lock_guard<std::mutex> lock(midiNotesMutex); currentNotes = activeMidiNotes; }
         colorEngine.processArp(buffer, currentNotes, tempEnvBuffer.getReadPointer(0));
-    }
 
-    // --- STEP 8: Dynamics Processing ---
-    if (pColorOn->load() > 0.5f) {
         colorEngine.setOttParameters(pOttDepth->load(), pOttTime->load(), pOttUp->load(), pOttDown->load(), pOttGain->load());
         colorEngine.setSootheParameters(pOttDepth->load(), pOttTime->load(), pSootheSelectivity->load(), pSootheSharpness->load(), pSootheFocus->load());
         colorEngine.processDynamics(buffer);
@@ -588,7 +534,7 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     // --- STEP 9: Master Gain & Scope ---
     for (int i = 0; i < numSamples; ++i) {
         float cg = smoothedGain.getNextValue();
-        float gainMod = tempEnvBuffer.getSample(7, i); // Gain Mod
+        float gainMod = tempEnvBuffer.getSample(7, i);
         float finalGain = juce::jlimit(0.0f, 1.0f, cg + gainMod);
 
         left[i] *= finalGain;

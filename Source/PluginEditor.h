@@ -46,6 +46,7 @@ private:
     std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment>> btnAtts;
 };
 
+// ★ 変更: 完全フリールーティングのMatrixTab
 class MatrixTab : public juce::Component {
 public:
     MatrixTab(juce::AudioProcessorValueTreeState& vts);
@@ -53,9 +54,12 @@ public:
     void resized() override;
 private:
     juce::AudioProcessorValueTreeState& apvts;
-    struct SlotUI { juce::ComboBox dest; juce::Slider amt; juce::Label dummyLbl; };
-    struct RowUI { std::array<SlotUI, 3> slots; };
-    std::array<RowUI, 6> rows;
+    struct SlotUI {
+        juce::ComboBox src;
+        juce::Slider amt;
+        juce::ComboBox dest;
+    };
+    std::array<SlotUI, 8> slots; // 8スロット独立
     std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>> sliderAtts;
     std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment>> comboAtts;
 };

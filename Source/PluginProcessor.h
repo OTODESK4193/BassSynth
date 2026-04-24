@@ -138,9 +138,12 @@ private:
     std::atomic<float>* pArpLevel = nullptr;
 
     std::array<std::atomic<float>*, 3> pModOn, pModAtk, pModDec, pModSus, pModRel, pModAmt;
-    std::array<std::atomic<float>*, 3> pLfoOn, pLfoWave, pLfoSync, pLfoRate, pLfoBeat, pLfoAmt, pLfoTrig; // ★追加
-    std::array<std::array<std::atomic<float>*, 3>, 6> pMatrixDest;
-    std::array<std::array<std::atomic<float>*, 3>, 6> pMatrixAmt;
+    std::array<std::atomic<float>*, 3> pLfoOn, pLfoWave, pLfoSync, pLfoRate, pLfoBeat, pLfoAmt, pLfoTrig;
+
+    // ★ 変更: 8つの独立したマトリックス・スロット
+    std::array<std::atomic<float>*, 8> pMatrixSrc;
+    std::array<std::atomic<float>*, 8> pMatrixDest;
+    std::array<std::atomic<float>*, 8> pMatrixAmt;
 
     juce::SmoothedValue<float> smoothedWtLevel, smoothedWtPitch, smoothedPDecayAmt, smoothedPDecayTime;
     juce::SmoothedValue<float> smoothedFltACutoff, smoothedFltAReso, smoothedFltBCutoff, smoothedFltBReso, smoothedFltMix;
