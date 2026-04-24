@@ -186,7 +186,7 @@ ColorIrPanel::ColorIrPanel(LiquidDreamAudioProcessor& p) : processor(p), apvts(p
     chordLabel.setJustificationType(juce::Justification::centred);
     chordLabel.setFont(juce::FontOptions(22.0f, juce::Font::bold));
     chordLabel.setColour(juce::Label::textColourId, juce::Colour::fromString("FF00FFCC"));
-    // PluginEditor.cpp の ColorIrPanel コンストラクタ内を以下のように修正してください。
+
     setupCombo(typeCombo, typeLabel, "IR Type", { "Crystal Saw", "Shimmer PWM", "Harmonic Bell", "Stacked Shimmer", "Crystal Pluck" }, this);
     comboAtts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(apvts, "color_type", typeCombo));
 
@@ -341,13 +341,11 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
 
     oscGroup.setText("WAVETABLE"); addAndMakeVisible(oscGroup);
     subGroup.setText("SUB OSC"); addAndMakeVisible(subGroup);
-
     shaperGroup.setText("DISTORTION & SHAPER"); addAndMakeVisible(shaperGroup);
     ampEnvGroup.setText("AMP ENVELOPE"); addAndMakeVisible(ampEnvGroup);
     filterGroup.setText("FILTER"); addAndMakeVisible(filterGroup);
     filterEnvGroup.setText("FILTER ENVELOPE"); addAndMakeVisible(filterEnvGroup);
     presetGroup.setText("PRESETS"); addAndMakeVisible(presetGroup);
-
     controlGroup.setText("PERFORMANCE"); addAndMakeVisible(controlGroup);
 
     addAndMakeVisible(oscOnButton);
@@ -379,19 +377,15 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     setupS(glideSlider, glideLabel, "Glide", this); setupS(pitchSlider, pitchLabel, "Pitch", this); setupS(gainSlider, gainLabel, "Gain", this);
     addAndMakeVisible(legatoButton);
 
-    // ★ プリセット管理: BassSynthPresets フォルダのスキャンとComboBox実装
     addAndMakeVisible(presetCombo);
     presetCombo.setJustificationType(juce::Justification::centred);
-
     addAndMakeVisible(savePresetBtn);
     addAndMakeVisible(loadPresetBtn);
     savePresetBtn.setColour(juce::TextButton::buttonColourId, juce::Colour::fromString("FF2A2A2A"));
     loadPresetBtn.setColour(juce::TextButton::buttonColourId, juce::Colour::fromString("FF2A2A2A"));
 
-    // 初期スキャン
     scanPresets();
 
-    // ComboBox から直接プリセットをロードする処理
     presetCombo.onChange = [this]() {
         int id = presetCombo.getSelectedId();
         if (id > 1) {
@@ -404,7 +398,6 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
         }
         };
 
-    // Save ボタン: プリセットを BassSynthPresets フォルダに保存
     savePresetBtn.onClick = [this] {
         auto presetDir = juce::File::getSpecialLocation(juce::File::userDocumentsDirectory).getChildFile("BassSynthPresets");
         if (!presetDir.exists()) presetDir.createDirectory();
@@ -419,10 +412,7 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
                 juce::MemoryBlock mb;
                 audioProcessor.getStateInformation(mb);
                 file.replaceWithData(mb.getData(), mb.getSize());
-
-                scanPresets(); // 保存後にリストを更新
-
-                // 保存したファイルを選択状態にする
+                scanPresets();
                 for (int i = 0; i < presetFiles.size(); ++i) {
                     if (presetFiles[i] == file) {
                         presetCombo.setSelectedId(i + 2, juce::dontSendNotification);
@@ -433,7 +423,6 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
             });
         };
 
-    // Load ボタン: プリセットをダイアログから手動でロード（任意の場所からも可能）
     loadPresetBtn.onClick = [this] {
         auto presetDir = juce::File::getSpecialLocation(juce::File::userDocumentsDirectory).getChildFile("BassSynthPresets");
         if (!presetDir.exists()) presetDir.createDirectory();
@@ -447,9 +436,7 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
                 juce::MemoryBlock mb;
                 file.loadFileAsData(mb);
                 audioProcessor.setStateInformation(mb.getData(), (int)mb.getSize());
-
-                scanPresets(); // リストを更新
-
+                scanPresets();
                 for (int i = 0; i < presetFiles.size(); ++i) {
                     if (presetFiles[i] == file) {
                         presetCombo.setSelectedId(i + 2, juce::dontSendNotification);
@@ -505,13 +492,13 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     browser.onUserFoldersChanged = [this](const juce::StringArray& folders) { audioProcessor.setUserFolders(folders); };
     browser.loadUserFolders(audioProcessor.getUserFolders());
 
-    startTimerHz(30);
+    // ★ 描画負荷軽減のため20Hzに変更
+    startTimerHz(20);
     setSize(1300, 700);
 }
 
 LiquidDreamAudioProcessorEditor::~LiquidDreamAudioProcessorEditor() { setLookAndFeel(nullptr); }
 
-// ★ 追加: プリセットフォルダのスキャンメソッド
 void LiquidDreamAudioProcessorEditor::scanPresets() {
     presetCombo.clear();
     presetCombo.addItem("Init", 1);
@@ -526,7 +513,6 @@ void LiquidDreamAudioProcessorEditor::scanPresets() {
         presetCombo.addItem(f.getFileNameWithoutExtension(), id++);
     }
 
-    // デフォルトで Init を選択状態にする（通知は送らない）
     if (presetCombo.getSelectedId() == 0) {
         presetCombo.setSelectedId(1, juce::dontSendNotification);
     }
@@ -535,21 +521,50 @@ void LiquidDreamAudioProcessorEditor::scanPresets() {
 void LiquidDreamAudioProcessorEditor::paint(juce::Graphics& g) { g.fillAll(juce::Colour::fromString("FF1E1E1E")); }
 
 void LiquidDreamAudioProcessorEditor::timerCallback() {
-    blinkCounter = (blinkCounter + 1) % 30;
+    blinkCounter = (blinkCounter + 1) % 20;
 
-    std::array<float, 512> tempBuffer;
-    audioProcessor.getStaticWaveform(tempBuffer);
-    dualScope.updateStaticWave(tempBuffer.data(), 512);
+    auto& apvts = audioProcessor.getAPVTS();
+
+    // ★ 最適化: パラメーターが変化した時のみFFT(スコープ描画)を再計算する
+    static float lastWave = -999, lastPos = -999, lastFm = -999;
+    static float lastMa = -999, lastMb = -999, lastMc = -999;
+    static float lastSa = -999, lastSb = -999, lastSc = -999;
+
+    float curWave = apvts.getRawParameterValue("osc_wave")->load();
+    float curPos = apvts.getRawParameterValue("osc_pos")->load();
+    float curFm = apvts.getRawParameterValue("osc_fm")->load();
+    float curMa = apvts.getRawParameterValue("osc_morph_a_amt")->load();
+    float curMb = apvts.getRawParameterValue("osc_morph_b_amt")->load();
+    float curMc = apvts.getRawParameterValue("osc_morph_c_amt")->load();
+    float curSa = apvts.getRawParameterValue("osc_morph_a_shift")->load();
+    float curSb = apvts.getRawParameterValue("osc_morph_b_shift")->load();
+    float curSc = apvts.getRawParameterValue("osc_morph_c_shift")->load();
+
+    bool wtChanged = false;
+    if (curWave != lastWave || curPos != lastPos || curFm != lastFm ||
+        curMa != lastMa || curMb != lastMb || curMc != lastMc ||
+        curSa != lastSa || curSb != lastSb || curSc != lastSc) {
+
+        wtChanged = true;
+        lastWave = curWave; lastPos = curPos; lastFm = curFm;
+        lastMa = curMa; lastMb = curMb; lastMc = curMc;
+        lastSa = curSa; lastSb = curSb; lastSc = curSc;
+    }
+
+    if (wtChanged) {
+        std::array<float, 512> tempBuffer;
+        audioProcessor.getStaticWaveform(tempBuffer);
+        dualScope.updateStaticWave(tempBuffer.data(), 512);
+    }
 
     if (colorButton.getToggleState()) {
         auto state = audioProcessor.getColorEngine().getLearnState();
         auto text = audioProcessor.getColorEngine().getLearnedChordNames();
-        bool blink = (blinkCounter < 15);
+        bool blink = (blinkCounter < 10);
         colorPanel.updateState(state, text, blink);
     }
 
     float modDepths[12] = { 0.0f };
-    auto& apvts = audioProcessor.getAPVTS();
 
     for (int src = 0; src < 6; ++src) {
         juce::String srcPrefix = (src < 3) ? "mod" + juce::String(src + 1) : "lfo" + juce::String(src - 2);
@@ -564,18 +579,35 @@ void LiquidDreamAudioProcessorEditor::timerCallback() {
         }
     }
 
+    // ★ 最適化: リングの値が変化した時のみrepaintを呼ぶ (無駄な描画を防ぐ)
     auto updateRing = [](juce::Slider& s, float depth) {
-        if (depth > 0.001f) {
-            s.getProperties().set("mod_active", true);
+        bool changed = false;
+        bool currentlyActive = s.getProperties().getWithDefault("mod_active", false);
+        bool shouldBeActive = (depth > 0.001f);
+
+        if (currentlyActive != shouldBeActive) changed = true;
+
+        if (shouldBeActive) {
             auto range = s.getNormalisableRange();
             float pNorm = range.convertTo0to1((float)s.getValue());
-            s.getProperties().set("mod_min", juce::jlimit(0.0f, 1.0f, pNorm - depth));
-            s.getProperties().set("mod_max", juce::jlimit(0.0f, 1.0f, pNorm + depth));
+            float newMin = juce::jlimit(0.0f, 1.0f, pNorm - depth);
+            float newMax = juce::jlimit(0.0f, 1.0f, pNorm + depth);
+
+            float oldMin = s.getProperties().getWithDefault("mod_min", 0.0f);
+            float oldMax = s.getProperties().getWithDefault("mod_max", 1.0f);
+
+            if (std::abs(newMin - oldMin) > 0.001f || std::abs(newMax - oldMax) > 0.001f) {
+                s.getProperties().set("mod_min", newMin);
+                s.getProperties().set("mod_max", newMax);
+                changed = true;
+            }
+            s.getProperties().set("mod_active", true);
         }
         else {
             s.getProperties().set("mod_active", false);
         }
-        s.repaint();
+
+        if (changed) s.repaint();
         };
 
     updateRing(wtPosSlider, modDepths[1]); updateRing(fmAmtSlider, modDepths[2]);
