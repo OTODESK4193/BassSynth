@@ -112,7 +112,6 @@ private:
     std::atomic<float>* pUni = nullptr; std::atomic<float>* pDetune = nullptr; std::atomic<float>* pWidth = nullptr; std::atomic<float>* pDrift = nullptr;
     std::atomic<float>* pSubOn = nullptr; std::atomic<float>* pSubWave = nullptr; std::atomic<float>* pSubVol = nullptr; std::atomic<float>* pSubPitch = nullptr;
 
-    // Filter Params
     std::atomic<float>* pFltAType = nullptr; std::atomic<float>* pFltACutoff = nullptr; std::atomic<float>* pFltAReso = nullptr;
     std::atomic<float>* pFltBType = nullptr; std::atomic<float>* pFltBCutoff = nullptr; std::atomic<float>* pFltBReso = nullptr;
     std::atomic<float>* pFltRouting = nullptr; std::atomic<float>* pFltMix = nullptr;
@@ -124,7 +123,6 @@ private:
     std::atomic<float>* pFAtkA = nullptr; std::atomic<float>* pFDecA = nullptr; std::atomic<float>* pFSusA = nullptr; std::atomic<float>* pFRelA = nullptr;
     std::atomic<float>* pFAtkB = nullptr; std::atomic<float>* pFDecB = nullptr; std::atomic<float>* pFSusB = nullptr; std::atomic<float>* pFRelB = nullptr;
 
-    // Color/Dynamics
     std::atomic<float>* pColorOn = nullptr; std::atomic<float>* pColorType = nullptr;
     std::atomic<float>* pColorMix = nullptr; std::atomic<float>* pColorIrVol = nullptr;
     std::atomic<float>* pColorPreHp = nullptr; std::atomic<float>* pColorPostHp = nullptr;
@@ -140,10 +138,10 @@ private:
     std::array<std::atomic<float>*, 3> pModOn, pModAtk, pModDec, pModSus, pModRel, pModAmt;
     std::array<std::atomic<float>*, 3> pLfoOn, pLfoWave, pLfoSync, pLfoRate, pLfoBeat, pLfoAmt, pLfoTrig;
 
-    // ★ 変更: 8つの独立したマトリックス・スロット
-    std::array<std::atomic<float>*, 8> pMatrixSrc;
-    std::array<std::atomic<float>*, 8> pMatrixDest;
-    std::array<std::atomic<float>*, 8> pMatrixAmt;
+    // ★ 変更: 10スロットの動的マトリックス
+    std::array<std::atomic<float>*, 10> pMatrixSrc;
+    std::array<std::atomic<float>*, 10> pMatrixDest;
+    std::array<std::atomic<float>*, 10> pMatrixAmt;
 
     juce::SmoothedValue<float> smoothedWtLevel, smoothedWtPitch, smoothedPDecayAmt, smoothedPDecayTime;
     juce::SmoothedValue<float> smoothedFltACutoff, smoothedFltAReso, smoothedFltBCutoff, smoothedFltBReso, smoothedFltMix;

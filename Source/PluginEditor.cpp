@@ -141,14 +141,19 @@ MatrixTab::MatrixTab(juce::AudioProcessorValueTreeState& vts) : apvts(vts) {
         "FLT A: Cutoff", "FLT A: Reso", "FLT B: Cutoff", "FLT B: Reso", "PRF: Gain"
     };
 
-    for (int i = 0; i < 8; ++i) {
+    // ★ 変更: 10スロット・1列レイアウトのためのUI初期化
+    for (int i = 0; i < 10; ++i) {
         addAndMakeVisible(slots[i].src);
         slots[i].src.addItemList(sources, 1);
         slots[i].src.setJustificationType(juce::Justification::centred);
 
         addAndMakeVisible(slots[i].amt);
-        slots[i].amt.setSliderStyle(juce::Slider::LinearHorizontal); // 視認性の良いスライダーへ変更
+        // 見やすさ重視で水平スライダーへ
+        slots[i].amt.setSliderStyle(juce::Slider::LinearHorizontal);
         slots[i].amt.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
+        slots[i].amt.setPopupDisplayEnabled(true, false, this); // 値のポップアップ表示
+        // テーマカラーのオレンジをトラックに適用
+        slots[i].amt.setColour(juce::Slider::trackColourId, juce::Colour::fromString("FFFF764D"));
 
         addAndMakeVisible(slots[i].dest);
         slots[i].dest.addItemList(dests, 1);
@@ -164,28 +169,29 @@ MatrixTab::MatrixTab(juce::AudioProcessorValueTreeState& vts) : apvts(vts) {
 void MatrixTab::paint(juce::Graphics& g) {
     g.fillAll(juce::Colour::fromString("FF1A1A1A"));
 
-    // 2列レイアウトの中央仕切り線
-    g.setColour(juce::Colours::white.withAlpha(0.1f));
-    g.drawLine(getWidth() / 2.0f, 10.0f, getWidth() / 2.0f, getHeight() - 10.0f, 1.0f);
+    // ★ 変更: ヘッダー部分の描画
+    g.setColour(juce::Colour::fromString("FFDDDDDD"));
+    g.setFont(12.0f);
+    g.drawText("SOURCE", 10, 5, 110, 20, juce::Justification::centred);
+    g.drawText("AMOUNT", 130, 5, 130, 20, juce::Justification::centred);
+    g.drawText("DESTINATION", 270, 5, 130, 20, juce::Justification::centred);
+
+    // ★ 変更: 各行の背景色ストライプ（視認性向上）
+    for (int i = 0; i < 10; ++i) {
+        g.setColour(juce::Colours::white.withAlpha(i % 2 == 0 ? 0.03f : 0.00f));
+        g.fillRect(0, 25 + i * 36, getWidth(), 36);
+    }
 }
 
 void MatrixTab::resized() {
-    int colWidth = getWidth() / 2;
-    int rowHeight = 60;
-    int startY = 20;
-
-    for (int i = 0; i < 8; ++i) {
-        // i=0~3 は左列、i=4~7 は右列
-        int col = i / 4;
-        int row = i % 4;
-
-        int x = col * colWidth + 10; // 左マージン
-        int y = startY + row * rowHeight;
-
-        // [Source] -- [Amount] --> [Destination]
-        slots[i].src.setBounds(x, y, 75, 24);
-        slots[i].amt.setBounds(x + 85, y + 2, 60, 20);
-        slots[i].dest.setBounds(x + 155, y, 85, 24);
+    // ★ 変更: 10スロットを1列に並べる計算
+    int startY = 25;
+    int rowH = 36;
+    for (int i = 0; i < 10; ++i) {
+        int y = startY + i * rowH + 6; // 行内の垂直中央揃え
+        slots[i].src.setBounds(15, y, 100, 24);
+        slots[i].amt.setBounds(130, y + 2, 130, 20);
+        slots[i].dest.setBounds(270, y, 120, 24);
     }
 }
 
@@ -661,17 +667,8 @@ void LiquidDreamAudioProcessorEditor::timerCallback() {
 
     float modDepths[14] = { 0.0f };
 
-    for (int src = 0; src < 6; ++src) {
-        juce::String srcPrefix = (src < 3) ? "mod" + juce::String(src + 1) : "lfo" + juce::String(src - 2);
-        if (apvts.getRawParameterValue(srcPrefix + "_on")->load() < 0.5f) continue;
-
-        // ★変更: ダイナミックマトリックスの計算ロジック（スロット0~7を走査）
-        // ※ この処理は現在 PluginProcessor.cpp に移行しているため、UI用の描画は
-        // 新しいルーティングに合わせた処理に切り替えます。
-    }
-
-    // UIリング描画用のバッファ（スロット8個分の動的計算）
-    for (int slot = 0; slot < 8; ++slot) {
+    // ★ 変更: 10スロットの動的マトリックス計算（UI描画リング用）
+    for (int slot = 0; slot < 10; ++slot) {
         int srcIdx = (int)apvts.getRawParameterValue("matrix_src_" + juce::String(slot))->load();
         int destIdx = (int)apvts.getRawParameterValue("matrix_dest_" + juce::String(slot))->load();
         float amt = std::abs(apvts.getRawParameterValue("matrix_amt_" + juce::String(slot))->load());

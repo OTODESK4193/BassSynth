@@ -57,8 +57,8 @@ LiquidDreamAudioProcessor::LiquidDreamAudioProcessor()
         pLfoAmt[i] = apvts.getRawParameterValue(ls + "amt"); pLfoTrig[i] = apvts.getRawParameterValue(ls + "trig");
     }
 
-    // ★ 変更: 8つの動的マトリックススロットをバインド
-    for (int i = 0; i < 8; ++i) {
+    // ★ 変更: 10スロットのバインディング
+    for (int i = 0; i < 10; ++i) {
         pMatrixSrc[i] = apvts.getRawParameterValue("matrix_src_" + juce::String(i));
         pMatrixDest[i] = apvts.getRawParameterValue("matrix_dest_" + juce::String(i));
         pMatrixAmt[i] = apvts.getRawParameterValue("matrix_amt_" + juce::String(i));
@@ -183,8 +183,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout LiquidDreamAudioProcessor::c
         params.push_back(std::make_unique<juce::AudioParameterInt>(pfx + "trig", nm + "Trig", 0, 2, 0));
     }
 
-    // ★ 変更: ダイナミックマトリックスの8スロット (Source 0~6, Dest 0~13)
-    for (int i = 0; i < 8; ++i) {
+    // ★ 変更: 10スロットの動的マトリックス
+    for (int i = 0; i < 10; ++i) {
         juce::String sIdx = juce::String(i);
         params.push_back(std::make_unique<juce::AudioParameterInt>("matrix_src_" + sIdx, "Src", 0, 6, 0));
         params.push_back(std::make_unique<juce::AudioParameterInt>("matrix_dest_" + sIdx, "Dest", 0, 13, 0));
@@ -404,7 +404,6 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     // --- STEP 1: Modulations & Envelopes (Dynamic Matrix) ---
     for (int i = 0; i < numSamples; ++i) {
 
-        // ★ 変更: 全モジュレーションソースの現在値を配列に確保
         float sources[7] = {
             0.0f, // 0: None
             (pModOn[0]->load(std::memory_order_relaxed) > 0.5f ? modEnvs[0].getNextSample() : 0.0f),
@@ -417,8 +416,8 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
 
         float destMods[14] = { 0 };
 
-        // ★ 変更: 8つの動的スロットをループ処理してターゲットに加算
-        for (int slot = 0; slot < 8; ++slot) {
+        // ★ 変更: 10個のスロットをループ
+        for (int slot = 0; slot < 10; ++slot) {
             int srcIdx = (int)pMatrixSrc[slot]->load(std::memory_order_relaxed);
             int destIdx = (int)pMatrixDest[slot]->load(std::memory_order_relaxed);
             float amt = pMatrixAmt[slot]->load(std::memory_order_relaxed);
