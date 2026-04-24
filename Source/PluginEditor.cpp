@@ -186,8 +186,8 @@ ColorIrPanel::ColorIrPanel(LiquidDreamAudioProcessor& p) : processor(p), apvts(p
     chordLabel.setJustificationType(juce::Justification::centred);
     chordLabel.setFont(juce::FontOptions(22.0f, juce::Font::bold));
     chordLabel.setColour(juce::Label::textColourId, juce::Colour::fromString("FF00FFCC"));
-
-    setupCombo(typeCombo, typeLabel, "IR Type", { "Sizzle Saw", "Phaser Square", "Glassy FM", "Spectral Rain" }, this);
+    // PluginEditor.cpp の ColorIrPanel コンストラクタ内を以下のように修正してください。
+    setupCombo(typeCombo, typeLabel, "IR Type", { "Crystal Saw", "Shimmer PWM", "Harmonic Bell", "Stacked Shimmer", "Crystal Pluck" }, this);
     comboAtts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(apvts, "color_type", typeCombo));
 
     setupS(mixSlider, mixLabel, "Mix", this);

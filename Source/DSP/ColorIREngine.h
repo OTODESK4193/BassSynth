@@ -202,7 +202,6 @@ private:
         }
     }
 
-    // ★ 警告修正: const を付与
     float generateOscillator(float phase, float inc, int wave) const {
         float out = 0.0f;
         float pPi = phase * juce::MathConstants<float>::twoPi;
@@ -303,10 +302,6 @@ public:
 
             juce::AudioBuffer<float> tempIR(2, numSamples); tempIR.clear();
             std::vector<float> phases(currentNotes.size(), 0.0f), incs(currentNotes.size(), 0.0f);
-            auto& random = juce::Random::getSystemRandom();
-
-            // ★ エラー修正: baseFreqの定義を復元
-            float baseFreq = (float)juce::MidiMessage::getMidiNoteInHertz(currentNotes[0]);
 
             for (size_t n = 0; n < currentNotes.size(); ++n) {
                 float freq = (float)juce::MidiMessage::getMidiNoteInHertz(currentNotes[n]);
@@ -321,57 +316,147 @@ public:
 
             for (int i = 0; i < numSamples; ++i) {
                 if (myJobId != irGenJobId.load()) return;
-                float sample = 0.0f;
+
                 float timeRatio = (float)i / (float)numSamples;
-                float globalNoise = random.nextFloat() * 2.0f - 1.0f;
+                float sampleL = 0.0f, sampleR = 0.0f;
 
                 if (irType == 0) {
+                    // Type 0: Crystal Saw
                     for (size_t n = 0; n < currentNotes.size(); ++n) {
-                        sample += 2.0f * phases[n] - 1.0f;
+                        float phL = phases[n];
+                        float phR = std::fmod(phases[n] + getPhaseOffset(n, 1), 1.0f);
+
+                        float sawL = 2.0f * phL - 1.0f;
+                        float sawR = 2.0f * phR - 1.0f;
+
+                        float ph2L = std::fmod(phL * 2.0f, 1.0f);
+                        float ph2R = std::fmod(phR * 2.0f, 1.0f);
+                        float octSawL = (2.0f * ph2L - 1.0f) * 0.35f;
+                        float octSawR = (2.0f * ph2R - 1.0f) * 0.35f;
+
+                        sampleL += (sawL + octSawL);
+                        sampleR += (sawR + octSawR);
+
                         phases[n] += incs[n]; if (phases[n] >= 1.0f) phases[n] -= 1.0f;
                     }
-                    sample *= norm;
+                    sampleL *= norm * 0.75f;
+                    sampleR *= norm * 0.75f;
                 }
                 else if (irType == 1) {
-                    float duty = 0.5f - 0.45f * timeRatio;
+                    // Type 1: Shimmer PWM
+                    float duty = 0.5f - 0.2f * timeRatio;
                     for (size_t n = 0; n < currentNotes.size(); ++n) {
-                        sample += (phases[n] < duty) ? 1.0f : -1.0f;
+                        float phL = phases[n];
+                        float phR = std::fmod(phases[n] + getPhaseOffset(n, 1), 1.0f);
+
+                        float pwmL = (phL < duty) ? 1.0f : -1.0f;
+                        float pwmR = (phR < duty) ? 1.0f : -1.0f;
+
+                        float pPiL = phL * juce::MathConstants<float>::twoPi;
+                        float pPiR = phR * juce::MathConstants<float>::twoPi;
+                        float shimmerL = std::sin(pPiL * 5.0f) * 0.15f + std::sin(pPiL * 7.0f) * 0.10f + std::sin(pPiL * 9.0f) * 0.07f;
+                        float shimmerR = std::sin(pPiR * 5.0f) * 0.15f + std::sin(pPiR * 7.0f) * 0.10f + std::sin(pPiR * 9.0f) * 0.07f;
+
+                        float shimmerMix = 0.3f + 0.5f * timeRatio;
+
+                        sampleL += pwmL * (1.0f - shimmerMix) + shimmerL * shimmerMix;
+                        sampleR += pwmR * (1.0f - shimmerMix) + shimmerR * shimmerMix;
+
                         phases[n] += incs[n]; if (phases[n] >= 1.0f) phases[n] -= 1.0f;
                     }
-                    sample *= norm;
+                    sampleL *= norm;
+                    sampleR *= norm;
                 }
                 else if (irType == 2) {
+                    // Type 2: Harmonic Bell
+                    float modDepth = 1.5f * (1.0f - timeRatio * 0.7f);
                     for (size_t n = 0; n < currentNotes.size(); ++n) {
-                        float freq = (float)juce::MidiMessage::getMidiNoteInHertz(currentNotes[n]);
-                        float ratio = freq / baseFreq;
-                        float pPi = phases[n] * juce::MathConstants<float>::twoPi;
+                        float phL = phases[n];
+                        float phR = std::fmod(phases[n] + getPhaseOffset(n, 1), 1.0f);
+                        float pPiL = phL * juce::MathConstants<float>::twoPi;
+                        float pPiR = phR * juce::MathConstants<float>::twoPi;
 
-                        float overtoneMix = std::min(1.0f, (ratio - 1.0f) * 0.4f);
-                        float decayMult = std::exp(-(float)i / (sr * (actualDecayMs / 1000.0f) * (1.0f / std::sqrt(ratio))));
+                        float valL = std::sin(pPiL) + std::sin(pPiL * 2.0f) * 0.50f + std::sin(pPiL * 3.0f) * 0.30f + std::sin(pPiL * 4.0f) * 0.20f + std::sin(pPiL * 6.0f) * 0.10f;
+                        float valR = std::sin(pPiR) + std::sin(pPiR * 2.0f) * 0.50f + std::sin(pPiR * 3.0f) * 0.30f + std::sin(pPiR * 4.0f) * 0.20f + std::sin(pPiR * 6.0f) * 0.10f;
 
-                        float val = std::sin(pPi);
-                        if (overtoneMix > 0.01f) {
-                            val += overtoneMix * (0.6f * std::sin(pPi * 2.76f) + 0.4f * std::sin(pPi * 5.4f) + 0.2f * std::sin(pPi * 8.9f));
-                        }
-                        sample += val * decayMult * 0.8f;
+                        float fmL = std::sin(pPiL + modDepth * std::sin(pPiL * 2.0f));
+                        float fmR = std::sin(pPiR + modDepth * std::sin(pPiR * 2.0f));
+
+                        sampleL += valL * 0.7f + fmL * 0.3f;
+                        sampleR += valR * 0.7f + fmR * 0.3f;
+
                         phases[n] += incs[n]; if (phases[n] >= 1.0f) phases[n] -= 1.0f;
                     }
-                    sample *= norm;
+                    sampleL *= norm * 0.55f;
+                    sampleR *= norm * 0.55f;
                 }
                 else if (irType == 3) {
+                    // Type 3: Stacked Chord Shimmer
                     for (size_t n = 0; n < currentNotes.size(); ++n) {
-                        sample += 2.0f * phases[n] - 1.0f;
+                        float phL = phases[n];
+                        float phR = std::fmod(phases[n] + getPhaseOffset(n, 1), 1.0f);
+                        float pPiL = phL * juce::MathConstants<float>::twoPi;
+                        float pPiR = phR * juce::MathConstants<float>::twoPi;
+
+                        float baseL = std::sin(pPiL);
+                        float baseR = std::sin(pPiR);
+
+                        float fifth_phL = std::fmod(phL * 1.5f, 1.0f);
+                        float fifth_phR = std::fmod(phR * 1.5f, 1.0f);
+                        float fifthL = std::sin(fifth_phL * juce::MathConstants<float>::twoPi) * 0.45f;
+                        float fifthR = std::sin(fifth_phR * juce::MathConstants<float>::twoPi) * 0.45f;
+
+                        float oct_phL = std::fmod(phL * 2.0f, 1.0f);
+                        float oct_phR = std::fmod(phR * 2.0f, 1.0f);
+                        float octL = std::sin(oct_phL * juce::MathConstants<float>::twoPi) * 0.35f;
+                        float octR = std::sin(oct_phR * juce::MathConstants<float>::twoPi) * 0.35f;
+
+                        float shimmerAmt = std::min(1.0f, timeRatio * 2.5f);
+                        float shimL = std::sin(pPiL * 4.0f) * 0.20f * shimmerAmt;
+                        float shimR = std::sin(pPiR * 4.0f) * 0.20f * shimmerAmt;
+
+                        sampleL += baseL + fifthL + octL + shimL;
+                        sampleR += baseR + fifthR + octR + shimR;
+
                         phases[n] += incs[n]; if (phases[n] >= 1.0f) phases[n] -= 1.0f;
                     }
-                    sample *= norm;
-                    float noiseEnv = std::exp(-(float)i / (sr * 0.15f));
-                    sample = sample * 0.8f + (sample * globalNoise) * noiseEnv * 0.4f;
+                    sampleL *= norm * 0.5f;
+                    sampleR *= norm * 0.5f;
+                }
+                else if (irType == 4) {
+                    // Type 4: Crystal Pluck
+                    for (size_t n = 0; n < currentNotes.size(); ++n) {
+                        float phL = phases[n];
+                        float phR = std::fmod(phases[n] + getPhaseOffset(n, 1), 1.0f);
+                        float pPiL = phL * juce::MathConstants<float>::twoPi;
+                        float pPiR = phR * juce::MathConstants<float>::twoPi;
+
+                        float valL = 0.0f, valR = 0.0f;
+                        for (int h = 1; h <= 8; ++h) {
+                            float harmonicDecay = std::exp(-(float)(h * h) * timeRatio * 3.0f);
+                            float amplitude = 1.0f / (float)h * harmonicDecay;
+                            valL += std::sin(pPiL * (float)h) * amplitude;
+                            valR += std::sin(pPiR * (float)h) * amplitude;
+                        }
+
+                        sampleL += valL;
+                        sampleR += valR;
+
+                        phases[n] += incs[n]; if (phases[n] >= 1.0f) phases[n] -= 1.0f;
+                    }
+                    sampleL *= norm * 0.6f;
+                    sampleR *= norm * 0.6f;
                 }
 
-                sample = std::tanh(sample * 4.0f);
+                // 出力段（ステレオ化・クリッピング・エンベロープ）
+                float clippedL = std::tanh(sampleL * 4.0f);
+                float clippedR = std::tanh(sampleR * 4.0f);
 
-                float env = (i < atkSamples) ? ((float)i / atkSamples) : std::pow(std::max(0.0f, 1.0f - ((float)(i - atkSamples) / decSamples)), 4.0f);
-                outL[i] = sample * env * 0.025f; outR[i] = sample * env * 0.025f;
+                float atkFade = (i < (int)atkSamples) ? ((float)i / atkSamples) : 1.0f;
+                float decFade = (i < (int)atkSamples) ? 1.0f : std::pow(std::max(0.0f, 1.0f - ((float)(i - (int)atkSamples) / decSamples)), 4.0f);
+
+                outL[i] = clippedL * atkFade * decFade * 0.025f;
+                outR[i] = clippedR * atkFade * decFade * 0.025f;
             }
 
             if (activeEngineIsA.load()) convEngineB.loadImpulseResponse(std::move(tempIR), sr, juce::dsp::Convolution::Stereo::yes, juce::dsp::Convolution::Trim::no, juce::dsp::Convolution::Normalise::no);
@@ -469,6 +554,13 @@ private:
 
     float sootheDepth = 0.0f, sootheTime = 0.0f;
     float sootheSelectivity = 0.5f, sootheSharpness = 0.5f, sootheFocus = 0.0f;
+
+    static inline float getPhaseOffset(size_t noteIndex, int channel)
+    {
+        const float spread = 0.07f;
+        float base = (float)noteIndex * spread;
+        return (channel == 0) ? base : (1.0f - base);
+    }
 
     void triggerCrossfade() {
         if (activeEngineIsA.load()) { activeEngineIsA.store(false); fadeTargetA = 0.0f; fadeTargetB = 1.0f; }
