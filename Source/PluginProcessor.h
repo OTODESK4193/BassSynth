@@ -82,7 +82,6 @@ private:
     ColorIREngine colorEngine;
     MonoVoiceManager voiceManager;
 
-    // ★ 変更: Filter A/B で独立したADSRを持つ
     AdsrEnvelope ampEnv, filterEnvA, filterEnvB;
     std::array<AdsrEnvelope, 3> modEnvs;
     std::array<Lfo, 3> lfos;
@@ -117,8 +116,6 @@ private:
     std::atomic<float>* pFltAType = nullptr; std::atomic<float>* pFltACutoff = nullptr; std::atomic<float>* pFltAReso = nullptr;
     std::atomic<float>* pFltBType = nullptr; std::atomic<float>* pFltBCutoff = nullptr; std::atomic<float>* pFltBReso = nullptr;
     std::atomic<float>* pFltRouting = nullptr; std::atomic<float>* pFltMix = nullptr;
-
-    // ★ 変更: A/B 独立した EnvAmt と ADSR
     std::atomic<float>* pFltAEnvAmt = nullptr; std::atomic<float>* pFltBEnvAmt = nullptr;
 
     std::atomic<float>* pDrive = nullptr; std::atomic<float>* pShpAmt = nullptr; std::atomic<float>* pShpRate = nullptr; std::atomic<float>* pShpBit = nullptr;
@@ -141,7 +138,7 @@ private:
     std::atomic<float>* pArpLevel = nullptr;
 
     std::array<std::atomic<float>*, 3> pModOn, pModAtk, pModDec, pModSus, pModRel, pModAmt;
-    std::array<std::atomic<float>*, 3> pLfoOn, pLfoWave, pLfoSync, pLfoRate, pLfoBeat, pLfoAmt;
+    std::array<std::atomic<float>*, 3> pLfoOn, pLfoWave, pLfoSync, pLfoRate, pLfoBeat, pLfoAmt, pLfoTrig; // ★追加
     std::array<std::array<std::atomic<float>*, 3>, 6> pMatrixDest;
     std::array<std::array<std::atomic<float>*, 3>, 6> pMatrixAmt;
 

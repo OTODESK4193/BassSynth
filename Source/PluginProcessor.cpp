@@ -71,6 +71,7 @@ LiquidDreamAudioProcessor::LiquidDreamAudioProcessor()
         pLfoWave[i] = apvts.getRawParameterValue(ls + "wave"); pLfoSync[i] = apvts.getRawParameterValue(ls + "sync");
         pLfoRate[i] = apvts.getRawParameterValue(ls + "rate"); pLfoBeat[i] = apvts.getRawParameterValue(ls + "beat");
         pLfoAmt[i] = apvts.getRawParameterValue(ls + "amt");
+        pLfoTrig[i] = apvts.getRawParameterValue(ls + "trig"); // ★追加
     }
 
     for (int src = 0; src < 6; ++src) {
@@ -134,7 +135,6 @@ juce::AudioProcessorValueTreeState::ParameterLayout LiquidDreamAudioProcessor::c
     params.push_back(std::make_unique<juce::AudioParameterInt>("flt_routing", "Routing", 0, 1, 0));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("flt_mix", "Flt Mix", 0.0f, 1.0f, 0.5f));
 
-    // Filter Env Amt A/B
     params.push_back(std::make_unique<juce::AudioParameterFloat>("flt_a_env_amt", "FltA Env Amt", 0.0f, 1.0f, 0.0f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("flt_b_env_amt", "FltB Env Amt", 0.0f, 1.0f, 0.0f));
 
@@ -211,6 +211,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout LiquidDreamAudioProcessor::c
         params.push_back(std::make_unique<juce::AudioParameterFloat>(pfx + "rate", nm + "Rate", lfoHzRange, 1.0f));
         params.push_back(std::make_unique<juce::AudioParameterInt>(pfx + "beat", nm + "Beat", 0, 8, 2));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(pfx + "amt", nm + "Amt", 0.0f, 1.0f, 1.0f));
+
+        // ★ 追加: LFO Trig Mode
+        params.push_back(std::make_unique<juce::AudioParameterInt>(pfx + "trig", nm + "Trig", 0, 2, 0));
     }
 
     for (int src = 0; src < 6; ++src) {
@@ -285,7 +288,6 @@ void LiquidDreamAudioProcessor::prepareToPlay(double sampleRate, int samplesPerB
     for (auto& env : modEnvs) env.setSampleRate(sampleRate);
     for (auto& lfo : lfos) lfo.setSampleRate(sampleRate);
 
-    // ★ 変更: 8チャンネル確保 (0:Amp, 1:FltAEnv, 2:FltBEnv, 3:FltACutMod, 4:FltAResMod, 5:FltBCutMod, 6:FltBResMod, 7:GainMod)
     tempEnvBuffer.setSize(8, samplesPerBlock);
     tempSubBuffer.setSize(2, samplesPerBlock);
     tempWavetableBuffer.setSize(2, samplesPerBlock);
@@ -398,7 +400,7 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
                 ampEnv.noteOn(isLegato);
                 filterEnvA.noteOn(isLegato); filterEnvB.noteOn(isLegato);
                 for (auto& env : modEnvs) env.noteOn(isLegato);
-                for (auto& lfo : lfos) lfo.noteOn(isLegato);
+                for (auto& lfo : lfos) lfo.noteOn(isLegato); // ★ LFOノートオン処理
             }
         }
         else if (msg.isNoteOff()) {
@@ -424,9 +426,10 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     filterEnvA.setParameters(pFAtkA->load(std::memory_order_relaxed), pFDecA->load(std::memory_order_relaxed), pFSusA->load(std::memory_order_relaxed), pFRelA->load(std::memory_order_relaxed));
     filterEnvB.setParameters(pFAtkB->load(std::memory_order_relaxed), pFDecB->load(std::memory_order_relaxed), pFSusB->load(std::memory_order_relaxed), pFRelB->load(std::memory_order_relaxed));
 
+    // ★ 変更: LFO のパラメータセットに trigMode を追加
     for (int i = 0; i < 3; ++i) {
         modEnvs[i].setParameters(pModAtk[i]->load(), pModDec[i]->load(), pModSus[i]->load(), pModRel[i]->load());
-        lfos[i].setParameters((int)pLfoWave[i]->load(), pLfoSync[i]->load() > 0.5f, pLfoRate[i]->load(), (int)pLfoBeat[i]->load(), pLfoAmt[i]->load());
+        lfos[i].setParameters((int)pLfoWave[i]->load(), pLfoSync[i]->load() > 0.5f, pLfoRate[i]->load(), (int)pLfoBeat[i]->load(), pLfoAmt[i]->load(), (int)pLfoTrig[i]->load());
     }
 
     int numSamples = buffer.getNumSamples();

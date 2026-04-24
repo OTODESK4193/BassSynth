@@ -20,27 +20,34 @@ public:
         sampleRate = std::max(1.0, sr);
     }
 
-    void setParameters(int wave, bool sync, float rate, int beat, float amt) {
+    // ★ 変更: trigMode を追加
+    void setParameters(int wave, bool sync, float rate, int beat, float amt, int tMode) {
         waveform = std::clamp(wave, 0, 3);
         isSync = sync;
         rateHz = rate;
         beatIdx = beat;
         depth = std::clamp(amt, 0.0f, 1.0f);
+        trigMode = std::clamp(tMode, 0, 2);
     }
 
     void noteOn(bool isLegato = false) {
         if (isLegato) return;
+        if (trigMode == 0) return; // Free モード時は位相リセットを無視
+
         phase = 0.0f;
+        oneShotDone = false;
         lastRandomVal = nextRandomVal;
         nextRandomVal = juce::Random::getSystemRandom().nextFloat() * 2.0f - 1.0f;
     }
 
-    // bpmはDAWから取得。取得できない場合は0が渡され、内部でデフォルトHzにフォールバックします
     inline float getNextSample(double bpm) {
+        if (trigMode == 2 && oneShotDone) {
+            return getWaveformValue(1.0f) * depth; // One-Shot 完了時は終端の値を維持
+        }
+
         float freq = rateHz;
 
         if (isSync && bpm > 0.0) {
-            // beatIdx: 0="1/1", 1="1/2", 2="1/4", 3="1/8", 4="1/16", 5="1/32", 6="1/4T", 7="1/8T", 8="1/16T"
             float beatsPerCycle = 1.0f;
             switch (beatIdx) {
             case 0: beatsPerCycle = 4.0f; break;
@@ -53,36 +60,25 @@ public:
             case 7: beatsPerCycle = 1.0f / 3.0f; break;
             case 8: beatsPerCycle = 0.5f / 3.0f; break;
             }
-            freq = (float)(bpm / 60.0) / beatsPerCycle;
+            freq = static_cast<float>(bpm / 60.0) / beatsPerCycle;
         }
 
-        // Phase Advance
-        float inc = freq / (float)sampleRate;
+        float inc = freq / static_cast<float>(sampleRate);
         phase += inc;
 
         if (phase >= 1.0f) {
-            phase -= std::floor(phase);
-            lastRandomVal = nextRandomVal;
-            nextRandomVal = juce::Random::getSystemRandom().nextFloat() * 2.0f - 1.0f;
+            if (trigMode == 2) {
+                phase = 1.0f;
+                oneShotDone = true; // One-Shot モード: 1周期で停止
+            }
+            else {
+                phase -= std::floor(phase);
+                lastRandomVal = nextRandomVal;
+                nextRandomVal = juce::Random::getSystemRandom().nextFloat() * 2.0f - 1.0f;
+            }
         }
 
-        float out = 0.0f;
-        switch (waveform) {
-        case 0: // Sine
-            out = std::sin(phase * 2.0f * std::numbers::pi_v<float>);
-            break;
-        case 1: // Saw (Down)
-            out = 1.0f - 2.0f * phase;
-            break;
-        case 2: // Pulse (Square)
-            out = phase < 0.5f ? 1.0f : -1.0f;
-            break;
-        case 3: // Random (S&H)
-            out = lastRandomVal;
-            break;
-        }
-
-        return out * depth;
+        return getWaveformValue(phase) * depth;
     }
 
 private:
@@ -95,4 +91,17 @@ private:
     float rateHz = 1.0f;
     int beatIdx = 2;      // 1/4
     float depth = 1.0f;
+    int trigMode = 0;     // 0:Free, 1:Retrig, 2:One-Shot
+    bool oneShotDone = false;
+
+    inline float getWaveformValue(float p) const {
+        float out = 0.0f;
+        switch (waveform) {
+        case 0: out = std::sin(p * 2.0f * std::numbers::pi_v<float>); break;
+        case 1: out = 1.0f - 2.0f * p; break;
+        case 2: out = p < 0.5f ? 1.0f : -1.0f; break;
+        case 3: out = lastRandomVal; break;
+        }
+        return out;
+    }
 };

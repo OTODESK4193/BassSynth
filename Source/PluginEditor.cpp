@@ -37,9 +37,12 @@ static void setupCombo(juce::ComboBox& c, juce::Label& l, const char* txt, juce:
 LfoTab::LfoTab(juce::AudioProcessorValueTreeState& vts) : apvts(vts) {
     juce::StringArray waves = { "Sine", "Saw", "Pulse", "Random" };
     juce::StringArray beats = { "1/1", "1/2", "1/4", "1/8", "1/16", "1/32", "1/4T", "1/8T", "1/16T" };
+    juce::StringArray trigs = { "Free", "Retrig", "OneShot" };
+
     for (int i = 0; i < 3; ++i) {
         addAndMakeVisible(lfos[i].onBtn);
         setupCombo(lfos[i].wave, lfos[i].waveLbl, "Wave", waves, this);
+        setupCombo(lfos[i].trig, lfos[i].trigLbl, "Trig", trigs, this);
         setupCombo(lfos[i].beat, lfos[i].beatLbl, "Beat", beats, this);
         setupS(lfos[i].rate, lfos[i].rateLbl, "Rate(Hz)", this);
         setupS(lfos[i].amt, lfos[i].amtLbl, "Amount", this);
@@ -48,6 +51,7 @@ LfoTab::LfoTab(juce::AudioProcessorValueTreeState& vts) : apvts(vts) {
         juce::String pfx = "lfo" + juce::String(i + 1) + "_";
         btnAtts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(apvts, pfx + "on", lfos[i].onBtn));
         comboAtts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(apvts, pfx + "wave", lfos[i].wave));
+        comboAtts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(apvts, pfx + "trig", lfos[i].trig));
         comboAtts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(apvts, pfx + "beat", lfos[i].beat));
         sliderAtts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, pfx + "rate", lfos[i].rate));
         sliderAtts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, pfx + "amt", lfos[i].amt));
@@ -70,11 +74,12 @@ void LfoTab::resized() {
     for (int i = 0; i < 3; ++i) {
         int y = 30 + i * 130;
         lfos[i].onBtn.setBounds(15, y + 15, 45, 24);
-        lfos[i].waveLbl.setBounds(70, y + 5, 75, 20); lfos[i].wave.setBounds(70, y + 25, 75, 24);
-        lfos[i].sync.setBounds(155, y + 25, 55, 24);
-        placeKnob(220, y, lfos[i].rateLbl, lfos[i].rate);
-        lfos[i].beatLbl.setBounds(300, y + 5, 70, 20); lfos[i].beat.setBounds(300, y + 25, 70, 24);
-        placeKnob(385, y, lfos[i].amtLbl, lfos[i].amt);
+        lfos[i].waveLbl.setBounds(70, y + 5, 65, 20);  lfos[i].wave.setBounds(70, y + 25, 65, 24);
+        lfos[i].trigLbl.setBounds(140, y + 5, 65, 20); lfos[i].trig.setBounds(140, y + 25, 65, 24);
+        lfos[i].sync.setBounds(210, y + 25, 50, 24);
+        placeKnob(265, y, lfos[i].rateLbl, lfos[i].rate);
+        lfos[i].beatLbl.setBounds(340, y + 5, 65, 20); lfos[i].beat.setBounds(340, y + 25, 65, 24);
+        placeKnob(410, y, lfos[i].amtLbl, lfos[i].amt);
     }
 }
 
@@ -342,7 +347,10 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     oscGroup.setText("WAVETABLE"); addAndMakeVisible(oscGroup);
     subGroup.setText("SUB OSC"); addAndMakeVisible(subGroup);
     shaperGroup.setText("DISTORTION & SHAPER"); addAndMakeVisible(shaperGroup);
+
+    // ★ 復元した Amp Envelope グループ
     ampEnvGroup.setText("AMP ENVELOPE"); addAndMakeVisible(ampEnvGroup);
+
     filterGroup.setText("DUAL FILTER & ENV"); addAndMakeVisible(filterGroup);
 
     // presetGroup is deliberately hidden to remove its border
@@ -391,7 +399,6 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     setupS(fltAResSlider, fltAResLabel, "Reso", this); setupS(fltBResSlider, fltBResLabel, "Reso", this);
     setupS(fltMixSlider, fltMixLabel, "Mix (Wet/B)", this);
 
-    // A/B Independent EnvAmt
     setupS(fltAEnvAmtSlider, fltAEnvAmtLabel, "EnvAmt", this);
     setupS(fltBEnvAmtSlider, fltBEnvAmtLabel, "EnvAmt", this);
 
@@ -400,7 +407,6 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
 
     setupS(ampAtkSlider, ampAtkLabel, "A", this); setupS(ampDecSlider, ampDecLabel, "D", this); setupS(ampSusSlider, ampSusLabel, "S", this); setupS(ampRelSlider, ampRelLabel, "R", this);
 
-    // A/B Independent ADSR
     setupS(fltAAtkSlider, fltAAtkLabel, "A", this); setupS(fltADecSlider, fltADecLabel, "D", this); setupS(fltASusSlider, fltASusLabel, "S", this); setupS(fltARelSlider, fltARelLabel, "R", this);
     setupS(fltBAtkSlider, fltBAtkLabel, "A", this); setupS(fltBDecSlider, fltBDecLabel, "D", this); setupS(fltBSusSlider, fltBSusLabel, "S", this); setupS(fltBRelSlider, fltBRelLabel, "R", this);
 
@@ -510,6 +516,7 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     att(fltACutoffSlider, "flt_a_cutoff"); att(fltAResSlider, "flt_a_res");
     att(fltBCutoffSlider, "flt_b_cutoff"); att(fltBResSlider, "flt_b_res");
     att(fltMixSlider, "flt_mix");
+
     att(fltAEnvAmtSlider, "flt_a_env_amt"); att(fltBEnvAmtSlider, "flt_b_env_amt");
 
     att(ampAtkSlider, "a_atk"); att(ampDecSlider, "a_dec"); att(ampSusSlider, "a_sus"); att(ampRelSlider, "a_rel");
@@ -533,7 +540,7 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     browser.onFactoryIndexSelected = [this](int idx) { audioProcessor.loadFactoryWavetable(idx); };
     browser.onUserFoldersChanged = [this](const juce::StringArray& folders) { audioProcessor.setUserFolders(folders); };
     browser.loadUserFolders(audioProcessor.getUserFolders());
-    browser.onCloseRequested = [this] { browser.setVisible(false); };
+    browser.onCloseRequested = [this] { browser.setVisible(false); }; // ★ブラウザ連携
 
     updateFilterUI();
 
@@ -831,6 +838,7 @@ void LiquidDreamAudioProcessorEditor::resized()
     filterGroup.setBounds(filterRect.reduced(0, 5));
     int fX = filterRect.getX() + 10, fY = filterRect.getY() + 20;
 
+    // Row 1
     fltABtn.setBounds(fX, fY, 35, 24);
     fltBBtn.setBounds(fX + 35, fY, 35, 24);
 
@@ -838,6 +846,7 @@ void LiquidDreamAudioProcessorEditor::resized()
     fltBTypeCombo.setBounds(fX + 80, fY, 80, 24);
     fltRoutingCombo.setBounds(fX + 170, fY, 80, 24);
 
+    // Row 2
     int r2Y = fY + 35;
     int spacing = 80;
     placeKnob(fX, r2Y, fltACutoffLabel, fltACutoffSlider);
@@ -848,6 +857,7 @@ void LiquidDreamAudioProcessorEditor::resized()
     placeKnob(fX + spacing * 3, r2Y, fltAEnvAmtLabel, fltAEnvAmtSlider);
     placeKnob(fX + spacing * 3, r2Y, fltBEnvAmtLabel, fltBEnvAmtSlider);
 
+    // Row 3
     int r3Y = r2Y + 70;
     placeKnob(fX, r3Y, fltAAtkLabel, fltAAtkSlider);
     placeKnob(fX, r3Y, fltBAtkLabel, fltBAtkSlider);

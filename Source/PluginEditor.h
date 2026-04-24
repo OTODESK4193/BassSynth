@@ -18,10 +18,10 @@ private:
     juce::AudioProcessorValueTreeState& apvts;
     struct LfoUI {
         juce::ToggleButton onBtn{ "ON" };
-        juce::ComboBox wave, beat;
+        juce::ComboBox wave, beat, trig;
         juce::ToggleButton sync{ "SYNC" };
         juce::Slider rate, amt;
-        juce::Label waveLbl, beatLbl, rateLbl, amtLbl;
+        juce::Label waveLbl, beatLbl, trigLbl, rateLbl, amtLbl;
     };
     std::array<LfoUI, 3> lfos;
     std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>> sliderAtts;
@@ -192,11 +192,9 @@ private:
     std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>> attachments;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> oscOnAtt, subOnAtt, legatoAtt, colorOnAtt;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> subWaveAtt, fmWaveAtt, morphAAtt, morphBAtt, morphCAtt;
-
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> fltATypeAtt, fltBTypeAtt, fltRoutingAtt;
 
     int blinkCounter = 0;
-
     void updateFilterUI();
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(LiquidDreamAudioProcessorEditor)
