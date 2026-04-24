@@ -72,14 +72,27 @@ void LfoTab::paint(juce::Graphics& g) {
 
 void LfoTab::resized() {
     for (int i = 0; i < 3; ++i) {
-        int y = 30 + i * 130;
-        lfos[i].onBtn.setBounds(15, y + 15, 45, 24);
-        lfos[i].waveLbl.setBounds(70, y + 5, 65, 20);  lfos[i].wave.setBounds(70, y + 25, 65, 24);
-        lfos[i].trigLbl.setBounds(140, y + 5, 65, 20); lfos[i].trig.setBounds(140, y + 25, 65, 24);
-        lfos[i].sync.setBounds(210, y + 25, 50, 24);
-        placeKnob(265, y, lfos[i].rateLbl, lfos[i].rate);
-        lfos[i].beatLbl.setBounds(340, y + 5, 65, 20); lfos[i].beat.setBounds(340, y + 25, 65, 24);
-        placeKnob(410, y, lfos[i].amtLbl, lfos[i].amt);
+        // 背景枠の開始Y座標 (10, 140, 270)
+        int boxY = 10 + i * 130;
+
+        // 縦の中央にONボタンを配置
+        lfos[i].onBtn.setBounds(15, boxY + 45, 45, 24);
+
+        // WaveとTrigを枠内に縦積み (Box高115に対して 10〜104 に収まるように設計)
+        lfos[i].waveLbl.setBounds(75, boxY + 10, 65, 20);
+        lfos[i].wave.setBounds(75, boxY + 30, 65, 24);
+        lfos[i].trigLbl.setBounds(75, boxY + 60, 65, 20);
+        lfos[i].trig.setBounds(75, boxY + 80, 65, 24);
+
+        // その他のコントロールも枠内の中央に配置
+        lfos[i].sync.setBounds(155, boxY + 45, 55, 24);
+
+        placeKnob(225, boxY + 25, lfos[i].rateLbl, lfos[i].rate);
+
+        lfos[i].beatLbl.setBounds(310, boxY + 25, 70, 20);
+        lfos[i].beat.setBounds(310, boxY + 45, 70, 24);
+
+        placeKnob(395, boxY + 25, lfos[i].amtLbl, lfos[i].amt);
     }
 }
 
