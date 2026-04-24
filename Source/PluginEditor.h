@@ -123,7 +123,6 @@ private:
 
     // Overlays & Groups
     ColorIrPanel colorPanel;
-    // ★修正: 誤って削除していた ampEnvGroup を復元しました
     juce::GroupComponent oscGroup, subGroup, shaperGroup, filterGroup, ampEnvGroup, controlGroup, presetGroup;
 
     // Osc Params
@@ -156,14 +155,21 @@ private:
     juce::ComboBox fltATypeCombo, fltBTypeCombo, fltRoutingCombo;
     juce::Slider fltACutoffSlider, fltBCutoffSlider, fltAResSlider, fltBResSlider;
     juce::Label  fltACutoffLabel, fltBCutoffLabel, fltAResLabel, fltBResLabel;
-    juce::Slider fltMixSlider, fltEnvAmtSlider;
-    juce::Label  fltMixLabel, fltEnvAmtLabel;
+    juce::Slider fltMixSlider; juce::Label fltMixLabel;
 
-    // Core Envelopes
+    // A/B 独立 Envelope Amount
+    juce::Slider fltAEnvAmtSlider, fltBEnvAmtSlider;
+    juce::Label  fltAEnvAmtLabel, fltBEnvAmtLabel;
+
+    // A/B 独立 ADSR
+    juce::Slider fltAAtkSlider, fltADecSlider, fltASusSlider, fltARelSlider;
+    juce::Label  fltAAtkLabel, fltADecLabel, fltASusLabel, fltARelLabel;
+    juce::Slider fltBAtkSlider, fltBDecSlider, fltBSusSlider, fltBRelSlider;
+    juce::Label  fltBAtkLabel, fltBDecLabel, fltBSusLabel, fltBRelLabel;
+
+    // Amp Envelope
     juce::Slider ampAtkSlider, ampDecSlider, ampSusSlider, ampRelSlider;
     juce::Label  ampAtkLabel, ampDecLabel, ampSusLabel, ampRelLabel;
-    juce::Slider fltAtkSlider, fltDecSlider, fltSusSlider, fltRelSlider;
-    juce::Label  fltAtkLabel, fltDecLabel, fltSusLabel, fltRelLabel;
 
     // Performance
     juce::ToggleButton legatoButton{ "LEGATO" };
@@ -187,9 +193,7 @@ private:
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> oscOnAtt, subOnAtt, legatoAtt, colorOnAtt;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> subWaveAtt, fmWaveAtt, morphAAtt, morphBAtt, morphCAtt;
 
-    // Filter Attachments
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> fltATypeAtt, fltBTypeAtt, fltRoutingAtt;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> fltACutoffAtt, fltBCutoffAtt, fltAResAtt, fltBResAtt, fltMixAtt, fltEnvAmtAtt;
 
     int blinkCounter = 0;
 

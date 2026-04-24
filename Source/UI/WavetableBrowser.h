@@ -8,10 +8,12 @@
 class WavetableBrowser : public juce::Component
 {
 public:
-    // 上位クラス（Editor/Processor）へ通知するためのコールバック
     std::function<void(const juce::File&)> onCustomFileSelected;
     std::function<void(int)> onFactoryIndexSelected;
     std::function<void(const juce::StringArray&)> onUserFoldersChanged;
+
+    // ★ 追加: ダブルクリック時にブラウザを閉じるためのコールバック
+    std::function<void()> onCloseRequested;
 
     WavetableBrowser(juce::AudioProcessorValueTreeState& vts) : apvts(vts)
     {
@@ -19,9 +21,8 @@ public:
         subCatModel.owner = this;
         fileModel.owner = this;
 
-        // カテゴリーの初期化
         categories.add("Basic");
-        categories.add("User"); // 【NEW】ユーザーカスタムフォルダ用
+        categories.add("User");
         categories.add("All");
 
         for (int i = 0; i < EmbeddedWavetables::numTables; ++i) {
@@ -48,7 +49,6 @@ public:
         addAndMakeVisible(subCatList);
         addAndMakeVisible(fileList);
 
-        // 【NEW】フォルダ追加ボタン
         addAndMakeVisible(addFolderBtn);
         addFolderBtn.setColour(juce::TextButton::buttonColourId, juce::Colour::fromString("FF2A2A2A"));
         addFolderBtn.onClick = [this] { openFolderChooser(); };
@@ -57,7 +57,6 @@ public:
         updateSubCategories();
     }
 
-    // プロセッサー側でロードされた設定（パスリスト）を復元するメソッド
     void loadUserFolders(const juce::StringArray& folderPaths) {
         userFolders.clear();
         for (auto& path : folderPaths) {
@@ -75,7 +74,6 @@ public:
         juce::String selCat = categories[selectedCategoryIdx];
 
         if (selCat == "User") {
-            // ユーザーフォルダ名一覧をサブカテゴリーに表示
             for (auto& uf : userFolders) subCategories.add(uf.name);
         }
         else {
@@ -105,7 +103,6 @@ public:
             ? subCategories[selectedSubCategoryIdx] : "";
 
         if (selCat == "User") {
-            // 選択されたユーザーフォルダ内のWAVファイルをリスト化
             for (auto& uf : userFolders) {
                 if (uf.name == selSub) {
                     for (auto& f : uf.files) {
@@ -116,7 +113,6 @@ public:
             }
         }
         else {
-            // ファクトリーファイルのリスト化
             if ((selCat == "All" || selCat == "Basic") && (selSub == "All" || selSub == "Shapes" || selSub.isEmpty())) {
                 currentList.add({ true, -1, juce::File(), "Basic Shapes" });
             }
@@ -148,16 +144,14 @@ public:
         if (item.isFactory) {
             currentFactoryIndex = item.factoryIndex;
             currentCustomFile = juce::File();
-            // APVTSの更新（オートメーション同期用）
             if (auto* param = apvts.getParameter("osc_wave"))
                 param->setValueNotifyingHost(param->getNormalisableRange().convertTo0to1((float)item.factoryIndex));
 
             if (onFactoryIndexSelected) onFactoryIndexSelected(item.factoryIndex);
         }
         else {
-            currentFactoryIndex = -2; // Custom flag
+            currentFactoryIndex = -2;
             currentCustomFile = item.file;
-            // カスタムファイルはAPVTSを通さず直接プロセッサーへパスを投げる
             if (onCustomFileSelected) onCustomFileSelected(item.file);
         }
         fileList.repaint();
@@ -205,7 +199,6 @@ private:
     int currentFactoryIndex = -1;
     juce::File currentCustomFile;
 
-    // 統合リストアイテム構造体
     struct ListItem {
         bool isFactory;
         int factoryIndex;
@@ -214,7 +207,6 @@ private:
     };
     juce::Array<ListItem> currentList;
 
-    // ユーザーフォルダ管理構造体
     struct CustomFolder {
         juce::String name;
         juce::File folder;
@@ -231,7 +223,6 @@ private:
     }
 
     void addUserFolderInternal(const juce::File& folder, bool triggerCallback) {
-        // 重複チェック
         for (auto& uf : userFolders) {
             if (uf.folder == folder) return;
         }
@@ -246,7 +237,7 @@ private:
         if (triggerCallback && onUserFoldersChanged) {
             juce::StringArray paths;
             for (auto& uf : userFolders) paths.add(uf.folder.getFullPathName());
-            onUserFoldersChanged(paths); // プロセッサーへパスリストを送信し、状態保存させる
+            onUserFoldersChanged(paths);
         }
 
         if (categories[selectedCategoryIdx] == "User") updateSubCategories();
@@ -254,7 +245,7 @@ private:
 
     void moveSelection(int delta) {
         if (currentList.isEmpty()) return;
-        int currentListIdx = 0; // 見つからない場合は先頭
+        int currentListIdx = 0;
         for (int i = 0; i < currentList.size(); ++i) {
             if (currentList[i].isFactory && currentList[i].factoryIndex == currentFactoryIndex) { currentListIdx = i; break; }
             if (!currentList[i].isFactory && currentList[i].file == currentCustomFile) { currentListIdx = i; break; }
@@ -320,6 +311,12 @@ private:
         void listBoxItemClicked(int row, const juce::MouseEvent&) override {
             if (!owner) return;
             owner->applySelection(row);
+        }
+        // ★ 追加: ダブルクリック時の処理
+        void listBoxItemDoubleClicked(int row, const juce::MouseEvent&) override {
+            if (!owner) return;
+            owner->applySelection(row);
+            if (owner->onCloseRequested) owner->onCloseRequested();
         }
     } fileModel;
 };

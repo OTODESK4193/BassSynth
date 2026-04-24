@@ -7,6 +7,7 @@
 #include <vector>
 #include <complex>
 #include <atomic>
+#include <cmath> // std::isnan, std::floor, std::isfinite を確実に使うため追加
 #include "../Generated/WavetableData_Generated.h"
 
 class WavetableOscillator
@@ -58,7 +59,7 @@ public:
     void createDefaultBasicShapes() {
         const int myJobId = ++loadJobId;
         WavetableSet::Ptr newSet = new WavetableSet();
-        newSet->totalSamples = 8192; // ★ 修正: 2048 * 4 の事前計算値
+        newSet->totalSamples = 8192;
         newSet->frameSize = 2048;
         newSet->numFrames = 4;
 
@@ -139,7 +140,6 @@ public:
                     workBuf.clear();
                     auto* workPtr = workBuf.getWritePointer(0);
                     for (int i = 0; i < 2048; ++i) {
-                        // ★ 警告修正: size_t でキャストしてオーバーフロー回避
                         size_t srcIdx = static_cast<size_t>(f) * 2048 + static_cast<size_t>(i);
                         workPtr[i] = (srcIdx < static_cast<size_t>(newSet->totalSamples)) ? tempRaw.getSample(0, static_cast<int>(srcIdx)) : 0.0f;
                     }
@@ -162,7 +162,6 @@ public:
                     float normalizeScale = 1.0f / peak;
                     auto* destPtr = newSet->levels[lvl].getWritePointer(0);
                     for (int i = 0; i < 2048; ++i) {
-                        // ★ 警告修正: size_t でキャスト
                         size_t dstIdx = static_cast<size_t>(f) * 2048 + static_cast<size_t>(i);
                         if (dstIdx < static_cast<size_t>(newSet->totalSamples)) destPtr[dstIdx] = juce::jlimit(-1.0f, 1.0f, workPtr[i] * normalizeScale);
                     }
@@ -179,7 +178,6 @@ public:
         int frameIdx = (int)framePos;
         float frameFrac = framePos - (float)frameIdx;
 
-        // ★ 警告修正: size_t計算
         size_t f0_base = static_cast<size_t>(frameIdx) * static_cast<size_t>(set->frameSize);
         size_t f1_base = static_cast<size_t>(std::min(frameIdx + 1, set->numFrames - 1)) * static_cast<size_t>(set->frameSize);
 
@@ -193,12 +191,15 @@ public:
             else if (fmWaveform == 3) mod = 4.0f * std::abs(phase - 0.5f) - 1.0f;
 
             float tp = phase + mod * fmAmount * 0.1f;
-            tp -= (int)tp; if (tp < 0) tp += 1.0f;
+            tp -= std::floor(tp); // ★修正: マイナス方向への確実なラップ
 
             float syncA = 1.0f, syncB = 1.0f, syncC = 1.0f;
             tp = applyPhaseWarp(tp, morphAMode, morphAAmount, morphAShift, syncA, originalPhase);
             tp = applyPhaseWarp(tp, morphBMode, morphBAmount, morphBShift, syncB, originalPhase);
             tp = applyPhaseWarp(tp, morphCMode, morphCAmount, morphCShift, syncC, originalPhase);
+
+            tp -= std::floor(tp); // ★修正
+            if (!std::isfinite(tp)) tp = 0.0f; // ★修正: NaNガード
 
             float floatPos = tp * set->frameSize;
             int pos = (int)floatPos;
@@ -257,7 +258,6 @@ public:
         int frameIdx = (int)framePos;
         float frameFrac = framePos - (float)frameIdx;
 
-        // ★ 警告修正: size_t計算
         size_t f0_base = static_cast<size_t>(frameIdx) * static_cast<size_t>(set->frameSize);
         size_t f1_base = static_cast<size_t>(std::min(frameIdx + 1, set->numFrames - 1)) * static_cast<size_t>(set->frameSize);
 
@@ -300,12 +300,16 @@ public:
                 float lvlFrac = (hL > maxH) ? juce::jlimit(0.0f, 1.0f, (hL - maxH) / (hL * 0.5f)) : 0.0f;
 
                 float tp = tp_simd.get(i);
-                tp -= (int)tp; if (tp < 0) tp += 1.0f;
+                tp -= std::floor(tp); // ★修正: マイナス方向へ確実にラップ
+
                 float sA = 1.0f, sB = 1.0f, sC = 1.0f;
 
                 tp = applyPhaseWarp(tp, morphAMode, morphAAmount, morphAShift, sA, originalPhase);
                 tp = applyPhaseWarp(tp, morphBMode, morphBAmount, morphBShift, sB, originalPhase);
                 tp = applyPhaseWarp(tp, morphCMode, morphCAmount, morphCShift, sC, originalPhase);
+
+                tp -= std::floor(tp); // ★修正: 最終ラップ
+                if (!std::isfinite(tp)) tp = 0.0f; // ★修正: NaNが伝播した場合はゼロクリア
 
                 float fPos = tp * set->frameSize; int pos = (int)fPos; float frac = fPos - (float)pos;
                 auto* p0 = set->levels[lvl0].getReadPointer(0); auto* p1 = set->levels[lvl0 + 1].getReadPointer(0);
@@ -318,7 +322,9 @@ public:
                 val = applyAmpWarp(val, morphCMode, morphCAmount, morphCShift, originalPhase);
 
                 vAmp.set(i, oscOn ? val * amp[b].get(i) : 0.0f);
-                float pNext = p.get(i) + step; pNext -= (int)pNext; nextP.set(i, pNext);
+                float pNext = p.get(i) + step;
+                pNext -= std::floor(pNext); // ★修正
+                nextP.set(i, pNext);
             }
             outL_simd += vAmp * panL[b]; outR_simd += vAmp * panR[b]; phases[b] = nextP;
         }
@@ -327,7 +333,7 @@ public:
 
         if (subOn && subVolume > 0.001f) {
             subPhase += (baseFreq * std::pow(2.0f, subPitchOffset * 0.083333f)) / (float)sampleRate;
-            subPhase -= (int)subPhase;
+            subPhase -= std::floor(subPhase); // ★修正
             float rs = 0.0f;
             switch (subWaveform) {
             case 0: rs = std::sin(subPhase * juce::MathConstants<float>::twoPi); break;
@@ -373,15 +379,15 @@ private:
         else if (mode == 2) {
             float c = std::clamp(0.5f + shift * 0.4f, 0.1f, 0.9f);
             float pw = std::clamp(0.01f + (amt * 0.5f + 0.5f) * 0.98f, 0.01f, 0.99f);
-            float ps = p + (0.5f - c); ps -= (int)(ps + 10.0f) - 10;
+            float ps = p + (0.5f - c); ps -= std::floor(ps);
             float w = (ps < pw) ? (ps / pw * 0.5f) : (0.5f + (ps - pw) / (1.0f - pw) * 0.5f);
-            warped = w + (c - 0.5f); warped -= (int)(warped + 10.0f) - 10;
+            warped = w + (c - 0.5f); warped -= std::floor(warped);
         }
         else if (mode == 3) {
             float ratio = 1.0f + std::abs(amt) * 7.0f;
-            float res = (p + shift * 0.5f) * ratio; res -= (int)res;
+            float res = (p + shift * 0.5f) * ratio; res -= std::floor(res);
             if (res > 0.985f) sOut *= (1.0f - res) / 0.015f; else if (res < 0.015f) sOut *= res / 0.015f;
-            warped = res - shift * 0.5f; warped -= (int)(warped + 10.0f) - 10;
+            warped = res - shift * 0.5f; warped -= std::floor(warped);
         }
         else if (mode == 4) {
             float pt = std::clamp(0.5f + shift * 0.4f, 0.1f, 0.9f);
@@ -433,9 +439,12 @@ private:
         return ((c3 * t + c2) * t + c1) * t + y1;
     }
 
-    // ★ 警告修正: size_tキャストを追加
+    // ★修正: マイナスのインデックスを絶対に防ぐ安全なモジュロ演算へ書き換え
     inline float getHermiteSample(const float* ptr, size_t bOff, int fs, int pos, float t) const {
-        int p0 = (pos - 1 + fs) % fs, p1 = pos, p2 = (pos + 1) % fs, p3 = (pos + 2) % fs;
+        int p0 = ((pos - 1) % fs + fs) % fs;
+        int p1 = (pos % fs + fs) % fs;
+        int p2 = ((pos + 1) % fs + fs) % fs;
+        int p3 = ((pos + 2) % fs + fs) % fs;
         return hermite(t, ptr[bOff + static_cast<size_t>(p0)], ptr[bOff + static_cast<size_t>(p1)], ptr[bOff + static_cast<size_t>(p2)], ptr[bOff + static_cast<size_t>(p3)]);
     }
 

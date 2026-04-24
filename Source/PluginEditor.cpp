@@ -167,7 +167,7 @@ void MatrixTab::resized() {
 }
 
 // ==============================================================================
-// ColorIrPanel Implementation (省略なし)
+// ColorIrPanel Implementation
 // ==============================================================================
 ColorIrPanel::ColorIrPanel(LiquidDreamAudioProcessor& p) : processor(p), apvts(p.getAPVTS()) {
     addAndMakeVisible(learnButton);
@@ -343,8 +343,6 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     subGroup.setText("SUB OSC"); addAndMakeVisible(subGroup);
     shaperGroup.setText("DISTORTION & SHAPER"); addAndMakeVisible(shaperGroup);
     ampEnvGroup.setText("AMP ENVELOPE"); addAndMakeVisible(ampEnvGroup);
-
-    // 変更: FilterとEnvの統合
     filterGroup.setText("DUAL FILTER & ENV"); addAndMakeVisible(filterGroup);
 
     // presetGroup is deliberately hidden to remove its border
@@ -392,13 +390,19 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     setupS(fltACutoffSlider, fltACutoffLabel, "Cutoff", this); setupS(fltBCutoffSlider, fltBCutoffLabel, "Cutoff", this);
     setupS(fltAResSlider, fltAResLabel, "Reso", this); setupS(fltBResSlider, fltBResLabel, "Reso", this);
     setupS(fltMixSlider, fltMixLabel, "Mix (Wet/B)", this);
-    setupS(fltEnvAmtSlider, fltEnvAmtLabel, "EnvAmt", this);
+
+    // A/B Independent EnvAmt
+    setupS(fltAEnvAmtSlider, fltAEnvAmtLabel, "EnvAmt", this);
+    setupS(fltBEnvAmtSlider, fltBEnvAmtLabel, "EnvAmt", this);
 
     fltABtn.onClick = [this] { updateFilterUI(); };
     fltBBtn.onClick = [this] { updateFilterUI(); };
 
     setupS(ampAtkSlider, ampAtkLabel, "A", this); setupS(ampDecSlider, ampDecLabel, "D", this); setupS(ampSusSlider, ampSusLabel, "S", this); setupS(ampRelSlider, ampRelLabel, "R", this);
-    setupS(fltAtkSlider, fltAtkLabel, "A", this); setupS(fltDecSlider, fltDecLabel, "D", this); setupS(fltSusSlider, fltSusLabel, "S", this); setupS(fltRelSlider, fltRelLabel, "R", this);
+
+    // A/B Independent ADSR
+    setupS(fltAAtkSlider, fltAAtkLabel, "A", this); setupS(fltADecSlider, fltADecLabel, "D", this); setupS(fltASusSlider, fltASusLabel, "S", this); setupS(fltARelSlider, fltARelLabel, "R", this);
+    setupS(fltBAtkSlider, fltBAtkLabel, "A", this); setupS(fltBDecSlider, fltBDecLabel, "D", this); setupS(fltBSusSlider, fltBSusLabel, "S", this); setupS(fltBRelSlider, fltBRelLabel, "R", this);
 
     setupS(glideSlider, glideLabel, "Glide", this); setupS(pitchSlider, pitchLabel, "Pitch", this); setupS(gainSlider, gainLabel, "Gain", this);
     addAndMakeVisible(legatoButton);
@@ -505,10 +509,14 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
 
     att(fltACutoffSlider, "flt_a_cutoff"); att(fltAResSlider, "flt_a_res");
     att(fltBCutoffSlider, "flt_b_cutoff"); att(fltBResSlider, "flt_b_res");
-    att(fltMixSlider, "flt_mix"); att(fltEnvAmtSlider, "flt_env_amt");
+    att(fltMixSlider, "flt_mix");
+    att(fltAEnvAmtSlider, "flt_a_env_amt"); att(fltBEnvAmtSlider, "flt_b_env_amt");
 
     att(ampAtkSlider, "a_atk"); att(ampDecSlider, "a_dec"); att(ampSusSlider, "a_sus"); att(ampRelSlider, "a_rel");
-    att(fltAtkSlider, "f_atk"); att(fltDecSlider, "f_dec"); att(fltSusSlider, "f_sus"); att(fltRelSlider, "f_rel");
+
+    att(fltAAtkSlider, "f_a_atk"); att(fltADecSlider, "f_a_dec"); att(fltASusSlider, "f_a_sus"); att(fltARelSlider, "f_a_rel");
+    att(fltBAtkSlider, "f_b_atk"); att(fltBDecSlider, "f_b_dec"); att(fltBSusSlider, "f_b_sus"); att(fltBRelSlider, "f_b_rel");
+
     att(glideSlider, "m_glide"); att(pitchSlider, "m_pb"); att(gainSlider, "m_gain");
 
     addAndMakeVisible(modTabs);
@@ -525,6 +533,7 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     browser.onFactoryIndexSelected = [this](int idx) { audioProcessor.loadFactoryWavetable(idx); };
     browser.onUserFoldersChanged = [this](const juce::StringArray& folders) { audioProcessor.setUserFolders(folders); };
     browser.loadUserFolders(audioProcessor.getUserFolders());
+    browser.onCloseRequested = [this] { browser.setVisible(false); };
 
     updateFilterUI();
 
@@ -536,16 +545,37 @@ LiquidDreamAudioProcessorEditor::~LiquidDreamAudioProcessorEditor() { setLookAnd
 
 void LiquidDreamAudioProcessorEditor::updateFilterUI() {
     bool isA = fltABtn.getToggleState();
+
     fltATypeCombo.setVisible(isA);
     fltACutoffSlider.setVisible(isA); fltACutoffLabel.setVisible(isA);
     fltAResSlider.setVisible(isA); fltAResLabel.setVisible(isA);
+    fltAEnvAmtSlider.setVisible(isA); fltAEnvAmtLabel.setVisible(isA);
+    fltAAtkSlider.setVisible(isA); fltAAtkLabel.setVisible(isA);
+    fltADecSlider.setVisible(isA); fltADecLabel.setVisible(isA);
+    fltASusSlider.setVisible(isA); fltASusLabel.setVisible(isA);
+    fltARelSlider.setVisible(isA); fltARelLabel.setVisible(isA);
 
     fltBTypeCombo.setVisible(!isA);
     fltBCutoffSlider.setVisible(!isA); fltBCutoffLabel.setVisible(!isA);
     fltBResSlider.setVisible(!isA); fltBResLabel.setVisible(!isA);
+    fltBEnvAmtSlider.setVisible(!isA); fltBEnvAmtLabel.setVisible(!isA);
+    fltBAtkSlider.setVisible(!isA); fltBAtkLabel.setVisible(!isA);
+    fltBDecSlider.setVisible(!isA); fltBDecLabel.setVisible(!isA);
+    fltBSusSlider.setVisible(!isA); fltBSusLabel.setVisible(!isA);
+    fltBRelSlider.setVisible(!isA); fltBRelLabel.setVisible(!isA);
 
-    if (isA) { fltACutoffSlider.toFront(false); fltAResSlider.toFront(false); fltATypeCombo.toFront(false); }
-    else { fltBCutoffSlider.toFront(false); fltBResSlider.toFront(false); fltBTypeCombo.toFront(false); }
+    if (isA) {
+        fltACutoffSlider.toFront(false); fltAResSlider.toFront(false);
+        fltATypeCombo.toFront(false); fltAEnvAmtSlider.toFront(false);
+        fltAAtkSlider.toFront(false); fltADecSlider.toFront(false);
+        fltASusSlider.toFront(false); fltARelSlider.toFront(false);
+    }
+    else {
+        fltBCutoffSlider.toFront(false); fltBResSlider.toFront(false);
+        fltBTypeCombo.toFront(false); fltBEnvAmtSlider.toFront(false);
+        fltBAtkSlider.toFront(false); fltBDecSlider.toFront(false);
+        fltBSusSlider.toFront(false); fltBRelSlider.toFront(false);
+    }
 }
 
 void LiquidDreamAudioProcessorEditor::scanPresets() {
@@ -736,10 +766,8 @@ void LiquidDreamAudioProcessorEditor::resized()
     auto rightArea = area;
     browser.setBounds(rightArea);
 
-    // 変更: Wavetableエリアの上下余白を詰めるために高さを210pxに縮小
     auto oscRect = rightArea.removeFromTop(210);
     oscGroup.setBounds(oscRect);
-    // Y座標の開始位置も少し上に持ち上げ
     int oX = oscRect.getX() + 10, oY = oscRect.getY() + 18;
 
     oscOnButton.setBounds(oX, oY + 20, 50, 24);
@@ -756,7 +784,6 @@ void LiquidDreamAudioProcessorEditor::resized()
     placeKnob(oX + 60 + step * 9, oY, fmAmtLabel, fmAmtSlider);
     placeComboLocal(oX + 60 + step * 10, oY, 80, fmWaveLabel, fmWaveCombo);
 
-    // Y間隔を狭める (100 -> 85)
     int y2 = oY + 85, mWidth = 120;
     placeComboLocal(oX, y2, mWidth, morphAModeLabel, morphAModeCombo);
     placeKnob(oX + mWidth + 10, y2, morphAAmtLabel, morphAAmtSlider);
@@ -778,7 +805,6 @@ void LiquidDreamAudioProcessorEditor::resized()
     rightArea.removeFromLeft(10);
     auto modCol = rightArea;
 
-    // --- Dynamic Height Allocation ---
     auto shpRect = centerCol.removeFromTop(100);
     shaperGroup.setBounds(shpRect);
     int sX = shpRect.getX(), sY = shpRect.getY() + 15;
@@ -795,19 +821,16 @@ void LiquidDreamAudioProcessorEditor::resized()
     placeKnob(aX + 215, aY, ampSusLabel, ampSusSlider);
     placeKnob(aX + 315, aY, ampRelLabel, ampRelSlider);
 
-    // Preset area moved to bottom, frame hidden
     auto presetRect = centerCol.removeFromBottom(40);
     int pX = presetRect.getX() + 10, pY = presetRect.getY() + 5;
     presetCombo.setBounds(pX, pY, 240, 24);
     savePresetBtn.setBounds(pX + 250, pY, 60, 24);
     loadPresetBtn.setBounds(pX + 320, pY, 60, 24);
 
-    // 変更: Dual Filter と Filter Env の統合レイアウト
     auto filterRect = centerCol;
     filterGroup.setBounds(filterRect.reduced(0, 5));
     int fX = filterRect.getX() + 10, fY = filterRect.getY() + 20;
 
-    // Row 1: Left Block: A/B, Type, Routing
     fltABtn.setBounds(fX, fY, 35, 24);
     fltBBtn.setBounds(fX + 35, fY, 35, 24);
 
@@ -815,7 +838,6 @@ void LiquidDreamAudioProcessorEditor::resized()
     fltBTypeCombo.setBounds(fX + 80, fY, 80, 24);
     fltRoutingCombo.setBounds(fX + 170, fY, 80, 24);
 
-    // Row 2: 4 Knobs (Cutoff, Reso, Mix, EnvAmt)
     int r2Y = fY + 35;
     int spacing = 80;
     placeKnob(fX, r2Y, fltACutoffLabel, fltACutoffSlider);
@@ -823,14 +845,18 @@ void LiquidDreamAudioProcessorEditor::resized()
     placeKnob(fX + spacing, r2Y, fltAResLabel, fltAResSlider);
     placeKnob(fX + spacing, r2Y, fltBResLabel, fltBResSlider);
     placeKnob(fX + spacing * 2, r2Y, fltMixLabel, fltMixSlider);
-    placeKnob(fX + spacing * 3, r2Y, fltEnvAmtLabel, fltEnvAmtSlider);
+    placeKnob(fX + spacing * 3, r2Y, fltAEnvAmtLabel, fltAEnvAmtSlider);
+    placeKnob(fX + spacing * 3, r2Y, fltBEnvAmtLabel, fltBEnvAmtSlider);
 
-    // Row 3: ADSR
     int r3Y = r2Y + 70;
-    placeKnob(fX, r3Y, fltAtkLabel, fltAtkSlider);
-    placeKnob(fX + spacing, r3Y, fltDecLabel, fltDecSlider);
-    placeKnob(fX + spacing * 2, r3Y, fltSusLabel, fltSusSlider);
-    placeKnob(fX + spacing * 3, r3Y, fltRelLabel, fltRelSlider);
+    placeKnob(fX, r3Y, fltAAtkLabel, fltAAtkSlider);
+    placeKnob(fX, r3Y, fltBAtkLabel, fltBAtkSlider);
+    placeKnob(fX + spacing, r3Y, fltADecLabel, fltADecSlider);
+    placeKnob(fX + spacing, r3Y, fltBDecLabel, fltBDecSlider);
+    placeKnob(fX + spacing * 2, r3Y, fltASusLabel, fltASusSlider);
+    placeKnob(fX + spacing * 2, r3Y, fltBSusLabel, fltBSusSlider);
+    placeKnob(fX + spacing * 3, r3Y, fltARelLabel, fltARelSlider);
+    placeKnob(fX + spacing * 3, r3Y, fltBRelLabel, fltBRelSlider);
 
     modTabs.setBounds(modCol);
 }

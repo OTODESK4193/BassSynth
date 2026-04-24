@@ -8,7 +8,7 @@
 #include <mutex>
 #include "DSP/WavetableOscillator.h"
 #include "DSP/SpectralMorphProcessor.h"
-#include "DSP/DualFilterEngine.h" // 変更: LadderFilterから置き換え
+#include "DSP/DualFilterEngine.h"
 #include "DSP/SineShaper.h"
 #include "DSP/ColorIREngine.h"
 #include "Logic/MonoVoiceManager.h"
@@ -77,12 +77,13 @@ private:
 
     WavetableOscillator oscillator;
     SpectralMorphProcessor spectralMorph;
-    DualFilterEngine dualFilter; // 変更点
+    DualFilterEngine dualFilter;
     SineShaper shaper;
     ColorIREngine colorEngine;
     MonoVoiceManager voiceManager;
 
-    AdsrEnvelope ampEnv, filterEnv;
+    // ★ 変更: Filter A/B で独立したADSRを持つ
+    AdsrEnvelope ampEnv, filterEnvA, filterEnvB;
     std::array<AdsrEnvelope, 3> modEnvs;
     std::array<Lfo, 3> lfos;
 
@@ -112,16 +113,19 @@ private:
     std::atomic<float>* pUni = nullptr; std::atomic<float>* pDetune = nullptr; std::atomic<float>* pWidth = nullptr; std::atomic<float>* pDrift = nullptr;
     std::atomic<float>* pSubOn = nullptr; std::atomic<float>* pSubWave = nullptr; std::atomic<float>* pSubVol = nullptr; std::atomic<float>* pSubPitch = nullptr;
 
-    // Filter Params (Dual化に伴い拡張)
+    // Filter Params
     std::atomic<float>* pFltAType = nullptr; std::atomic<float>* pFltACutoff = nullptr; std::atomic<float>* pFltAReso = nullptr;
     std::atomic<float>* pFltBType = nullptr; std::atomic<float>* pFltBCutoff = nullptr; std::atomic<float>* pFltBReso = nullptr;
     std::atomic<float>* pFltRouting = nullptr; std::atomic<float>* pFltMix = nullptr;
-    std::atomic<float>* pFltEnvAmt = nullptr;
+
+    // ★ 変更: A/B 独立した EnvAmt と ADSR
+    std::atomic<float>* pFltAEnvAmt = nullptr; std::atomic<float>* pFltBEnvAmt = nullptr;
 
     std::atomic<float>* pDrive = nullptr; std::atomic<float>* pShpAmt = nullptr; std::atomic<float>* pShpRate = nullptr; std::atomic<float>* pShpBit = nullptr;
     std::atomic<float>* pGain = nullptr; std::atomic<float>* pGlide = nullptr; std::atomic<float>* pLegato = nullptr;
     std::atomic<float>* pAAtk = nullptr; std::atomic<float>* pADec = nullptr; std::atomic<float>* pASus = nullptr; std::atomic<float>* pARel = nullptr;
-    std::atomic<float>* pFAtk = nullptr; std::atomic<float>* pFDec = nullptr; std::atomic<float>* pFSus = nullptr; std::atomic<float>* pFRel = nullptr;
+    std::atomic<float>* pFAtkA = nullptr; std::atomic<float>* pFDecA = nullptr; std::atomic<float>* pFSusA = nullptr; std::atomic<float>* pFRelA = nullptr;
+    std::atomic<float>* pFAtkB = nullptr; std::atomic<float>* pFDecB = nullptr; std::atomic<float>* pFSusB = nullptr; std::atomic<float>* pFRelB = nullptr;
 
     // Color/Dynamics
     std::atomic<float>* pColorOn = nullptr; std::atomic<float>* pColorType = nullptr;
