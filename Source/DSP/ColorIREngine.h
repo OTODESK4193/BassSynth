@@ -288,12 +288,20 @@ public:
         }
 
         std::sort(currentNotes.begin(), currentNotes.end());
-        sparkleArp.updateChord(currentNotes);
+        sparkleArp.updateChord(currentNotes); // Arpは相対的なので元のノートを使用
+
+        // ★ オート・オクターブ・シフト: どんな位置で弾いても最適な黄金音域（C5〜B5）でIRを生成
+        std::vector<int> optimizedNotes;
+        int root = currentNotes[0];
+        int shift = ((root % 12) + 60) - root; // C5(72)を基準にピッチクラスを維持してシフト
+        for (int note : currentNotes) {
+            optimizedNotes.push_back(std::clamp(note + shift, 0, 127)); // MIDI範囲外エラーを防止
+        }
 
         const int myJobId = ++irGenJobId;
         const double sr = currentSampleRate;
 
-        threadPool->addJob([this, currentNotes, attackMs, decayMs, irType, sr, myJobId]() {
+        threadPool->addJob([this, optimizedNotes, attackMs, decayMs, irType, sr, myJobId]() {
             if (myJobId != irGenJobId.load()) return;
 
             float actualDecayMs = std::max(100.0f, decayMs);
@@ -301,18 +309,21 @@ public:
             if (numSamples < 2048) numSamples = 2048;
 
             juce::AudioBuffer<float> tempIR(2, numSamples); tempIR.clear();
-            std::vector<float> phases(currentNotes.size(), 0.0f), incs(currentNotes.size(), 0.0f);
+            std::vector<float> phases(optimizedNotes.size(), 0.0f), incs(optimizedNotes.size(), 0.0f);
+            auto& random = juce::Random::getSystemRandom();
 
-            for (size_t n = 0; n < currentNotes.size(); ++n) {
-                float freq = (float)juce::MidiMessage::getMidiNoteInHertz(currentNotes[n]);
+            float baseFreq = (float)juce::MidiMessage::getMidiNoteInHertz(optimizedNotes[0]);
+
+            for (size_t n = 0; n < optimizedNotes.size(); ++n) {
+                float freq = (float)juce::MidiMessage::getMidiNoteInHertz(optimizedNotes[n]);
                 incs[n] = freq / (float)sr;
-                phases[n] = 0.0f;
+                phases[n] = 0.0f; // ★ ゼロ位相完全同期
             }
 
             float atkSamples = std::max(1.0f, (attackMs / 1000.0f) * (float)sr);
             float decSamples = (actualDecayMs / 1000.0f) * (float)sr;
             auto* outL = tempIR.getWritePointer(0); auto* outR = tempIR.getWritePointer(1);
-            float norm = 1.0f / (float)currentNotes.size();
+            float norm = 1.0f / (float)optimizedNotes.size();
 
             for (int i = 0; i < numSamples; ++i) {
                 if (myJobId != irGenJobId.load()) return;
@@ -322,7 +333,7 @@ public:
 
                 if (irType == 0) {
                     // Type 0: Crystal Saw
-                    for (size_t n = 0; n < currentNotes.size(); ++n) {
+                    for (size_t n = 0; n < optimizedNotes.size(); ++n) {
                         float phL = phases[n];
                         float phR = std::fmod(phases[n] + getPhaseOffset(n, 1), 1.0f);
 
@@ -345,7 +356,7 @@ public:
                 else if (irType == 1) {
                     // Type 1: Shimmer PWM
                     float duty = 0.5f - 0.2f * timeRatio;
-                    for (size_t n = 0; n < currentNotes.size(); ++n) {
+                    for (size_t n = 0; n < optimizedNotes.size(); ++n) {
                         float phL = phases[n];
                         float phR = std::fmod(phases[n] + getPhaseOffset(n, 1), 1.0f);
 
@@ -370,7 +381,7 @@ public:
                 else if (irType == 2) {
                     // Type 2: Harmonic Bell
                     float modDepth = 1.5f * (1.0f - timeRatio * 0.7f);
-                    for (size_t n = 0; n < currentNotes.size(); ++n) {
+                    for (size_t n = 0; n < optimizedNotes.size(); ++n) {
                         float phL = phases[n];
                         float phR = std::fmod(phases[n] + getPhaseOffset(n, 1), 1.0f);
                         float pPiL = phL * juce::MathConstants<float>::twoPi;
@@ -392,7 +403,7 @@ public:
                 }
                 else if (irType == 3) {
                     // Type 3: Stacked Chord Shimmer
-                    for (size_t n = 0; n < currentNotes.size(); ++n) {
+                    for (size_t n = 0; n < optimizedNotes.size(); ++n) {
                         float phL = phases[n];
                         float phR = std::fmod(phases[n] + getPhaseOffset(n, 1), 1.0f);
                         float pPiL = phL * juce::MathConstants<float>::twoPi;
@@ -425,7 +436,7 @@ public:
                 }
                 else if (irType == 4) {
                     // Type 4: Crystal Pluck
-                    for (size_t n = 0; n < currentNotes.size(); ++n) {
+                    for (size_t n = 0; n < optimizedNotes.size(); ++n) {
                         float phL = phases[n];
                         float phR = std::fmod(phases[n] + getPhaseOffset(n, 1), 1.0f);
                         float pPiL = phL * juce::MathConstants<float>::twoPi;
