@@ -198,7 +198,6 @@ juce::AudioProcessorValueTreeState::ParameterLayout LiquidDreamAudioProcessor::c
     return { params.begin(), params.end() };
 }
 
-// ★ 追加: XMLを利用した状態の保存と復元（APVTS + カスタムファイル情報）
 void LiquidDreamAudioProcessor::getStateInformation(juce::MemoryBlock& destData)
 {
     auto state = apvts.copyState();
@@ -228,7 +227,6 @@ void LiquidDreamAudioProcessor::setStateInformation(const void* data, int sizeIn
     }
 }
 
-// ★ 追加: カスタムWavetableおよびファクトリーのロード制御
 void LiquidDreamAudioProcessor::loadCustomWavetable(const juce::File& file) {
     currentCustomWavetablePath = file.getFullPathName();
     customWavetableLoaded.store(true);
@@ -330,16 +328,13 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     smoothedShpRate.setTargetValue(pShpRate->load(std::memory_order_relaxed)); smoothedShpBit.setTargetValue(pShpBit->load(std::memory_order_relaxed));
     smoothedSubVol.setTargetValue(pSubVol->load(std::memory_order_relaxed));
 
-    // ★ 変更: カスタム波形フラグとAPVTSの競合回避ロジック
     int waveIdx = (int)pWave->load(std::memory_order_relaxed);
     static int lastWaveIdx = -2;
     if (waveIdx != lastWaveIdx) {
         if (lastWaveIdx == -2 && customWavetableLoaded.load()) {
-            // プロジェクトロード直後の同期のみ行い、カスタム波形を維持する
             lastWaveIdx = waveIdx;
         }
         else {
-            // オートメーション等でAPVTSが変更された場合はファクトリー波形を強制ロード
             lastWaveIdx = waveIdx;
             customWavetableLoaded.store(false);
             currentCustomWavetablePath = "";
@@ -404,6 +399,7 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     auto* wtL = tempWavetableBuffer.getWritePointer(0); auto* wtR = tempWavetableBuffer.getWritePointer(1);
     float stft_aA = 0.0f, stft_sA = 0.0f, stft_aB = 0.0f, stft_sB = 0.0f, stft_aC = 0.0f, stft_sC = 0.0f;
 
+    // --- STEP 1: Modulations & Envelopes ---
     for (int i = 0; i < numSamples; ++i) {
         float modValues[6] = {
             (pModOn[0]->load(std::memory_order_relaxed) > 0.5f ? modEnvs[0].getNextSample() * pModAmt[0]->load(std::memory_order_relaxed) : 0.0f),
@@ -467,14 +463,18 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         tempEnvBuffer.setSample(4, i, destMods[11]); // Gain Mod
 
         float oL = 0.0f, oR = 0.0f, subL = 0.0f, subR = 0.0f;
+
+        // --- STEP 2: Generate Oscillators ---
         oscillator.getSampleStereo(oL, oR, subL, subR);
 
         wtL[i] = oL; wtR[i] = oR;
         tempSubBuffer.setSample(0, i, subL); tempSubBuffer.setSample(1, i, subR);
     }
 
+    // --- STEP 3: Spectral Morphing ---
     spectralMorph.process(tempWavetableBuffer, currentModeA, stft_aA, stft_sA, currentModeB, stft_aB, stft_sB, currentModeC, stft_aC, stft_sC);
 
+    // --- STEP 4: Distortion & Shaper ---
     for (int i = 0; i < numSamples; ++i) {
         float cd = smoothedDrive.getNextValue(), csa = smoothedShpAmt.getNextValue(), csr = smoothedShpRate.getNextValue(), csb = smoothedShpBit.getNextValue();
         float sL = wtL[i]; float sR = wtR[i];
@@ -482,13 +482,7 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         wtL[i] = sL; wtR[i] = sR;
     }
 
-    if (pColorOn->load() > 0.5f) {
-        colorEngine.setOttParameters(pOttDepth->load(), pOttTime->load(), pOttUp->load(), pOttDown->load(), pOttGain->load());
-        colorEngine.setSootheParameters(pOttDepth->load(), pOttTime->load(), pSootheSelectivity->load(), pSootheSharpness->load(), pSootheFocus->load());
-        colorEngine.setParameters(pColorPreHp->load(), pColorPostHp->load(), pColorMix->load(), pColorIrVol->load());
-        colorEngine.process(tempWavetableBuffer);
-    }
-
+    // --- STEP 5: Add Sub, Apply Filter & Amp Envelope (Base Synth Completion) ---
     for (int i = 0; i < numSamples; ++i) {
         float cc = smoothedCutoff.getNextValue(), cr = smoothedReso.getNextValue(), ce = pFltEnvAmt->load();
         float aVal = tempEnvBuffer.getSample(0, i);
@@ -496,21 +490,30 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         float cutoffMod = tempEnvBuffer.getSample(2, i);
         float resoMod = tempEnvBuffer.getSample(3, i);
 
+        // Add Sub to WT
         float sL = wtL[i] + tempSubBuffer.getSample(0, i);
         float sR = wtR[i] + tempSubBuffer.getSample(1, i);
 
+        // Filter
         float mc = cc * std::exp2(cutoffMod * 8.0f);
         mc += (fVal * ce * 10000.0f);
         filter.setParameters(juce::jlimit(20.0f, 20000.0f, mc), juce::jlimit(0.0f, 0.95f, cr + resoMod));
 
         sL = filter.processSample(sL); sR = filter.processSample(sR);
 
+        // Apply Amp Envelope (Write to main buffer)
         left[i] = sL * aVal; right[i] = sR * aVal;
     }
 
+    // --- STEP 6: Color IR Addition ---
+    if (pColorOn->load() > 0.5f) {
+        colorEngine.setParameters(pColorPreHp->load(), pColorPostHp->load(), pColorMix->load(), pColorIrVol->load());
+        colorEngine.processIR(buffer);
+    }
+
+    // --- STEP 7: Sparkle Arp Addition ---
     if (pColorOn->load() > 0.5f) {
         colorEngine.setArpParameters((int)pArpWave->load(), (int)pArpMode->load(), pArpSpeed->load(), (int)pArpPitch->load(), pArpLevel->load());
-
         std::vector<int> currentNotes;
         {
             std::lock_guard<std::mutex> lock(midiNotesMutex);
@@ -519,6 +522,14 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         colorEngine.processArp(buffer, currentNotes, tempEnvBuffer.getReadPointer(0));
     }
 
+    // --- STEP 8: Dynamics Processing (Glue everything together) ---
+    if (pColorOn->load() > 0.5f) {
+        colorEngine.setOttParameters(pOttDepth->load(), pOttTime->load(), pOttUp->load(), pOttDown->load(), pOttGain->load());
+        colorEngine.setSootheParameters(pOttDepth->load(), pOttTime->load(), pSootheSelectivity->load(), pSootheSharpness->load(), pSootheFocus->load());
+        colorEngine.processDynamics(buffer);
+    }
+
+    // --- STEP 9: Master Gain & Scope ---
     for (int i = 0; i < numSamples; ++i) {
         float cg = smoothedGain.getNextValue();
         float gainMod = tempEnvBuffer.getSample(4, i);

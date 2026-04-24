@@ -202,7 +202,8 @@ private:
         }
     }
 
-    float generateOscillator(float phase, float inc, int wave) {
+    // ★ 警告修正: const を付与
+    float generateOscillator(float phase, float inc, int wave) const {
         float out = 0.0f;
         float pPi = phase * juce::MathConstants<float>::twoPi;
         int maxHarmonic = (int)(0.5f / inc);
@@ -244,7 +245,6 @@ public:
 
     ~ColorIREngine() {
         irGenJobId++;
-        // ★ 修正: ポインタアクセスへ変更
         threadPool->removeAllJobs(true, 1000);
     }
 
@@ -294,7 +294,6 @@ public:
         const int myJobId = ++irGenJobId;
         const double sr = currentSampleRate;
 
-        // ★ 修正: ポインタアクセスへ変更
         threadPool->addJob([this, currentNotes, attackMs, decayMs, irType, sr, myJobId]() {
             if (myJobId != irGenJobId.load()) return;
 
@@ -305,9 +304,10 @@ public:
             juce::AudioBuffer<float> tempIR(2, numSamples); tempIR.clear();
             std::vector<float> phases(currentNotes.size(), 0.0f), incs(currentNotes.size(), 0.0f);
             auto& random = juce::Random::getSystemRandom();
+
+            // ★ エラー修正: baseFreqの定義を復元
             float baseFreq = (float)juce::MidiMessage::getMidiNoteInHertz(currentNotes[0]);
 
-            // ★ 修正: すべての初期位相を0.0fで同期させ、強烈なコード感（Zero-Phase）を確保
             for (size_t n = 0; n < currentNotes.size(); ++n) {
                 float freq = (float)juce::MidiMessage::getMidiNoteInHertz(currentNotes[n]);
                 incs[n] = freq / (float)sr;
@@ -322,19 +322,20 @@ public:
             for (int i = 0; i < numSamples; ++i) {
                 if (myJobId != irGenJobId.load()) return;
                 float sample = 0.0f;
+                float timeRatio = (float)i / (float)numSamples;
+                float globalNoise = random.nextFloat() * 2.0f - 1.0f;
 
                 if (irType == 0) {
                     for (size_t n = 0; n < currentNotes.size(); ++n) {
-                        float saw = 2.0f * phases[n] - 1.0f;
-                        sample += saw;
+                        sample += 2.0f * phases[n] - 1.0f;
                         phases[n] += incs[n]; if (phases[n] >= 1.0f) phases[n] -= 1.0f;
                     }
                     sample *= norm;
                 }
                 else if (irType == 1) {
+                    float duty = 0.5f - 0.45f * timeRatio;
                     for (size_t n = 0; n < currentNotes.size(); ++n) {
-                        float sq = (phases[n] < 0.5f) ? 1.0f : -1.0f;
-                        sample += sq;
+                        sample += (phases[n] < duty) ? 1.0f : -1.0f;
                         phases[n] += incs[n]; if (phases[n] >= 1.0f) phases[n] -= 1.0f;
                     }
                     sample *= norm;
@@ -358,25 +359,16 @@ public:
                     sample *= norm;
                 }
                 else if (irType == 3) {
-                    // ★ 修正: 発散しないピュアなAdditive Resonator（倍音加算）へ進化
                     for (size_t n = 0; n < currentNotes.size(); ++n) {
-                        float val = 0.0f;
-                        // 1倍音（基音）から5倍音までのサイン波を合成
-                        for (int h = 1; h <= 5; ++h) {
-                            float hPhase = std::fmod(phases[n] * h, 1.0f);
-                            // 高次倍音ほど早く減衰させる
-                            float hDecay = std::exp(-(float)i / (sr * (actualDecayMs / 1000.0f) / (float)h));
-                            val += std::sin(hPhase * juce::MathConstants<float>::twoPi) * hDecay * (1.0f / (float)h);
-                        }
-                        sample += val;
+                        sample += 2.0f * phases[n] - 1.0f;
                         phases[n] += incs[n]; if (phases[n] >= 1.0f) phases[n] -= 1.0f;
                     }
-                    sample *= (norm * 0.8f);
-                    // アタックの瞬間にのみ、微量の煌めきノイズを付与
-                    sample += (random.nextFloat() * 2.0f - 1.0f) * 0.1f * std::exp(-(float)i / (sr * 0.02f));
+                    sample *= norm;
+                    float noiseEnv = std::exp(-(float)i / (sr * 0.15f));
+                    sample = sample * 0.8f + (sample * globalNoise) * noiseEnv * 0.4f;
                 }
 
-                sample = std::tanh(sample * ((irType == 3) ? 1.5f : 4.0f));
+                sample = std::tanh(sample * 4.0f);
 
                 float env = (i < atkSamples) ? ((float)i / atkSamples) : std::pow(std::max(0.0f, 1.0f - ((float)(i - atkSamples) / decSamples)), 4.0f);
                 outL[i] = sample * env * 0.025f; outR[i] = sample * env * 0.025f;
@@ -407,51 +399,53 @@ public:
         irVolumeLinear = juce::Decibels::decibelsToGain(irVolDb);
     }
 
-    void process(juce::AudioBuffer<float>& buffer)
+    void processIR(juce::AudioBuffer<float>& buffer)
     {
-        if (mix > 0.001f && state.load() == LearnState::Active) {
-            const int numSamples = buffer.getNumSamples();
-            if (wetBufferA.getNumSamples() < numSamples) {
-                wetBufferA.setSize(2, numSamples, false, false, true); wetBufferB.setSize(2, numSamples, false, false, true);
-            }
+        if (mix <= 0.001f || state.load() != LearnState::Active) return;
 
-            for (int ch = 0; ch < 2; ++ch) wetBufferA.copyFrom(ch, 0, buffer, ch, 0, numSamples);
-
-            auto* wAL = wetBufferA.getWritePointer(0); auto* wAR = wetBufferA.getWritePointer(1);
-            for (int i = 0; i < numSamples; ++i) {
-                wAL[i] = preFilterL.processSample(0, wAL[i]); wAR[i] = preFilterR.processSample(1, wAR[i]);
-            }
-
-            for (int ch = 0; ch < 2; ++ch) wetBufferB.copyFrom(ch, 0, wetBufferA, ch, 0, numSamples);
-
-            juce::dsp::AudioBlock<float> blockA(wetBufferA); juce::dsp::ProcessContextReplacing<float> contextA(blockA); convEngineA.process(contextA);
-            juce::dsp::AudioBlock<float> blockB(wetBufferB); juce::dsp::ProcessContextReplacing<float> contextB(blockB); convEngineB.process(contextB);
-
-            auto* inL = buffer.getReadPointer(0); auto* inR = buffer.getReadPointer(1);
-            auto* outL = buffer.getWritePointer(0); auto* outR = buffer.getWritePointer(1);
-            auto* wBL = wetBufferB.getReadPointer(0); auto* wBR = wetBufferB.getReadPointer(1);
-
-            float fadeInc = 1.0f / (float)(currentSampleRate * 0.05);
-            for (int i = 0; i < numSamples; ++i) {
-                if (fadeVolA < fadeTargetA) fadeVolA = std::min(fadeVolA + fadeInc, fadeTargetA); else if (fadeVolA > fadeTargetA) fadeVolA = std::max(fadeVolA - fadeInc, fadeTargetA);
-                if (fadeVolB < fadeTargetB) fadeVolB = std::min(fadeVolB + fadeInc, fadeTargetB); else if (fadeVolB > fadeTargetB) fadeVolB = std::max(fadeVolB - fadeInc, fadeTargetB);
-
-                float currentWetL = std::tanh(wAL[i] * fadeVolA + wBL[i] * fadeVolB);
-                float currentWetR = std::tanh(wAR[i] * fadeVolA + wBR[i] * fadeVolB);
-
-                currentWetL = postFilterL.processSample(0, currentWetL); currentWetR = postFilterR.processSample(1, currentWetR);
-
-                currentWetL *= irVolumeLinear; currentWetR *= irVolumeLinear;
-
-                outL[i] = inL[i] * (1.0f - mix) + currentWetL * mix; outR[i] = inR[i] * (1.0f - mix) + currentWetR * mix;
-            }
+        const int numSamples = buffer.getNumSamples();
+        if (wetBufferA.getNumSamples() < numSamples) {
+            wetBufferA.setSize(2, numSamples, false, false, true); wetBufferB.setSize(2, numSamples, false, false, true);
         }
 
-        trueOtt.process(buffer);
+        for (int ch = 0; ch < 2; ++ch) wetBufferA.copyFrom(ch, 0, buffer, ch, 0, numSamples);
+
+        auto* wAL = wetBufferA.getWritePointer(0); auto* wAR = wetBufferA.getWritePointer(1);
+        for (int i = 0; i < numSamples; ++i) {
+            wAL[i] = preFilterL.processSample(0, wAL[i]); wAR[i] = preFilterR.processSample(1, wAR[i]);
+        }
+
+        for (int ch = 0; ch < 2; ++ch) wetBufferB.copyFrom(ch, 0, wetBufferA, ch, 0, numSamples);
+
+        juce::dsp::AudioBlock<float> blockA(wetBufferA); juce::dsp::ProcessContextReplacing<float> contextA(blockA); convEngineA.process(contextA);
+        juce::dsp::AudioBlock<float> blockB(wetBufferB); juce::dsp::ProcessContextReplacing<float> contextB(blockB); convEngineB.process(contextB);
+
+        auto* inL = buffer.getReadPointer(0); auto* inR = buffer.getReadPointer(1);
+        auto* outL = buffer.getWritePointer(0); auto* outR = buffer.getWritePointer(1);
+        auto* wBL = wetBufferB.getReadPointer(0); auto* wBR = wetBufferB.getReadPointer(1);
+
+        float fadeInc = 1.0f / (float)(currentSampleRate * 0.05);
+        for (int i = 0; i < numSamples; ++i) {
+            if (fadeVolA < fadeTargetA) fadeVolA = std::min(fadeVolA + fadeInc, fadeTargetA); else if (fadeVolA > fadeTargetA) fadeVolA = std::max(fadeVolA - fadeInc, fadeTargetA);
+            if (fadeVolB < fadeTargetB) fadeVolB = std::min(fadeVolB + fadeInc, fadeTargetB); else if (fadeVolB > fadeTargetB) fadeVolB = std::max(fadeVolB - fadeInc, fadeTargetB);
+
+            float currentWetL = std::tanh(wAL[i] * fadeVolA + wBL[i] * fadeVolB);
+            float currentWetR = std::tanh(wAR[i] * fadeVolA + wBR[i] * fadeVolB);
+
+            currentWetL = postFilterL.processSample(0, currentWetL); currentWetR = postFilterR.processSample(1, currentWetR);
+
+            currentWetL *= irVolumeLinear; currentWetR *= irVolumeLinear;
+
+            outL[i] = inL[i] * (1.0f - mix) + currentWetL * mix; outR[i] = inR[i] * (1.0f - mix) + currentWetR * mix;
+        }
     }
 
     void processArp(juce::AudioBuffer<float>& masterBuffer, const std::vector<int>& activeNotes, const float* mainAmpEnvBuffer) {
         if (state.load() == LearnState::Active) sparkleArp.process(masterBuffer, activeNotes, mainAmpEnvBuffer);
+    }
+
+    void processDynamics(juce::AudioBuffer<float>& buffer) {
+        trueOtt.process(buffer);
     }
 
 private:
@@ -461,10 +455,7 @@ private:
     mutable std::mutex chordMutex;
 
     juce::dsp::Convolution convEngineA, convEngineB;
-
-    // ★ 修正: マルチインスタンス時のCPUスパイクを防ぐためのシングルトン共有スレッド
     juce::SharedResourcePointer<juce::ThreadPool> threadPool;
-
     std::atomic<int> irGenJobId{ 0 };
 
     juce::AudioBuffer<float> wetBufferA, wetBufferB;

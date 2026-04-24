@@ -50,7 +50,6 @@ public:
 
     ~WavetableOscillator() {
         loadJobId++;
-        // ★ 修正: ポインタアクセスへ変更
         backgroundPool->removeAllJobs(true, 1000);
     }
 
@@ -59,7 +58,7 @@ public:
     void createDefaultBasicShapes() {
         const int myJobId = ++loadJobId;
         WavetableSet::Ptr newSet = new WavetableSet();
-        newSet->totalSamples = 2048 * 4;
+        newSet->totalSamples = 8192; // ★ 修正: 2048 * 4 の事前計算値
         newSet->frameSize = 2048;
         newSet->numFrames = 4;
 
@@ -130,7 +129,6 @@ public:
     }
 
     void runBandlimitingTask(int myJobId, WavetableSet::Ptr newSet, juce::AudioBuffer<float> tempRaw) {
-        // ★ 修正: ポインタアクセスへ変更
         backgroundPool->addJob([this, myJobId, newSet, tempRaw]() {
             juce::dsp::FFT fft(11);
             juce::AudioBuffer<float> workBuf(1, 4096);
@@ -141,8 +139,9 @@ public:
                     workBuf.clear();
                     auto* workPtr = workBuf.getWritePointer(0);
                     for (int i = 0; i < 2048; ++i) {
-                        int srcIdx = (int)(f * 2048) + i;
-                        workPtr[i] = (srcIdx < newSet->totalSamples) ? tempRaw.getSample(0, srcIdx) : 0.0f;
+                        // ★ 警告修正: size_t でキャストしてオーバーフロー回避
+                        size_t srcIdx = static_cast<size_t>(f) * 2048 + static_cast<size_t>(i);
+                        workPtr[i] = (srcIdx < static_cast<size_t>(newSet->totalSamples)) ? tempRaw.getSample(0, static_cast<int>(srcIdx)) : 0.0f;
                     }
                     fft.performRealOnlyForwardTransform(workPtr);
                     int harmonicLimit = std::max(2, 1024 >> lvl);
@@ -163,8 +162,9 @@ public:
                     float normalizeScale = 1.0f / peak;
                     auto* destPtr = newSet->levels[lvl].getWritePointer(0);
                     for (int i = 0; i < 2048; ++i) {
-                        int dstIdx = (int)(f * 2048) + i;
-                        if (dstIdx < newSet->totalSamples) destPtr[dstIdx] = juce::jlimit(-1.0f, 1.0f, workPtr[i] * normalizeScale);
+                        // ★ 警告修正: size_t でキャスト
+                        size_t dstIdx = static_cast<size_t>(f) * 2048 + static_cast<size_t>(i);
+                        if (dstIdx < static_cast<size_t>(newSet->totalSamples)) destPtr[dstIdx] = juce::jlimit(-1.0f, 1.0f, workPtr[i] * normalizeScale);
                     }
                 }
             }
@@ -179,8 +179,9 @@ public:
         int frameIdx = (int)framePos;
         float frameFrac = framePos - (float)frameIdx;
 
-        int f0_base = (int)(frameIdx * set->frameSize);
-        int f1_base = (int)(std::min(frameIdx + 1, set->numFrames - 1) * set->frameSize);
+        // ★ 警告修正: size_t計算
+        size_t f0_base = static_cast<size_t>(frameIdx) * static_cast<size_t>(set->frameSize);
+        size_t f1_base = static_cast<size_t>(std::min(frameIdx + 1, set->numFrames - 1)) * static_cast<size_t>(set->frameSize);
 
         for (int i = 0; i < 512; ++i) {
             float originalPhase = i / 512.0f;
@@ -256,8 +257,9 @@ public:
         int frameIdx = (int)framePos;
         float frameFrac = framePos - (float)frameIdx;
 
-        int f0_base = (int)(frameIdx * set->frameSize);
-        int f1_base = (int)(std::min(frameIdx + 1, set->numFrames - 1) * set->frameSize);
+        // ★ 警告修正: size_t計算
+        size_t f0_base = static_cast<size_t>(frameIdx) * static_cast<size_t>(set->frameSize);
+        size_t f1_base = static_cast<size_t>(std::min(frameIdx + 1, set->numFrames - 1)) * static_cast<size_t>(set->frameSize);
 
         SIMDFloat outL_simd(0.0f), outR_simd(0.0f);
         int numBlocks = (unisonCount + SimdWidth - 1) / SimdWidth;
@@ -286,7 +288,7 @@ public:
                 int vIdx = b * SimdWidth + i;
                 if (vIdx >= unisonCount) { nextP.set(i, p.get(i)); continue; }
 
-                float originalPhase = p.get(i); // ★ ゼロスナップ判定用
+                float originalPhase = p.get(i);
 
                 driftPhase[vIdx] += driftRate[vIdx] / (float)sampleRate;
                 if (driftPhase[vIdx] >= 1.0f) driftPhase[vIdx] -= 1.0f;
@@ -301,7 +303,6 @@ public:
                 tp -= (int)tp; if (tp < 0) tp += 1.0f;
                 float sA = 1.0f, sB = 1.0f, sC = 1.0f;
 
-                // ★ 第6引数にオリジナル位相を渡し、厳格にゼロスナップさせる
                 tp = applyPhaseWarp(tp, morphAMode, morphAAmount, morphAShift, sA, originalPhase);
                 tp = applyPhaseWarp(tp, morphBMode, morphBAmount, morphBShift, sB, originalPhase);
                 tp = applyPhaseWarp(tp, morphCMode, morphCAmount, morphCShift, sC, originalPhase);
@@ -312,7 +313,6 @@ public:
                 float v1 = getHermiteSample(p1, f0_base, set->frameSize, pos, frac) * (1.0f - frameFrac) + getHermiteSample(p1, f1_base, set->frameSize, pos, frac) * frameFrac;
                 float val = (v0 * (1.0f - lvlFrac) + v1 * lvlFrac) * (sA * sB * sC);
 
-                // ★ 振幅もゼロスナップ
                 val = applyAmpWarp(val, morphAMode, morphAAmount, morphAShift, originalPhase);
                 val = applyAmpWarp(val, morphBMode, morphBAmount, morphBShift, originalPhase);
                 val = applyAmpWarp(val, morphCMode, morphCAmount, morphCShift, originalPhase);
@@ -354,14 +354,12 @@ private:
     std::array<float, MaxVoices> driftPhase = { 0 }, driftRate = { 0 };
     juce::AudioFormatManager formatManager;
 
-    // ★ 修正: マルチインスタンス時のCPUスパイクを防ぐためのシングルトン共有スレッド
     juce::SharedResourcePointer<juce::ThreadPool> backgroundPool;
 
     std::atomic<int> loadJobId{ 0 };
     juce::ReferenceCountedObjectPtr<WavetableSet> currentWavetableSet;
     std::array<SIMDFloat, MaxBlocks> phases, increments, panL, panR, amp;
 
-    // ★ 修正: ゼロスナップ（境界でのジャンプを強制補間）の追加
     inline float applyPhaseWarp(float p, int mode, float amt, float shift, float& sOut, float originalPhase) const {
         if (mode == 0) return p;
 
@@ -392,7 +390,6 @@ private:
             warped = p * (1.0f - std::abs(amt)) + m * std::abs(amt);
         }
 
-        // ★ ゼロスナップ: 両端0.5%で元の位相に強制クロスフェードさせ、不連続ジャンプを完全に消し去る
         if (originalPhase < 0.005f) {
             float mix = originalPhase / 0.005f;
             return warped * mix + originalPhase * (1.0f - mix);
@@ -425,7 +422,6 @@ private:
             warped = (amt >= 0.0f ? std::tanh(dr) : std::sin(dr * 1.570796f)) - (shift * 0.5f);
         }
 
-        // ★ ゼロスナップ: 振幅も両端で0に収束させクリックノイズを除去
         if (originalPhase < 0.005f) return warped * (originalPhase / 0.005f);
         else if (originalPhase > 0.995f) return warped * ((1.0f - originalPhase) / 0.005f);
 
@@ -436,9 +432,11 @@ private:
         float c1 = 0.5f * (y2 - y0), c2 = y0 - 2.5f * y1 + 2.0f * y2 - 0.5f * y3, c3 = 0.5f * (y3 - y0) + 1.5f * (y1 - y2);
         return ((c3 * t + c2) * t + c1) * t + y1;
     }
-    inline float getHermiteSample(const float* ptr, int bOff, int fs, int pos, float t) const {
+
+    // ★ 警告修正: size_tキャストを追加
+    inline float getHermiteSample(const float* ptr, size_t bOff, int fs, int pos, float t) const {
         int p0 = (pos - 1 + fs) % fs, p1 = pos, p2 = (pos + 1) % fs, p3 = (pos + 2) % fs;
-        return hermite(t, ptr[bOff + p0], ptr[bOff + p1], ptr[bOff + p2], ptr[bOff + p3]);
+        return hermite(t, ptr[bOff + static_cast<size_t>(p0)], ptr[bOff + static_cast<size_t>(p1)], ptr[bOff + static_cast<size_t>(p2)], ptr[bOff + static_cast<size_t>(p3)]);
     }
 
     void recalculate() {
