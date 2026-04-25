@@ -79,7 +79,7 @@ public:
     Mseg& getMsegEngine(int index) { return msegs[index]; }
 
     std::atomic<bool> presetLoadedFlag{ false };
-    std::atomic<bool> forceScopeUpdate{ false }; // ★ 追加: 波形強制更新フラグ
+    std::atomic<bool> forceScopeUpdate{ false };
     bool isCustomWavetableLoaded() const { return customWavetableLoaded.load(); }
     juce::String getCustomWavetablePath() const { return currentCustomWavetablePath; }
     int getFactoryIndex() const { return (int)pWave->load(); }
@@ -192,6 +192,22 @@ private:
             }
         }
         return state;
+    }
+
+    // ★ 追加: ChordLearnのシリアライズ関数
+    juce::String serializeChord(const std::vector<int>& notes) {
+        juce::StringArray strArr;
+        for (int n : notes) strArr.add(juce::String(n));
+        return strArr.joinIntoString(",");
+    }
+
+    std::vector<int> deserializeChord(const juce::String& str) {
+        std::vector<int> notes;
+        if (str.isEmpty()) return notes;
+        juce::StringArray strArr;
+        strArr.addTokens(str, ",", "");
+        for (auto& s : strArr) notes.push_back(s.getIntValue());
+        return notes;
     }
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(LiquidDreamAudioProcessor)

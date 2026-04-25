@@ -36,6 +36,7 @@ public:
         ap2.setCutoffFrequency(2500.0f);
 
         envLowL = 1.0f; envLowR = 1.0f; envMidL = 1.0f; envMidR = 1.0f; envHighL = 1.0f; envHighR = 1.0f;
+        updateAlphas();
     }
 
     void setParameters(float depthPct, float timePct, float upPct, float downPct, float outGainDb)
@@ -46,6 +47,7 @@ public:
         outGainLinear = juce::Decibels::decibelsToGain(outGainDb);
         attackMs = juce::jmap(timePct, 0.5f, 50.0f);
         releaseMs = juce::jmap(timePct, 10.0f, 500.0f);
+        updateAlphas();
     }
 
     void process(juce::AudioBuffer<float>& buffer)
@@ -83,7 +85,16 @@ private:
     float attackMs = 10.0f, releaseMs = 100.0f;
     float envLowL = 1.0f, envLowR = 1.0f, envMidL = 1.0f, envMidR = 1.0f, envHighL = 1.0f, envHighR = 1.0f;
 
-    float calculateGain(float inputAbs, float& envState, int bandIndex)
+    float alphaAttack = 0.0f;
+    float alphaRelease = 0.0f;
+
+    void updateAlphas() {
+        if (sampleRate <= 0.0) return;
+        alphaAttack = std::exp(-1.0f / static_cast<float>(sampleRate * attackMs * 0.001));
+        alphaRelease = std::exp(-1.0f / static_cast<float>(sampleRate * releaseMs * 0.001));
+    }
+
+    inline float calculateGain(float inputAbs, float& envState, int bandIndex)
     {
         float inputDb = juce::Decibels::gainToDecibels(std::abs(inputAbs) + 1e-6f);
         float targetDb = inputDb;
@@ -101,7 +112,7 @@ private:
         }
 
         float targetGain = juce::Decibels::decibelsToGain(targetDb - inputDb);
-        float alpha = (targetGain < envState) ? std::exp(-1.0f / static_cast<float>(sampleRate * attackMs * 0.001)) : std::exp(-1.0f / static_cast<float>(sampleRate * releaseMs * 0.001));
+        float alpha = (targetGain < envState) ? alphaAttack : alphaRelease;
         envState = alpha * envState + (1.0f - alpha) * targetGain;
 
         return envState;
@@ -158,12 +169,11 @@ public:
             oscPhase += inc; if (oscPhase >= 1.0f) oscPhase -= 1.0f;
 
             float env = std::max(0.0f, 1.0f - (envPhase / static_cast<float>(samplesPerStep)));
-            env = std::pow(env, 4.0f);
+            float env2 = env * env;
+            env = env2 * env2;
             envPhase += 1.0f;
 
             currentLevel = currentLevel * 0.999f + targetLevel * 0.001f;
-
-            // ★ オリジナルの計算式に完全ロールバック
             float val = sample * env * currentLevel * 0.24f * mainAmpEnvBuffer[i];
 
             outL[i] += val; outR[i] += val;
@@ -287,6 +297,17 @@ public:
         return names.joinIntoString(", ");
     }
 
+    // ★ 追加: 保存・復元用の Getter / Setter
+    std::vector<int> getLearnedNotes() const {
+        std::lock_guard<std::mutex> lock(chordMutex);
+        return learnedNotes;
+    }
+
+    void setLearnedNotes(const std::vector<int>& notes) {
+        std::lock_guard<std::mutex> lock(chordMutex);
+        learnedNotes = notes;
+    }
+
     void finishLearningAndGenerate(float attackMs, float decayMs, int irType)
     {
         std::vector<int> currentNotes;
@@ -309,6 +330,8 @@ public:
         const int myJobId = ++irGenJobId;
         const double sr = currentSampleRate;
 
+        threadPool->removeAllJobs(true, 10);
+
         threadPool->addJob([this, optimizedNotes, attackMs, decayMs, irType, sr, myJobId]() {
             if (myJobId != irGenJobId.load()) return;
 
@@ -321,7 +344,7 @@ public:
 
             for (size_t n = 0; n < optimizedNotes.size(); ++n) {
                 float freq = (float)juce::MidiMessage::getMidiNoteInHertz(optimizedNotes[n]);
-                incs[n] = freq / (float)sr;
+                incs[n] = freq / static_cast<float>(sr);
                 phases[n] = 0.0f;
             }
 
@@ -331,7 +354,7 @@ public:
             float norm = 1.0f / static_cast<float>(optimizedNotes.size());
 
             for (int i = 0; i < numSamples; ++i) {
-                if (myJobId != irGenJobId.load()) return;
+                if ((i & 255) == 0 && myJobId != irGenJobId.load()) return;
 
                 float timeRatio = static_cast<float>(i) / static_cast<float>(numSamples);
                 float sampleL = 0.0f, sampleR = 0.0f;
@@ -339,13 +362,14 @@ public:
                 if (irType == 0) {
                     for (size_t n = 0; n < optimizedNotes.size(); ++n) {
                         float phL = phases[n];
-                        float phR = std::fmod(phases[n] + getPhaseOffset(n, 1), 1.0f);
+                        float phR = phases[n] + getPhaseOffset(n, 1); phR -= static_cast<int>(phR);
 
                         float sawL = 2.0f * phL - 1.0f;
                         float sawR = 2.0f * phR - 1.0f;
 
-                        float ph2L = std::fmod(phL * 2.0f, 1.0f);
-                        float ph2R = std::fmod(phR * 2.0f, 1.0f);
+                        float ph2L = phL * 2.0f; ph2L -= static_cast<int>(ph2L);
+                        float ph2R = phR * 2.0f; ph2R -= static_cast<int>(ph2R);
+
                         float octSawL = (2.0f * ph2L - 1.0f) * 0.35f;
                         float octSawR = (2.0f * ph2R - 1.0f) * 0.35f;
 
@@ -361,7 +385,7 @@ public:
                     float duty = 0.5f - 0.2f * timeRatio;
                     for (size_t n = 0; n < optimizedNotes.size(); ++n) {
                         float phL = phases[n];
-                        float phR = std::fmod(phases[n] + getPhaseOffset(n, 1), 1.0f);
+                        float phR = phases[n] + getPhaseOffset(n, 1); phR -= static_cast<int>(phR);
 
                         float pwmL = (phL < duty) ? 1.0f : -1.0f;
                         float pwmR = (phR < duty) ? 1.0f : -1.0f;
@@ -385,7 +409,7 @@ public:
                     float modDepth = 1.5f * (1.0f - timeRatio * 0.7f);
                     for (size_t n = 0; n < optimizedNotes.size(); ++n) {
                         float phL = phases[n];
-                        float phR = std::fmod(phases[n] + getPhaseOffset(n, 1), 1.0f);
+                        float phR = phases[n] + getPhaseOffset(n, 1); phR -= static_cast<int>(phR);
                         float pPiL = phL * juce::MathConstants<float>::twoPi;
                         float pPiR = phR * juce::MathConstants<float>::twoPi;
 
@@ -406,20 +430,20 @@ public:
                 else if (irType == 3) {
                     for (size_t n = 0; n < optimizedNotes.size(); ++n) {
                         float phL = phases[n];
-                        float phR = std::fmod(phases[n] + getPhaseOffset(n, 1), 1.0f);
+                        float phR = phases[n] + getPhaseOffset(n, 1); phR -= static_cast<int>(phR);
                         float pPiL = phL * juce::MathConstants<float>::twoPi;
                         float pPiR = phR * juce::MathConstants<float>::twoPi;
 
                         float baseL = std::sin(pPiL);
                         float baseR = std::sin(pPiR);
 
-                        float fifth_phL = std::fmod(phL * 1.5f, 1.0f);
-                        float fifth_phR = std::fmod(phR * 1.5f, 1.0f);
+                        float fifth_phL = phL * 1.5f; fifth_phL -= static_cast<int>(fifth_phL);
+                        float fifth_phR = phR * 1.5f; fifth_phR -= static_cast<int>(fifth_phR);
                         float fifthL = std::sin(fifth_phL * juce::MathConstants<float>::twoPi) * 0.45f;
                         float fifthR = std::sin(fifth_phR * juce::MathConstants<float>::twoPi) * 0.45f;
 
-                        float oct_phL = std::fmod(phL * 2.0f, 1.0f);
-                        float oct_phR = std::fmod(phR * 2.0f, 1.0f);
+                        float oct_phL = phL * 2.0f; oct_phL -= static_cast<int>(oct_phL);
+                        float oct_phR = phR * 2.0f; oct_phR -= static_cast<int>(oct_phR);
                         float octL = std::sin(oct_phL * juce::MathConstants<float>::twoPi) * 0.35f;
                         float octR = std::sin(oct_phR * juce::MathConstants<float>::twoPi) * 0.35f;
 
@@ -438,7 +462,7 @@ public:
                 else if (irType == 4) {
                     for (size_t n = 0; n < optimizedNotes.size(); ++n) {
                         float phL = phases[n];
-                        float phR = std::fmod(phases[n] + getPhaseOffset(n, 1), 1.0f);
+                        float phR = phases[n] + getPhaseOffset(n, 1); phR -= static_cast<int>(phR);
                         float pPiL = phL * juce::MathConstants<float>::twoPi;
                         float pPiR = phR * juce::MathConstants<float>::twoPi;
 
@@ -464,9 +488,9 @@ public:
                 float clippedR = std::tanh(sampleR * 4.0f);
 
                 float atkFade = (i < (int)atkSamples) ? (static_cast<float>(i) / atkSamples) : 1.0f;
-                float decFade = (i < (int)atkSamples) ? 1.0f : std::pow(std::max(0.0f, 1.0f - (static_cast<float>(i - (int)atkSamples) / decSamples)), 4.0f);
+                float baseDec = std::max(0.0f, 1.0f - (static_cast<float>(i - (int)atkSamples) / decSamples));
+                float decFade = (i < (int)atkSamples) ? 1.0f : ((baseDec * baseDec) * (baseDec * baseDec));
 
-                // ★ オリジナルの計算式に完全ロールバック
                 outL[i] = clippedL * atkFade * decFade * 0.025f;
                 outR[i] = clippedR * atkFade * decFade * 0.025f;
             }

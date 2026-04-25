@@ -226,6 +226,9 @@ void LiquidDreamAudioProcessor::getStateInformation(juce::MemoryBlock& destData)
         xml->setAttribute("UserFolders", userWavetableFolders.joinIntoString("|"));
         xml->setAttribute("Favorites", favoriteWavetables.joinIntoString("|"));
 
+        // ★ 追加: ChordLearn のシリアライズ
+        xml->setAttribute("ColorChord", serializeChord(colorEngine.getLearnedNotes()));
+
         xml->setAttribute("mseg0_data", serializeMsegState(msegStates[0]));
         xml->setAttribute("mseg1_data", serializeMsegState(msegStates[1]));
 
@@ -264,6 +267,23 @@ void LiquidDreamAudioProcessor::setStateInformation(const void* data, int sizeIn
             msegs[1].pushNewState(msegStates[1]);
         }
 
+        // ★ 追加: ChordLearn のデシリアライズと、非同期スレッドへの再生成ジョブ投げ
+        juce::String chordStr = xmlState->getStringAttribute("ColorChord", "");
+        if (chordStr.isNotEmpty()) {
+            colorEngine.setLearnedNotes(deserializeChord(chordStr));
+            colorEngine.setLearnState(ColorIREngine::LearnState::Active);
+
+            float atk = pColorAtk->load(std::memory_order_relaxed);
+            float dec = pColorDec->load(std::memory_order_relaxed);
+            int type = (int)pColorType->load(std::memory_order_relaxed);
+
+            colorEngine.finishLearningAndGenerate(atk, dec, type);
+        }
+        else {
+            colorEngine.setLearnedNotes({});
+            colorEngine.setLearnState(ColorIREngine::LearnState::Idle);
+        }
+
         presetLoadedFlag.store(true);
     }
 }
@@ -272,7 +292,7 @@ void LiquidDreamAudioProcessor::loadCustomWavetable(const juce::File& file) {
     currentCustomWavetablePath = file.getFullPathName();
     customWavetableLoaded.store(true);
     oscillator.loadCustomWavetableFile(file);
-    forceScopeUpdate.store(true); // ★ 追加: 強制再描画
+    forceScopeUpdate.store(true);
 }
 
 void LiquidDreamAudioProcessor::loadFactoryWavetable(int index) {
@@ -280,7 +300,7 @@ void LiquidDreamAudioProcessor::loadFactoryWavetable(int index) {
     customWavetableLoaded.store(false);
     if (index >= 0 && index < 10) oscillator.loadFactoryWavetable(index);
     else oscillator.loadFactoryWavetable(0);
-    forceScopeUpdate.store(true); // ★ 追加: 強制再描画
+    forceScopeUpdate.store(true);
 }
 
 void LiquidDreamAudioProcessor::setUserFolders(const juce::StringArray& folders) {
