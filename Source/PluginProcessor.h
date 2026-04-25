@@ -11,7 +11,7 @@
 #include "DSP/DualFilterEngine.h"
 #include "DSP/SineShaper.h"
 #include "DSP/ColorIREngine.h"
-#include "DSP/ZeroLatencyLimiter.h" // ★ 追加
+#include "DSP/ZeroLatencyLimiter.h"
 #include "Logic/MonoVoiceManager.h"
 #include "Logic/AdsrEnvelope.h"
 #include "Logic/Lfo.h"
@@ -95,7 +95,7 @@ private:
     SineShaper shaper;
     ColorIREngine colorEngine;
     MonoVoiceManager voiceManager;
-    ZeroLatencyLimiter masterLimiter; // ★ 追加
+    ZeroLatencyLimiter masterLimiter;
 
     AdsrEnvelope ampEnv, filterEnvA, filterEnvB;
     std::array<AdsrEnvelope, 3> modEnvs;
@@ -106,6 +106,7 @@ private:
     std::array<float, 512> tempScopeBuffer;
     int scopeWriteIndex = 0;
 
+    // ★ 修正: モジュレーション拡張のため、エンベロープバッファのチャンネル数を8から24へ拡張
     juce::AudioBuffer<float> tempEnvBuffer;
     juce::AudioBuffer<float> tempSubBuffer;
     juce::AudioBuffer<float> tempWavetableBuffer;
@@ -153,7 +154,6 @@ private:
     std::atomic<float>* pArpSpeed = nullptr; std::atomic<float>* pArpPitch = nullptr;
     std::atomic<float>* pArpLevel = nullptr;
 
-    // ★ 追加: Limiter パラメータ
     std::atomic<float>* pLimitOn = nullptr;
     std::atomic<float>* pLimitCeil = nullptr;
 
@@ -170,6 +170,9 @@ private:
     juce::SmoothedValue<float> smoothedDrive, smoothedShpAmt, smoothedShpRate, smoothedShpBit, smoothedGain;
     juce::SmoothedValue<float> smoothedWtPos, smoothedFm, smoothedDrift, smoothedSubVol, smoothedSubPitch, smoothedWidth;
     juce::SmoothedValue<float> smoothedMorphAAmt, smoothedMorphAShift, smoothedMorphBAmt, smoothedMorphBShift, smoothedMorphCAmt, smoothedMorphCShift;
+    // ★ 追加: Color Mix と LFO Rate のスムージング
+    juce::SmoothedValue<float> smoothedColorMix;
+    std::array<juce::SmoothedValue<float>, 3> smoothedLfoRates;
 
     float lastOscFreq = -1.0f;
     int lastModeA = -1, lastModeB = -1, lastModeC = -1;

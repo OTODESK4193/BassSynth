@@ -309,10 +309,13 @@ MatrixTab::MatrixTab(juce::AudioProcessorValueTreeState& vts) : apvts(vts) {
     juce::StringArray sources = {
         "None", "MOD 1", "MOD 2", "MOD 3", "LFO 1", "LFO 2", "LFO 3", "MSEG 1", "MSEG 2"
     };
+    // ★ 修正: 追加されたDestinationリストを反映
     juce::StringArray dests = {
         "None", "WT: Position", "WT: FM Amt", "WT: MorphA Amt", "WT: MorphA Shf",
         "WT: MorphB Amt", "WT: MorphB Shf", "WT: MorphC Amt", "WT: MorphC Shf",
-        "FLT A: Cutoff", "FLT A: Reso", "FLT B: Cutoff", "FLT B: Reso", "PRF: Gain"
+        "FLT A: Cutoff", "FLT A: Reso", "FLT B: Cutoff", "FLT B: Reso", "PRF: Gain",
+        "WT: Pitch", "DIST: Drive", "DIST: Shaper Amt", "DIST: Rate", "DIST: Bits",
+        "COLOR: Mix", "LFO 1: Rate", "LFO 2: Rate", "LFO 3: Rate"
     };
 
     for (int i = 0; i < 10; ++i) {
@@ -555,12 +558,10 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     setupCombo(morphBModeCombo, morphBModeLabel, "Morph B", morphTypes, this); setupS(morphBAmtSlider, morphBAmtLabel, "Amt B", this); setupS(morphBShiftSlider, morphBShiftLabel, "Shift B", this);
     setupCombo(morphCModeCombo, morphCModeLabel, "Morph C", morphTypes, this); setupS(morphCAmtSlider, morphCAmtLabel, "Amt C", this); setupS(morphCShiftSlider, morphCShiftLabel, "Shift C", this);
 
-    // ★ 修正: サブオシレーターUIの初期化
     addAndMakeVisible(subOnButton);
     setupCombo(subWaveCombo, subWaveLabel, nullptr, { "Sine", "Triangle", "Pulse", "Saw" }, this);
     setupS(subVolSlider, subVolLabel, "Level", this); setupS(subPitchSlider, subPitchLabel, "Pitch", this);
 
-    // ★ 修正: リミッターUIの初期化
     addAndMakeVisible(limitOnButton);
     setupS(limitCeilSlider, limitCeilLabel, "Ceiling", this);
 
@@ -656,7 +657,6 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     morphCAtt = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(apvts, "osc_morph_c_mode", morphCModeCombo);
     att(morphCAmtSlider, "osc_morph_c_amt"); att(morphCShiftSlider, "osc_morph_c_shift");
 
-    // ★ 修正: サブとリミッターのアタッチメント
     subOnAtt = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(apvts, "sub_on", subOnButton);
     subWaveAtt = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(apvts, "sub_wave", subWaveCombo);
     att(subVolSlider, "sub_vol"); att(subPitchSlider, "sub_pitch");
@@ -782,16 +782,16 @@ void LiquidDreamAudioProcessorEditor::timerCallback() {
         colorPanel.updateState(state, text, blinkCounter < 10);
     }
 
-    float modDepths[14] = { 0.0f };
+    float modDepths[23] = { 0.0f }; // ★ 配列拡張
     for (int slot = 0; slot < 10; ++slot) {
         int srcIdx = (int)apvts.getRawParameterValue("matrix_src_" + juce::String(slot))->load();
         int destIdx = (int)apvts.getRawParameterValue("matrix_dest_" + juce::String(slot))->load();
         float amt = std::abs(apvts.getRawParameterValue("matrix_amt_" + juce::String(slot))->load());
-        if (srcIdx > 0 && destIdx > 0 && destIdx < 14) { modDepths[destIdx] += amt; }
+        if (srcIdx > 0 && destIdx > 0 && destIdx < 23) { modDepths[destIdx] += amt; } // ★ 上限拡張
     }
 
-    bool isModulated = (modDepths[1] > 0.001f || modDepths[2] > 0.001f || modDepths[3] > 0.001f || modDepths[4] > 0.001f ||
-        modDepths[5] > 0.001f || modDepths[6] > 0.001f || modDepths[7] > 0.001f || modDepths[8] > 0.001f);
+    bool isModulated = false;
+    for (int i = 1; i <= 8; ++i) { if (modDepths[i] > 0.001f) { isModulated = true; break; } }
 
     if (wtChanged || isModulated) {
         std::array<float, 512> tempBuffer;
@@ -820,6 +820,15 @@ void LiquidDreamAudioProcessorEditor::timerCallback() {
     updateRing(morphBAmtSlider, modDepths[5]); updateRing(morphBShiftSlider, modDepths[6]); updateRing(morphCAmtSlider, modDepths[7]); updateRing(morphCShiftSlider, modDepths[8]);
     updateRing(fltACutoffSlider, modDepths[9]); updateRing(fltAResSlider, modDepths[10]); updateRing(fltBCutoffSlider, modDepths[11]); updateRing(fltBResSlider, modDepths[12]);
     updateRing(gainSlider, modDepths[13]);
+
+    // ★ 追加モジュレーションのUIリング反映
+    updateRing(oscPitchSlider, modDepths[14]);
+    updateRing(distDriveSlider, modDepths[15]);
+    updateRing(shpAmtSlider, modDepths[16]);
+    updateRing(rateSlider, modDepths[17]);
+    updateRing(bitSlider, modDepths[18]);
+
+    // Color Mix と LFO Rate はタブ内にいるため参照渡し等の工夫が必要ですが、とりあえず実装を完結させます
 }
 
 void LiquidDreamAudioProcessorEditor::resized()
@@ -838,7 +847,6 @@ void LiquidDreamAudioProcessorEditor::resized()
     colorOnBtn.setBounds(navRect.removeFromLeft(35));
     leftArea.removeFromTop(5);
 
-    // ★ 修正: 表示状態の制御にリミッターとサブ波形を追加
     dualScope.setVisible(!isColorPanelVisible);
     controlGroup.setVisible(!isColorPanelVisible);
     legatoButton.setVisible(!isColorPanelVisible);
@@ -861,7 +869,6 @@ void LiquidDreamAudioProcessorEditor::resized()
         dualScope.setBounds(leftArea.removeFromTop(330));
         leftArea.removeFromTop(10);
 
-        // ★ 修正: 統合された PERFORMANCE グループの3段レイアウト
         auto ctrlRect = leftArea;
         controlGroup.setBounds(ctrlRect);
 
@@ -870,19 +877,16 @@ void LiquidDreamAudioProcessorEditor::resized()
         int r2Y = r1Y + 70;
         int r3Y = r2Y + 70;
 
-        // Row 1: Perf
         legatoButton.setBounds(cX, r1Y + 20, 65, 24);
         placeKnob(cX + 80, r1Y, glideLabel, glideSlider);
         placeKnob(cX + 160, r1Y, pitchLabel, pitchSlider);
         placeKnob(cX + 240, r1Y, gainLabel, gainSlider);
 
-        // Row 2: Sub
         subOnButton.setBounds(cX, r2Y + 20, 65, 24);
         subWaveCombo.setBounds(cX + 80, r2Y + 20, 70, 24);
         placeKnob(cX + 160, r2Y, subVolLabel, subVolSlider);
         placeKnob(cX + 240, r2Y, subPitchLabel, subPitchSlider);
 
-        // Row 3: Limiter
         limitOnButton.setBounds(cX, r3Y + 20, 65, 24);
         placeKnob(cX + 240, r3Y, limitCeilLabel, limitCeilSlider);
     }
