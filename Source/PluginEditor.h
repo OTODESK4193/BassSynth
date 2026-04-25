@@ -7,6 +7,7 @@
 #include "UI/AbletonLookAndFeel.h"
 #include "UI/WavetableBrowser.h"
 #include "UI/DualScopeComponent.h"
+#include "Logic/Mseg.h"
 
 // --- Custom Tab Components for Modulation ---
 class LfoTab : public juce::Component {
@@ -29,6 +30,53 @@ private:
     std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment>> btnAtts;
 };
 
+// ★ 追加: MSEGを描画・編集するキャンバスコンポーネント
+class MsegEditorComponent : public juce::Component {
+public:
+    MsegEditorComponent(Mseg& engine, const MsegState& initialState);
+    void paint(juce::Graphics& g) override;
+    void mouseDown(const juce::MouseEvent& e) override;
+    void mouseDrag(const juce::MouseEvent& e) override;
+    void mouseUp(const juce::MouseEvent& e) override;
+    void mouseDoubleClick(const juce::MouseEvent& e) override;
+
+private:
+    Mseg& msegEngine;
+    MsegState state;
+    int draggingNodeIndex = -1;
+    bool draggingCurve = false;
+
+    float getXPos(float x) const;
+    float getYPos(float y) const;
+    float getXValue(float xPos) const;
+    float getYValue(float yPos) const;
+    int hitTestNode(const juce::Point<float>& pos) const;
+    void updateDSP();
+};
+
+// ★ 追加: MSEGタブ全体を管理するコンポーネント
+class MsegTab : public juce::Component {
+public:
+    MsegTab(LiquidDreamAudioProcessor& p, juce::AudioProcessorValueTreeState& vts);
+    void paint(juce::Graphics& g) override;
+    void resized() override;
+private:
+    LiquidDreamAudioProcessor& processor;
+    juce::AudioProcessorValueTreeState& apvts;
+    struct MsegUI {
+        juce::ToggleButton onBtn{ "ON" };
+        juce::ComboBox beat, trig;
+        juce::ToggleButton sync{ "SYNC" };
+        juce::Slider rate, amt;
+        juce::Label beatLbl, trigLbl, rateLbl, amtLbl;
+        std::unique_ptr<MsegEditorComponent> editor;
+    };
+    std::array<MsegUI, 2> msegs;
+    std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>> sliderAtts;
+    std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment>> comboAtts;
+    std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment>> btnAtts;
+};
+
 class ModEnvTab : public juce::Component {
 public:
     ModEnvTab(juce::AudioProcessorValueTreeState& vts);
@@ -46,7 +94,6 @@ private:
     std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment>> btnAtts;
 };
 
-// ★ 変更: 10スロット・1列構成のフリールーティングMatrixTab
 class MatrixTab : public juce::Component {
 public:
     MatrixTab(juce::AudioProcessorValueTreeState& vts);
@@ -59,7 +106,7 @@ private:
         juce::Slider amt;
         juce::ComboBox dest;
     };
-    std::array<SlotUI, 10> slots; // 10スロット独立
+    std::array<SlotUI, 10> slots;
     std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>> sliderAtts;
     std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment>> comboAtts;
 };
@@ -189,6 +236,7 @@ private:
     // Modulation Tabs
     juce::TabbedComponent modTabs;
     LfoTab lfoTab;
+    MsegTab msegTab;
     ModEnvTab modEnvTab;
     MatrixTab matrixTab;
 
@@ -199,6 +247,8 @@ private:
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> fltATypeAtt, fltBTypeAtt, fltRoutingAtt;
 
     int blinkCounter = 0;
+    bool wtChanged = false; // ★ 追加: エラーの根本原因を修正
+
     void updateFilterUI();
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(LiquidDreamAudioProcessorEditor)

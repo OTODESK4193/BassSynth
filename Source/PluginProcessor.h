@@ -14,6 +14,7 @@
 #include "Logic/MonoVoiceManager.h"
 #include "Logic/AdsrEnvelope.h"
 #include "Logic/Lfo.h"
+#include "Logic/Mseg.h" // ★ 追加: MSEGコア
 #include "Generated/WavetableData_Generated.h"
 
 class LiquidDreamAudioProcessor : public juce::AudioProcessor
@@ -71,6 +72,10 @@ public:
     void setUserFolders(const juce::StringArray& folders);
     juce::StringArray getUserFolders() const { return userWavetableFolders; }
 
+    // ★ 追加: GUI から MSEG データを取得・更新するための窓口
+    MsegState msegStates[2];
+    Mseg& getMsegEngine(int index) { return msegs[index]; }
+
 private:
     juce::AudioProcessorValueTreeState apvts;
     juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
@@ -85,6 +90,7 @@ private:
     AdsrEnvelope ampEnv, filterEnvA, filterEnvB;
     std::array<AdsrEnvelope, 3> modEnvs;
     std::array<Lfo, 3> lfos;
+    std::array<Mseg, 2> msegs; // ★ 追加: 2基の MSEG
 
     std::array<float, 512> outputScopeData;
     std::array<float, 512> tempScopeBuffer;
@@ -138,7 +144,9 @@ private:
     std::array<std::atomic<float>*, 3> pModOn, pModAtk, pModDec, pModSus, pModRel, pModAmt;
     std::array<std::atomic<float>*, 3> pLfoOn, pLfoWave, pLfoSync, pLfoRate, pLfoBeat, pLfoAmt, pLfoTrig;
 
-    // ★ 変更: 10スロットの動的マトリックス
+    // ★ 追加: MSEG 用パラメータ
+    std::array<std::atomic<float>*, 2> pMsegOn, pMsegSync, pMsegRate, pMsegBeat, pMsegAmt, pMsegTrig;
+
     std::array<std::atomic<float>*, 10> pMatrixSrc;
     std::array<std::atomic<float>*, 10> pMatrixDest;
     std::array<std::atomic<float>*, 10> pMatrixAmt;
@@ -151,6 +159,35 @@ private:
 
     float lastOscFreq = -1.0f;
     int lastModeA = -1, lastModeB = -1, lastModeC = -1;
+
+    // ★ 追加: MSEG シリアライズ / デシリアライズ用関数
+    juce::String serializeMsegState(const MsegState& state) {
+        juce::String result;
+        for (int i = 0; i < state.numPoints; ++i) {
+            result << state.points[i].x << "," << state.points[i].y << "," << state.points[i].curve;
+            if (i < state.numPoints - 1) result << ";";
+        }
+        return result;
+    }
+
+    MsegState deserializeMsegState(const juce::String& str) {
+        MsegState state;
+        if (str.isEmpty()) return state;
+
+        juce::StringArray parts;
+        parts.addTokens(str, ";", "");
+        state.numPoints = std::min(MAX_MSEG_POINTS, parts.size());
+        for (int i = 0; i < state.numPoints; ++i) {
+            juce::StringArray vals;
+            vals.addTokens(parts[i], ",", "");
+            if (vals.size() >= 3) {
+                state.points[i].x = vals[0].getFloatValue();
+                state.points[i].y = vals[1].getFloatValue();
+                state.points[i].curve = vals[2].getFloatValue();
+            }
+        }
+        return state;
+    }
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(LiquidDreamAudioProcessor)
 };
