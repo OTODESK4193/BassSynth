@@ -44,6 +44,15 @@ public:
         addFolderBtn.setColour(juce::TextButton::buttonColourId, juce::Colour::fromString("FF2A2A2A"));
         addFolderBtn.onClick = [this] { openFolderChooser(); };
 
+        // ★ 追加: 検索ボックスの初期設定
+        addAndMakeVisible(searchBox);
+        searchBox.setColour(juce::TextEditor::backgroundColourId, juce::Colour::fromString("FF121212"));
+        searchBox.setColour(juce::TextEditor::textColourId, juce::Colours::white);
+        searchBox.setColour(juce::TextEditor::outlineColourId, juce::Colour::fromString("FF444444"));
+        searchBox.setColour(juce::TextEditor::focusedOutlineColourId, juce::Colour::fromString("FF00FFCC"));
+        searchBox.setTextToShowWhenEmpty("Search...", juce::Colours::grey);
+        searchBox.onTextChange = [this] { updateFiles(); }; // 文字入力のたびにリストを更新
+
         currentFactoryIndex = (int)apvts.getRawParameterValue("osc_wave")->load();
         updateSubCategories();
     }
@@ -104,10 +113,19 @@ public:
         juce::String selSub = (selectedSubCategoryIdx >= 0 && selectedSubCategoryIdx < subCategories.size())
             ? subCategories[selectedSubCategoryIdx] : "";
 
+        // ★ 追加: 検索テキストの取得（大文字・小文字を区別しないように小文字化）
+        juce::String searchText = searchBox.getText().trim().toLowerCase();
+
+        auto matchSearch = [&](const juce::String& name) {
+            return searchText.isEmpty() || name.toLowerCase().contains(searchText);
+            };
+
         auto addFactory = [&]() {
             if (selSub == "All" || selSub == "Basic") {
                 const char* names[] = { "Basic Morph", "PWM Sweep", "Sync Sweep", "Harmonic Build", "FM Sweep", "Saw Sync", "Vowel Sweep", "Sub Fade", "Metallic Sweep", "Noise Fade" };
-                for (int i = 0; i < 10; ++i) currentList.add({ true, i, juce::File(), names[i] });
+                for (int i = 0; i < 10; ++i) {
+                    if (matchSearch(names[i])) currentList.add({ true, i, juce::File(), names[i] });
+                }
             }
             };
 
@@ -115,7 +133,8 @@ public:
             for (auto& uf : userFolders) {
                 for (auto& w : uf.wavs) {
                     if (selSub == "All" || w.subCategory == selSub) {
-                        currentList.add({ false, -1, w.file, w.file.getFileNameWithoutExtension() });
+                        juce::String fileName = w.file.getFileNameWithoutExtension();
+                        if (matchSearch(fileName)) currentList.add({ false, -1, w.file, fileName });
                     }
                 }
             }
@@ -126,11 +145,16 @@ public:
                 if (fav.startsWith("Factory::")) {
                     int idx = fav.substring(9).getIntValue();
                     const char* names[] = { "Basic Morph", "PWM Sweep", "Sync Sweep", "Harmonic Build", "FM Sweep", "Saw Sync", "Vowel Sweep", "Sub Fade", "Metallic Sweep", "Noise Fade" };
-                    if (idx >= 0 && idx < 10) currentList.add({ true, idx, juce::File(), names[idx] });
+                    if (idx >= 0 && idx < 10) {
+                        if (matchSearch(names[idx])) currentList.add({ true, idx, juce::File(), names[idx] });
+                    }
                 }
                 else {
                     juce::File f(fav);
-                    if (f.existsAsFile()) currentList.add({ false, -1, f, f.getFileNameWithoutExtension() });
+                    if (f.existsAsFile()) {
+                        juce::String fileName = f.getFileNameWithoutExtension();
+                        if (matchSearch(fileName)) currentList.add({ false, -1, f, fileName });
+                    }
                 }
             }
             };
@@ -190,6 +214,9 @@ public:
 
         catList.setBounds(catArea);
         subCatList.setBounds(subArea);
+
+        // ★ 追加: 第3カラムのトップに検索ボックスの領域を確保
+        searchBox.setBounds(area.removeFromTop(36).reduced(4, 4));
         fileList.setBounds(area);
     }
 
@@ -197,6 +224,7 @@ private:
     juce::AudioProcessorValueTreeState& apvts;
     juce::ListBox catList{ "Cat", nullptr }, subCatList{ "Sub", nullptr }, fileList{ "File", nullptr };
     juce::TextButton addFolderBtn{ "+ Add User Folder" };
+    juce::TextEditor searchBox; // ★ 追加: 検索入力コンポーネント
     std::unique_ptr<juce::FileChooser> chooser;
 
     juce::StringArray categories, subCategories;
@@ -322,7 +350,6 @@ private:
 
             if (isActive) g.fillAll(juce::Colour::fromString("FF6A6A6A"));
 
-            // ★ ★マークの描画
             juce::String favId = item.isFactory ? "Factory::" + juce::String(item.factoryIndex) : item.file.getFullPathName();
             bool isFav = owner->favoritePaths.contains(favId);
 
@@ -336,7 +363,7 @@ private:
         }
         void listBoxItemClicked(int row, const juce::MouseEvent& e) override {
             if (!owner) return;
-            if (e.x < 35) { // ★ 星マークのクリック判定
+            if (e.x < 35) {
                 auto& item = owner->currentList.getReference(row);
                 juce::String favId = item.isFactory ? "Factory::" + juce::String(item.factoryIndex) : item.file.getFullPathName();
                 if (owner->favoritePaths.contains(favId)) owner->favoritePaths.removeString(favId);
