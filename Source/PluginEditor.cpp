@@ -187,27 +187,18 @@ void MsegTab::paint(juce::Graphics& g) {
 void MsegTab::resized() {
     for (int i = 0; i < 2; ++i) {
         int boxY = 10 + i * 190;
-
-        // 1. 左側: キャンバスエリア
         msegs[i].editor->setBounds(15, boxY + 40, 260, 130);
-
-        // 2. 中央列: On, Trig, Sync, Beat
-        // コンボボックスの幅を 60 -> 85 に拡大して見切れを完全に防止
         msegs[i].onBtn.setBounds(290, boxY + 40, 55, 22);
-
         msegs[i].trigLbl.setBounds(290, boxY + 65, 85, 15);
         msegs[i].trig.setBounds(290, boxY + 80, 85, 22);
-
         msegs[i].sync.setBounds(290, boxY + 110, 55, 22);
-
         msegs[i].beatLbl.setBounds(290, boxY + 135, 85, 15);
         msegs[i].beat.setBounds(290, boxY + 150, 85, 22);
-
-        // 3. 右列: Rate, Amt ノブを右へ移動 (x=370 -> x=400)
         placeKnob(400, boxY + 35, msegs[i].rateLbl, msegs[i].rate);
         placeKnob(400, boxY + 105, msegs[i].amtLbl, msegs[i].amt);
     }
 }
+
 // ==============================================================================
 // LfoTab Implementation
 // ==============================================================================
@@ -355,11 +346,9 @@ void MatrixTab::resized() {
     int rowH = 36;
     for (int i = 0; i < 10; ++i) {
         int y = startY + i * rowH + 6;
-
-        // ★ 各UIの幅とX座標を見切れないように再調整
-        slots[i].src.setBounds(15, y, 115, 24);         // 幅115
-        slots[i].amt.setBounds(140, y + 2, 135, 20);    // 幅135
-        slots[i].dest.setBounds(285, y, 180, 24);       // 幅を180に拡大して見切れを防止
+        slots[i].src.setBounds(15, y, 115, 24);
+        slots[i].amt.setBounds(140, y + 2, 135, 20);
+        slots[i].dest.setBounds(285, y, 180, 24);
     }
 }
 
@@ -458,7 +447,6 @@ void ColorIrPanel::paint(juce::Graphics& g) {
         g.drawLine(15, y + 25, getWidth() - 15, y + 25, 1.0f);
         };
 
-    // ★ 謎の文字化け「গৌ」を正常なコードに修正
     drawBlock(5, 255, "1. COLOR IR GENERATOR", juce::Colour::fromString("FFFF764D"));
     drawBlock(265, 175, "2. DYNAMICS (OTT & SOOTHE)", juce::Colour::fromString("FF00FFCC"));
     drawBlock(445, 185, "3. SPARKLE ARP & MASTER", juce::Colour::fromString("FFFFD700"));
@@ -529,9 +517,10 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     addAndMakeVisible(openBrowserButton); addAndMakeVisible(prevWaveButton);
     addAndMakeVisible(nextWaveButton); addAndMakeVisible(rndWaveButton);
 
-    addAndMakeVisible(colorButton);
-    colorButton.setClickingTogglesState(true);
-    colorButton.onClick = [this] { resized(); };
+    // ★ 表示切替ボタンとColor DSPオンオフを配置
+    addAndMakeVisible(viewWaveBtn); addAndMakeVisible(viewColorBtn); addAndMakeVisible(colorOnBtn);
+    viewWaveBtn.onClick = [this] { isColorPanelVisible = false; resized(); };
+    viewColorBtn.onClick = [this] { isColorPanelVisible = true; resized(); };
 
     addAndMakeVisible(dualScope);
     addAndMakeVisible(colorPanel);
@@ -595,15 +584,23 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     setupS(glideSlider, glideLabel, "Glide", this); setupS(pitchSlider, pitchLabel, "Pitch", this); setupS(gainSlider, gainLabel, "Gain", this);
     addAndMakeVisible(legatoButton);
 
+    // ★ Initプリセット動作とLoadボタン削除の対応
     addAndMakeVisible(presetCombo); presetCombo.setJustificationType(juce::Justification::centred);
-    addAndMakeVisible(savePresetBtn); addAndMakeVisible(loadPresetBtn);
+    addAndMakeVisible(savePresetBtn);
     savePresetBtn.setColour(juce::TextButton::buttonColourId, juce::Colour::fromString("FF2A2A2A"));
-    loadPresetBtn.setColour(juce::TextButton::buttonColourId, juce::Colour::fromString("FF2A2A2A"));
 
     scanPresets();
     presetCombo.onChange = [this]() {
         int id = presetCombo.getSelectedId();
-        if (id > 1) {
+        if (id == 1) { // Init
+            for (auto* p : audioProcessor.getParameters()) {
+                if (auto* floatParam = dynamic_cast<juce::AudioProcessorParameterWithID*>(p)) {
+                    floatParam->setValueNotifyingHost(floatParam->getDefaultValue());
+                }
+            }
+            audioProcessor.loadFactoryWavetable(-1);
+        }
+        else if (id > 1) {
             int index = id - 2;
             if (juce::isPositiveAndBelow(index, presetFiles.size())) {
                 juce::MemoryBlock mb; presetFiles[index].loadFileAsData(mb);
@@ -631,29 +628,11 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
             });
         };
 
-    loadPresetBtn.onClick = [this] {
-        auto presetDir = juce::File::getSpecialLocation(juce::File::userDocumentsDirectory).getChildFile("BassSynthPresets");
-        if (!presetDir.exists()) presetDir.createDirectory();
-        auto chooser = std::make_shared<juce::FileChooser>("Load Preset", presetDir, "*.xml");
-        auto flags = juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles;
-
-        chooser->launchAsync(flags, [this, chooser](const juce::FileChooser& fc) {
-            auto file = fc.getResult();
-            if (file.existsAsFile()) {
-                juce::MemoryBlock mb; file.loadFileAsData(mb);
-                audioProcessor.setStateInformation(mb.getData(), (int)mb.getSize()); scanPresets();
-                for (int i = 0; i < presetFiles.size(); ++i) {
-                    if (presetFiles[i] == file) { presetCombo.setSelectedId(i + 2, juce::dontSendNotification); break; }
-                }
-            }
-            });
-        };
-
     auto& apvts = audioProcessor.getAPVTS();
     auto att = [&](juce::Slider& s, const juce::String& id) { attachments.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, id, s)); };
 
     oscOnAtt = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(apvts, "osc_on", oscOnButton);
-    colorOnAtt = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(apvts, "color_on", colorButton);
+    colorOnAtt = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(apvts, "color_on", colorOnBtn); // ★
     att(wtLevelSlider, "osc_level"); att(wtPosSlider, "osc_pos"); att(oscPitchSlider, "osc_pitch");
     att(pitchDecayAmtSlider, "osc_pdecay_amt"); att(pitchDecayTimeSlider, "osc_pdecay_time");
     att(driftSlider, "osc_drift"); att(uniCountSlider, "osc_uni"); att(detuneSlider, "osc_detune");
@@ -745,12 +724,17 @@ void LiquidDreamAudioProcessorEditor::timerCallback() {
     float curWave = apvts.getRawParameterValue("osc_wave")->load();
     float curPos = apvts.getRawParameterValue("osc_pos")->load();
     float curFm = apvts.getRawParameterValue("osc_fm")->load();
-    float curMa = apvts.getRawParameterValue("osc_morph_a_amt")->load();
-    float curMb = apvts.getRawParameterValue("osc_morph_b_amt")->load();
-    float curMc = apvts.getRawParameterValue("osc_morph_c_amt")->load();
-    float curSa = apvts.getRawParameterValue("osc_morph_a_shift")->load();
-    float curSb = apvts.getRawParameterValue("osc_morph_b_shift")->load();
-    float curSc = apvts.getRawParameterValue("osc_morph_c_shift")->load();
+    float curModeA = apvts.getRawParameterValue("osc_morph_a_mode")->load();
+    float curModeB = apvts.getRawParameterValue("osc_morph_b_mode")->load();
+    float curModeC = apvts.getRawParameterValue("osc_morph_c_mode")->load();
+
+    // ★ ModeがNone(0)の時は無駄な再描画判定を防ぐ
+    float curMa = (curModeA > 0.5f) ? apvts.getRawParameterValue("osc_morph_a_amt")->load() : 0.0f;
+    float curSa = (curModeA > 0.5f) ? apvts.getRawParameterValue("osc_morph_a_shift")->load() : 0.0f;
+    float curMb = (curModeB > 0.5f) ? apvts.getRawParameterValue("osc_morph_b_amt")->load() : 0.0f;
+    float curSb = (curModeB > 0.5f) ? apvts.getRawParameterValue("osc_morph_b_shift")->load() : 0.0f;
+    float curMc = (curModeC > 0.5f) ? apvts.getRawParameterValue("osc_morph_c_amt")->load() : 0.0f;
+    float curSc = (curModeC > 0.5f) ? apvts.getRawParameterValue("osc_morph_c_shift")->load() : 0.0f;
 
     if (curWave != lastWave || curPos != lastPos || curFm != lastFm ||
         curMa != lastMa || curMb != lastMb || curMc != lastMc ||
@@ -762,15 +746,7 @@ void LiquidDreamAudioProcessorEditor::timerCallback() {
         lastSa = curSa; lastSb = curSb; lastSc = curSc;
     }
 
-    if (wtChanged) {
-        std::array<float, 512> tempBuffer;
-        audioProcessor.getStaticWaveform(tempBuffer);
-        dualScope.updateStaticWave(tempBuffer.data(), 512);
-
-        wtChanged = false; // ★追加: 更新が終わったらフラグを下ろす
-    }
-
-    if (colorButton.getToggleState()) {
+    if (colorOnBtn.getToggleState()) {
         auto state = audioProcessor.getColorEngine().getLearnState();
         auto text = audioProcessor.getColorEngine().getLearnedChordNames();
         colorPanel.updateState(state, text, blinkCounter < 10);
@@ -782,6 +758,17 @@ void LiquidDreamAudioProcessorEditor::timerCallback() {
         int destIdx = (int)apvts.getRawParameterValue("matrix_dest_" + juce::String(slot))->load();
         float amt = std::abs(apvts.getRawParameterValue("matrix_amt_" + juce::String(slot))->load());
         if (srcIdx > 0 && destIdx > 0 && destIdx < 14) { modDepths[destIdx] += amt; }
+    }
+
+    // ★ モジュレーション時の動的再描画
+    bool isModulated = (modDepths[1] > 0.001f || modDepths[2] > 0.001f || modDepths[3] > 0.001f || modDepths[4] > 0.001f ||
+        modDepths[5] > 0.001f || modDepths[6] > 0.001f || modDepths[7] > 0.001f || modDepths[8] > 0.001f);
+
+    if (wtChanged || isModulated) {
+        std::array<float, 512> tempBuffer;
+        audioProcessor.getStaticWaveform(tempBuffer);
+        dualScope.updateStaticWave(tempBuffer.data(), 512);
+        wtChanged = false;
     }
 
     auto updateRing = [](juce::Slider& s, float depth) {
@@ -811,15 +798,25 @@ void LiquidDreamAudioProcessorEditor::resized()
     auto area = getLocalBounds().reduced(15);
     auto placeComboLocal = [](int x, int y, int w, juce::Label& lbl, juce::ComboBox& cmb) { lbl.setBounds(x, y, w, 20); cmb.setBounds(x, y + 30, w, 24); };
     auto leftArea = area.removeFromLeft(350); auto navRect = leftArea.removeFromTop(35).reduced(2);
-    openBrowserButton.setBounds(navRect.removeFromLeft(100)); navRect.removeFromLeft(5); prevWaveButton.setBounds(navRect.removeFromLeft(35)); navRect.removeFromLeft(5);
-    nextWaveButton.setBounds(navRect.removeFromLeft(35)); navRect.removeFromLeft(5); rndWaveButton.setBounds(navRect.removeFromLeft(50)); navRect.removeFromLeft(5);
-    colorButton.setBounds(navRect.removeFromLeft(60)); leftArea.removeFromTop(5);
-    bool isColorMode = colorButton.getToggleState(); dualScope.setVisible(!isColorMode); controlGroup.setVisible(!isColorMode); legatoButton.setVisible(!isColorMode);
-    glideSlider.setVisible(!isColorMode); glideLabel.setVisible(!isColorMode); pitchSlider.setVisible(!isColorMode); pitchLabel.setVisible(!isColorMode);
-    gainSlider.setVisible(!isColorMode); gainLabel.setVisible(!isColorMode); subGroup.setVisible(!isColorMode); subOnButton.setVisible(!isColorMode);
-    subWaveCombo.setVisible(!isColorMode); subVolSlider.setVisible(!isColorMode); subVolLabel.setVisible(!isColorMode); subPitchSlider.setVisible(!isColorMode); subPitchLabel.setVisible(!isColorMode);
-    colorPanel.setVisible(isColorMode);
-    if (isColorMode) { colorPanel.setBounds(leftArea); }
+
+    openBrowserButton.setBounds(navRect.removeFromLeft(80)); navRect.removeFromLeft(5);
+    prevWaveButton.setBounds(navRect.removeFromLeft(25)); navRect.removeFromLeft(5);
+    nextWaveButton.setBounds(navRect.removeFromLeft(25)); navRect.removeFromLeft(5);
+    rndWaveButton.setBounds(navRect.removeFromLeft(40)); navRect.removeFromLeft(5);
+
+    // ★表示切替ボタン配置
+    viewWaveBtn.setBounds(navRect.removeFromLeft(50)); navRect.removeFromLeft(5);
+    viewColorBtn.setBounds(navRect.removeFromLeft(50)); navRect.removeFromLeft(5);
+    colorOnBtn.setBounds(navRect.removeFromLeft(35));
+    leftArea.removeFromTop(5);
+
+    dualScope.setVisible(!isColorPanelVisible); controlGroup.setVisible(!isColorPanelVisible); legatoButton.setVisible(!isColorPanelVisible);
+    glideSlider.setVisible(!isColorPanelVisible); glideLabel.setVisible(!isColorPanelVisible); pitchSlider.setVisible(!isColorPanelVisible); pitchLabel.setVisible(!isColorPanelVisible);
+    gainSlider.setVisible(!isColorPanelVisible); gainLabel.setVisible(!isColorPanelVisible); subGroup.setVisible(!isColorPanelVisible); subOnButton.setVisible(!isColorPanelVisible);
+    subWaveCombo.setVisible(!isColorPanelVisible); subVolSlider.setVisible(!isColorPanelVisible); subVolLabel.setVisible(!isColorPanelVisible); subPitchSlider.setVisible(!isColorPanelVisible); subPitchLabel.setVisible(!isColorPanelVisible);
+    colorPanel.setVisible(isColorPanelVisible);
+
+    if (isColorPanelVisible) { colorPanel.setBounds(leftArea); }
     else {
         dualScope.setBounds(leftArea.removeFromTop(370)); leftArea.removeFromTop(10); auto ctrlRect = leftArea.removeFromTop(100); controlGroup.setBounds(ctrlRect);
         int cX = ctrlRect.getX(), cY = ctrlRect.getY() + 15; legatoButton.setBounds(cX + 10, cY + 20, 75, 24);
@@ -827,6 +824,7 @@ void LiquidDreamAudioProcessorEditor::resized()
         leftArea.removeFromTop(10); auto subRect = leftArea.removeFromTop(120); subGroup.setBounds(subRect); int sbX = subRect.getX() + 10, sbY = subRect.getY() + 15;
         subOnButton.setBounds(sbX, sbY + 20, 50, 24); subWaveCombo.setBounds(sbX + 60, sbY + 25, 70, 24); placeKnob(sbX + 160, sbY, subVolLabel, subVolSlider); placeKnob(sbX + 240, sbY, subPitchLabel, subPitchSlider);
     }
+
     area.removeFromLeft(15); auto rightArea = area; browser.setBounds(rightArea);
     auto oscRect = rightArea.removeFromTop(210); oscGroup.setBounds(oscRect); int oX = oscRect.getX() + 10, oY = oscRect.getY() + 18;
     oscOnButton.setBounds(oX, oY + 20, 50, 24); int step = 73;
@@ -844,8 +842,11 @@ void LiquidDreamAudioProcessorEditor::resized()
     placeKnob(sX + 15, sY, distDriveLabel, distDriveSlider); placeKnob(sX + 115, sY, shpAmtLabel, shpAmtSlider); placeKnob(sX + 215, sY, rateLabel, rateSlider); placeKnob(sX + 315, sY, bitLabel, bitSlider);
     auto aEnvRect = centerCol.removeFromTop(100); ampEnvGroup.setBounds(aEnvRect); int aX = aEnvRect.getX(), aY = aEnvRect.getY() + 15;
     placeKnob(aX + 15, aY, ampAtkLabel, ampAtkSlider); placeKnob(aX + 115, aY, ampDecLabel, ampDecSlider); placeKnob(aX + 215, aY, ampSusLabel, ampSusSlider); placeKnob(aX + 315, aY, ampRelLabel, ampRelSlider);
+
     auto presetRect = centerCol.removeFromBottom(40); int pX = presetRect.getX() + 10, pY = presetRect.getY() + 5;
-    presetCombo.setBounds(pX, pY, 240, 24); savePresetBtn.setBounds(pX + 250, pY, 60, 24); loadPresetBtn.setBounds(pX + 320, pY, 60, 24);
+    presetCombo.setBounds(pX, pY, 290, 24);
+    savePresetBtn.setBounds(pX + 300, pY, 80, 24);
+
     auto filterRect = centerCol; filterGroup.setBounds(filterRect.reduced(0, 5)); int fX = filterRect.getX() + 10, fY = filterRect.getY() + 20;
     fltABtn.setBounds(fX, fY, 35, 24); fltBBtn.setBounds(fX + 35, fY, 35, 24); fltATypeCombo.setBounds(fX + 80, fY, 80, 24); fltBTypeCombo.setBounds(fX + 80, fY, 80, 24); fltRoutingCombo.setBounds(fX + 170, fY, 80, 24);
     int r2Y = fY + 35, spacing = 80;

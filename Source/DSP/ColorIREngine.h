@@ -162,7 +162,13 @@ public:
             envPhase += 1.0f;
 
             currentLevel = currentLevel * 0.999f + targetLevel * 0.001f;
-            float val = sample * env * currentLevel * 0.24f * mainAmpEnvBuffer[i];
+
+            // ★修正: レベルカーブを2乗にして微小値の急激な立ち上がりを防ぎ、波形ごとの音量差を補正
+            float levelCurve = std::pow(currentLevel, 2.0f);
+            float waveGain = (currentWave >= 3) ? 1.4f : ((currentWave == 0) ? 1.0f : 0.8f);
+
+            // ★修正: ベース係数を下げて、OTTに突っ込んだ時の爆音化を防ぐ
+            float val = sample * env * levelCurve * waveGain * 0.12f * mainAmpEnvBuffer[i];
 
             outL[i] += val; outR[i] += val;
             sampleCounter++;
@@ -466,8 +472,9 @@ public:
                 float atkFade = (i < (int)atkSamples) ? ((float)i / atkSamples) : 1.0f;
                 float decFade = (i < (int)atkSamples) ? 1.0f : std::pow(std::max(0.0f, 1.0f - ((float)(i - (int)atkSamples) / decSamples)), 4.0f);
 
-                outL[i] = clippedL * atkFade * decFade * 0.025f;
-                outR[i] = clippedR * atkFade * decFade * 0.025f;
+                // ★修正: IRの生成音量ゲインを調整
+                outL[i] = clippedL * atkFade * decFade * 0.06f;
+                outR[i] = clippedR * atkFade * decFade * 0.06f;
             }
 
             if (activeEngineIsA.load()) convEngineB.loadImpulseResponse(std::move(tempIR), sr, juce::dsp::Convolution::Stereo::yes, juce::dsp::Convolution::Trim::no, juce::dsp::Convolution::Normalise::no);

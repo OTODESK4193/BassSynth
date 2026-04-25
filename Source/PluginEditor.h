@@ -30,7 +30,6 @@ private:
     std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment>> btnAtts;
 };
 
-// ★ 追加: MSEGを描画・編集するキャンバスコンポーネント
 class MsegEditorComponent : public juce::Component {
 public:
     MsegEditorComponent(Mseg& engine, const MsegState& initialState);
@@ -54,7 +53,6 @@ private:
     void updateDSP();
 };
 
-// ★ 追加: MSEGタブ全体を管理するコンポーネント
 class MsegTab : public juce::Component {
 public:
     MsegTab(LiquidDreamAudioProcessor& p, juce::AudioProcessorValueTreeState& vts);
@@ -170,7 +168,11 @@ private:
     juce::TextButton prevWaveButton{ juce::String::fromUTF8("\xe2\x97\x80") };
     juce::TextButton nextWaveButton{ juce::String::fromUTF8("\xe2\x96\xb6") };
     juce::TextButton rndWaveButton{ "RND" };
-    juce::ToggleButton colorButton{ "COLOR" };
+
+    // ★修正: パネル表示切替ボタンとColor DSPオンオフを分離
+    juce::ToggleButton colorOnBtn{ "ON" };
+    juce::TextButton viewWaveBtn{ "SCOPE" };
+    juce::TextButton viewColorBtn{ "COLOR" };
 
     // Overlays & Groups
     ColorIrPanel colorPanel;
@@ -230,7 +232,6 @@ private:
     // Preset UI
     juce::ComboBox presetCombo;
     juce::TextButton savePresetBtn{ "Save" };
-    juce::TextButton loadPresetBtn{ "Load" };
     juce::Array<juce::File> presetFiles;
 
     // Modulation Tabs
@@ -247,7 +248,8 @@ private:
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> fltATypeAtt, fltBTypeAtt, fltRoutingAtt;
 
     int blinkCounter = 0;
-    bool wtChanged = false; // ★ 追加: エラーの根本原因を修正
+    bool wtChanged = false;
+    bool isColorPanelVisible = false; // ★追加: パネルの表示状態管理
 
     void updateFilterUI();
 
