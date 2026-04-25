@@ -86,7 +86,6 @@ private:
 
 class MsegEditorComponent : public juce::Component {
 public:
-    // ★ 修正: MsegStateを「参照渡し」で受け取ることでプロセッサ本体のデータを直接編集する
     MsegEditorComponent(Mseg& engine, MsegState& linkedState);
     void paint(juce::Graphics& g) override;
     void mouseDown(const juce::MouseEvent& e) override;
@@ -97,7 +96,7 @@ public:
 
 private:
     Mseg& msegEngine;
-    MsegState& state; // ★ 修正: 参照保持
+    MsegState& state;
     int draggingNodeIndex = -1;
     bool draggingCurve = false;
 
@@ -290,6 +289,17 @@ private:
     int blinkCounter = 0;
     bool wtChanged = false;
     bool isColorPanelVisible = false;
+
+    // ★ 修正: static だった変数をメンバ変数に格上げし、インスタンス同士の競合を防止
+    float lastWaveVal = -999.0f;
+    float lastPosVal = -999.0f;
+    float lastFmVal = -999.0f;
+    float lastMaVal = -999.0f;
+    float lastMbVal = -999.0f;
+    float lastMcVal = -999.0f;
+    float lastSaVal = -999.0f;
+    float lastSbVal = -999.0f;
+    float lastScVal = -999.0f;
 
     void updateFilterUI();
 

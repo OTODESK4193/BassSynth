@@ -116,6 +116,9 @@ private:
     juce::StringArray favoriteWavetables;
     std::atomic<bool> customWavetableLoaded{ false };
 
+    // ★ 修正: processBlock 内の無限ループを防ぐためのメンバ変数
+    int lastWaveIdxProcessor = -2;
+
     std::atomic<float>* pOscOn = nullptr; std::atomic<float>* pWave = nullptr; std::atomic<float>* pPos = nullptr;
     std::atomic<float>* pOscLevel = nullptr; std::atomic<float>* pOscPitch = nullptr;
     std::atomic<float>* pPDecayAmt = nullptr; std::atomic<float>* pPDecayTime = nullptr;
@@ -194,7 +197,6 @@ private:
         return state;
     }
 
-    // ★ 追加: ChordLearnのシリアライズ関数
     juce::String serializeChord(const std::vector<int>& notes) {
         juce::StringArray strArr;
         for (int n : notes) strArr.add(juce::String(n));

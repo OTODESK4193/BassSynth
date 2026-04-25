@@ -8,7 +8,7 @@ LiquidDreamAudioProcessor::LiquidDreamAudioProcessor()
     : AudioProcessor(BusesProperties().withOutput("Output", juce::AudioChannelSet::stereo(), true)),
     apvts(*this, nullptr, "PARAMS", createParameterLayout())
 {
-    static juce::SharedResourcePointer<juce::ThreadPool> pool;
+    // ★ 修正: SharedResourcePointer を削除。もう全体を止める元凶はありません。
     outputScopeData.fill(0.0f); tempScopeBuffer.fill(0.0f);
 
     pOscOn = apvts.getRawParameterValue("osc_on"); pWave = apvts.getRawParameterValue("osc_wave"); pPos = apvts.getRawParameterValue("osc_pos");
@@ -225,8 +225,6 @@ void LiquidDreamAudioProcessor::getStateInformation(juce::MemoryBlock& destData)
         xml->setAttribute("CustomWavePath", currentCustomWavetablePath);
         xml->setAttribute("UserFolders", userWavetableFolders.joinIntoString("|"));
         xml->setAttribute("Favorites", favoriteWavetables.joinIntoString("|"));
-
-        // ★ 追加: ChordLearn のシリアライズ
         xml->setAttribute("ColorChord", serializeChord(colorEngine.getLearnedNotes()));
 
         xml->setAttribute("mseg0_data", serializeMsegState(msegStates[0]));
@@ -267,7 +265,6 @@ void LiquidDreamAudioProcessor::setStateInformation(const void* data, int sizeIn
             msegs[1].pushNewState(msegStates[1]);
         }
 
-        // ★ 追加: ChordLearn のデシリアライズと、非同期スレッドへの再生成ジョブ投げ
         juce::String chordStr = xmlState->getStringAttribute("ColorChord", "");
         if (chordStr.isNotEmpty()) {
             colorEngine.setLearnedNotes(deserializeChord(chordStr));
@@ -348,6 +345,9 @@ void LiquidDreamAudioProcessor::prepareToPlay(double sampleRate, int samplesPerB
 
     lastOscFreq = -1.0f;
     lastModeA = -1; lastModeB = -1; lastModeC = -1;
+
+    // ★ リセット時にインスタンス固有の波形監視変数を初期化
+    lastWaveIdxProcessor = -2;
 }
 
 void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
@@ -396,13 +396,13 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     smoothedSubVol.setTargetValue(pSubVol->load(std::memory_order_relaxed));
 
     int waveIdx = (int)pWave->load(std::memory_order_relaxed);
-    static int lastWaveIdx = -2;
-    if (waveIdx != lastWaveIdx) {
-        if (lastWaveIdx == -2 && customWavetableLoaded.load()) {
-            lastWaveIdx = waveIdx;
+    // ★ 修正: static を廃止し、メンバ変数を利用。無限ループのピンポンを完全根絶！
+    if (waveIdx != lastWaveIdxProcessor) {
+        if (lastWaveIdxProcessor == -2 && customWavetableLoaded.load()) {
+            lastWaveIdxProcessor = waveIdx;
         }
         else {
-            lastWaveIdx = waveIdx;
+            lastWaveIdxProcessor = waveIdx;
             customWavetableLoaded.store(false);
             currentCustomWavetablePath = "";
             if (waveIdx >= 0 && waveIdx < 10) oscillator.loadFactoryWavetable(waveIdx);

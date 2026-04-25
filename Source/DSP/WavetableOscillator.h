@@ -48,12 +48,11 @@ public:
 
     ~WavetableOscillator() {
         loadJobId++;
-        backgroundPool->removeAllJobs(true, 1000);
+        backgroundPool.removeAllJobs(true, 1000); // ★ 修正
     }
 
     void prepare(double sr) { sampleRate = std::max(1.0, sr); }
 
-    // ★ 修正: 10種類のファクトリー波形を「64フレームのウェーブテーブル」として生成。Posノブが効くようになります。
     void loadFactoryWavetable(int index) {
         const int myJobId = ++loadJobId;
         WavetableSet::Ptr newSet = new WavetableSet();
@@ -66,12 +65,12 @@ public:
         auto* w = tempRaw.getWritePointer(0);
 
         for (int f = 0; f < numFrames; ++f) {
-            float posMod = f / (float)(numFrames - 1); // 0.0 to 1.0 (Position)
+            float posMod = f / (float)(numFrames - 1);
             for (int i = 0; i < 2048; ++i) {
                 float p = i / 2048.0f;
                 float val = 0.0f;
                 switch (index) {
-                case 0: // Basic Morph (Sine -> Tri -> Saw -> Square)
+                case 0:
                     if (posMod < 0.333f) {
                         float mix = posMod * 3.0f;
                         val = std::sin(p * 6.2831853f) * (1.0f - mix) + (4.0f * std::abs(p - 0.5f) - 1.0f) * mix;
@@ -85,34 +84,34 @@ public:
                         val = (1.0f - 2.0f * p) * (1.0f - mix) + (p < 0.5f ? 1.0f : -1.0f) * mix;
                     }
                     break;
-                case 1: // PWM Sweep (50% to 5%)
+                case 1:
                     val = p < (0.5f - posMod * 0.45f) ? 1.0f : -1.0f;
                     break;
-                case 2: // Sync Sweep
+                case 2:
                     val = std::sin(std::fmod(p * (1.0f + posMod * 7.0f), 1.0f) * 6.2831853f) * (1.0f - p);
                     break;
-                case 3: // Harmonic Build-up
+                case 3:
                     for (int h = 1; h <= 1 + (int)(posMod * 15.0f); ++h) val += std::sin(p * h * 6.2831853f) / (float)h;
                     break;
-                case 4: // FM Sweep
+                case 4:
                     val = std::sin(p * 6.2831853f + std::sin(p * 6.2831853f) * (posMod * 5.0f));
                     break;
-                case 5: // Saw Sync
+                case 5:
                     val = 1.0f - 2.0f * std::fmod(p * (1.0f + posMod * 3.0f), 1.0f);
                     break;
-                case 6: // Vowel Sweep (Moving Formant)
+                case 6:
                     for (int h = 1; h <= 12; ++h) {
                         float amp = std::exp(-std::pow(std::abs((float)h - (2.0f + posMod * 10.0f)), 2.0f) * 0.5f);
                         val += std::sin(p * h * 6.2831853f) * amp;
                     }
                     break;
-                case 7: // Sub Fade
+                case 7:
                     val = std::sin(p * 6.2831853f) + posMod * std::sin(p * 3.14159265f);
                     break;
-                case 8: // Metallic Sweep
+                case 8:
                     val = std::sin(p * 6.2831853f) + posMod * std::sin(p * 17.34f) + posMod * posMod * std::sin(p * 31.12f);
                     break;
-                case 9: // Noise Fade
+                case 9:
                     val = std::sin(p * 6.2831853f) * (1.0f - posMod) + (juce::Random::getSystemRandom().nextFloat() * 2.0f - 1.0f) * posMod;
                     break;
                 }
@@ -155,7 +154,8 @@ public:
     }
 
     void runBandlimitingTask(int myJobId, WavetableSet::Ptr newSet, juce::AudioBuffer<float> tempRaw) {
-        backgroundPool->addJob([this, myJobId, newSet, tempRaw]() {
+        backgroundPool.removeAllJobs(true, 10); // ★ 古い処理の確実なキャンセル
+        backgroundPool.addJob([this, myJobId, newSet, tempRaw]() { // ★ 専用プールを利用
             juce::dsp::FFT fft(11);
             juce::AudioBuffer<float> workBuf(1, 4096);
             for (int lvl = 1; lvl < NumLevels; ++lvl) {
@@ -380,7 +380,7 @@ private:
     std::array<float, MaxVoices> driftPhase = { 0 }, driftRate = { 0 };
     juce::AudioFormatManager formatManager;
 
-    juce::SharedResourcePointer<juce::ThreadPool> backgroundPool;
+    juce::ThreadPool backgroundPool{ 1 }; // ★ 修正: 共有プールから各インスタンス専用スレッドに変更
 
     std::atomic<int> loadJobId{ 0 };
     juce::ReferenceCountedObjectPtr<WavetableSet> currentWavetableSet;

@@ -34,7 +34,6 @@ static void setupCombo(juce::ComboBox& c, juce::Label& l, const char* txt, juce:
 // ==============================================================================
 // MSEG Editor Component (Canvas) Implementation
 // ==============================================================================
-// ★ 修正: MsegStateを「参照」として受け取り、初期化リストで紐付ける
 MsegEditorComponent::MsegEditorComponent(Mseg& engine, MsegState& linkedState)
     : msegEngine(engine), state(linkedState) {
 }
@@ -741,14 +740,9 @@ void LiquidDreamAudioProcessorEditor::timerCallback() {
         }
     }
 
-    // ★ 追加: RNDボタンやカスタム波形読み込み時の強制再描画
     if (audioProcessor.forceScopeUpdate.exchange(false)) {
         wtChanged = true;
     }
-
-    static float lastWave = -999, lastPos = -999, lastFm = -999;
-    static float lastMa = -999, lastMb = -999, lastMc = -999;
-    static float lastSa = -999, lastSb = -999, lastSc = -999;
 
     float curWave = apvts.getRawParameterValue("osc_wave")->load();
     float curPos = apvts.getRawParameterValue("osc_pos")->load();
@@ -764,14 +758,14 @@ void LiquidDreamAudioProcessorEditor::timerCallback() {
     float curMc = (curModeC > 0.5f) ? apvts.getRawParameterValue("osc_morph_c_amt")->load() : 0.0f;
     float curSc = (curModeC > 0.5f) ? apvts.getRawParameterValue("osc_morph_c_shift")->load() : 0.0f;
 
-    if (curWave != lastWave || curPos != lastPos || curFm != lastFm ||
-        curMa != lastMa || curMb != lastMb || curMc != lastMc ||
-        curSa != lastSa || curSb != lastSb || curSc != lastSc) {
+    if (curWave != lastWaveVal || curPos != lastPosVal || curFm != lastFmVal ||
+        curMa != lastMaVal || curMb != lastMbVal || curMc != lastMcVal ||
+        curSa != lastSaVal || curSb != lastSbVal || curSc != lastScVal) {
 
         wtChanged = true;
-        lastWave = curWave; lastPos = curPos; lastFm = curFm;
-        lastMa = curMa; lastMb = curMb; lastMc = curMc;
-        lastSa = curSa; lastSb = curSb; lastSc = curSc;
+        lastWaveVal = curWave; lastPosVal = curPos; lastFmVal = curFm;
+        lastMaVal = curMa; lastMbVal = curMb; lastMcVal = curMc;
+        lastSaVal = curSa; lastSbVal = curSb; lastScVal = curSc;
     }
 
     if (colorOnBtn.getToggleState()) {

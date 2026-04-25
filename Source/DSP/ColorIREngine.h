@@ -263,7 +263,7 @@ public:
 
     ~ColorIREngine() {
         irGenJobId++;
-        threadPool->removeAllJobs(true, 1000);
+        threadPool.removeAllJobs(true, 1000); // ★ 修正
     }
 
     void prepare(double sampleRate, int samplesPerBlock)
@@ -297,7 +297,6 @@ public:
         return names.joinIntoString(", ");
     }
 
-    // ★ 追加: 保存・復元用の Getter / Setter
     std::vector<int> getLearnedNotes() const {
         std::lock_guard<std::mutex> lock(chordMutex);
         return learnedNotes;
@@ -330,9 +329,9 @@ public:
         const int myJobId = ++irGenJobId;
         const double sr = currentSampleRate;
 
-        threadPool->removeAllJobs(true, 10);
+        threadPool.removeAllJobs(true, 10); // ★ 修正: 専用プールから安全にキル
 
-        threadPool->addJob([this, optimizedNotes, attackMs, decayMs, irType, sr, myJobId]() {
+        threadPool.addJob([this, optimizedNotes, attackMs, decayMs, irType, sr, myJobId]() { // ★ 専用プールを利用
             if (myJobId != irGenJobId.load()) return;
 
             float actualDecayMs = std::max(100.0f, decayMs);
@@ -576,7 +575,7 @@ private:
     mutable std::mutex chordMutex;
 
     juce::dsp::Convolution convEngineA, convEngineB;
-    juce::SharedResourcePointer<juce::ThreadPool> threadPool;
+    juce::ThreadPool threadPool{ 1 }; // ★ 修正: 共有プールから各インスタンス専用スレッドに変更
     std::atomic<int> irGenJobId{ 0 };
 
     juce::AudioBuffer<float> wetBufferA, wetBufferB;
