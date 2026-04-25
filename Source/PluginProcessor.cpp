@@ -215,7 +215,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout LiquidDreamAudioProcessor::c
     for (int i = 0; i < 10; ++i) {
         juce::String sIdx = juce::String(i);
         params.push_back(std::make_unique<juce::AudioParameterInt>("matrix_src_" + sIdx, "Src", 0, 8, 0));
-        params.push_back(std::make_unique<juce::AudioParameterInt>("matrix_dest_" + sIdx, "Dest", 0, 22, 0)); // ★ Destination範囲を拡張
+        params.push_back(std::make_unique<juce::AudioParameterInt>("matrix_dest_" + sIdx, "Dest", 0, 22, 0));
         params.push_back(std::make_unique<juce::AudioParameterFloat>("matrix_amt_" + sIdx, "Amt", -1.0f, 1.0f, 0.0f));
     }
 
@@ -325,7 +325,6 @@ void LiquidDreamAudioProcessor::prepareToPlay(double sampleRate, int samplesPerB
     for (auto& lfo : lfos) lfo.setSampleRate(sampleRate);
     for (auto& ms : msegs) ms.setSampleRate(sampleRate);
 
-    // ★ 修正: 追加パラメーターを受け取るためバッファを拡張 (8 -> 24)
     tempEnvBuffer.setSize(24, samplesPerBlock);
     tempSubBuffer.setSize(2, samplesPerBlock);
     tempWavetableBuffer.setSize(2, samplesPerBlock);
@@ -344,7 +343,6 @@ void LiquidDreamAudioProcessor::prepareToPlay(double sampleRate, int samplesPerB
     smoothedMorphBAmt.reset(sampleRate, st); smoothedMorphBShift.reset(sampleRate, st);
     smoothedMorphCAmt.reset(sampleRate, st); smoothedMorphCShift.reset(sampleRate, st);
 
-    // ★ 追加モジュレーション用のスムージングリセット
     smoothedColorMix.reset(sampleRate, st);
     for (int i = 0; i < 3; ++i) smoothedLfoRates[i].reset(sampleRate, st);
 
@@ -353,6 +351,9 @@ void LiquidDreamAudioProcessor::prepareToPlay(double sampleRate, int samplesPerB
     smoothedPDecayAmt.setCurrentAndTargetValue(pPDecayAmt->load(std::memory_order_relaxed));
     smoothedPDecayTime.setCurrentAndTargetValue(pPDecayTime->load(std::memory_order_relaxed));
     smoothedDrift.setCurrentAndTargetValue(pDrift->load(std::memory_order_relaxed));
+
+    // ★ モジュレーションの内部スムージング（ノイズ対策用）の初期化
+    modSourceStates.fill(0.0f);
 
     lastOscFreq = -1.0f;
     lastModeA = -1; lastModeB = -1; lastModeC = -1;
@@ -475,16 +476,21 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     auto* wtL = tempWavetableBuffer.getWritePointer(0); auto* wtR = tempWavetableBuffer.getWritePointer(1);
     float stft_aA = 0.0f, stft_sA = 0.0f, stft_aB = 0.0f, stft_sB = 0.0f, stft_aC = 0.0f, stft_sC = 0.0f;
 
+    // ★ 修正: モジュレーション出力にかける「3ミリ秒」のスムージング係数
+    float modAlpha = std::exp(-1.0f / static_cast<float>(getSampleRate() * 0.003));
+
+    // ★ 修正: サンプルループを跨いで保持されるべき Matrix の変調量
+    float destMods[23] = { 0.0f };
+
     for (int i = 0; i < numSamples; ++i) {
-        // ★ モジュレーションされたLFOレートを適用
-        float modLfoRate[3] = { 0 };
+
+        // ★ 修正: LFO Rateの変調を、LFOの次のサンプルを生成する「直前」に毎サンプル適用する
         for (int m = 0; m < 3; ++m) {
-            float baseRate = smoothedLfoRates[m].getNextValue();
-            // 一時的に 0.01~50Hz にクランプ (計算は後で行う)
-            lfos[m].setParameters((int)pLfoWave[m]->load(), pLfoSync[m]->load() > 0.5f, baseRate, (int)pLfoBeat[m]->load(), pLfoAmt[m]->load(), (int)pLfoTrig[m]->load());
+            float r = juce::jlimit(0.01f, 50.0f, smoothedLfoRates[m].getNextValue() + destMods[20 + m] * 25.0f);
+            lfos[m].setParameters((int)pLfoWave[m]->load(), pLfoSync[m]->load() > 0.5f, r, (int)pLfoBeat[m]->load(), pLfoAmt[m]->load(), (int)pLfoTrig[m]->load());
         }
 
-        float sources[9] = {
+        float rawSources[9] = {
             0.0f,
             (pModOn[0]->load(std::memory_order_relaxed) > 0.5f ? modEnvs[0].getNextSample() : 0.0f),
             (pModOn[1]->load(std::memory_order_relaxed) > 0.5f ? modEnvs[1].getNextSample() : 0.0f),
@@ -496,16 +502,20 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
             (pMsegOn[1]->load(std::memory_order_relaxed) > 0.5f ? msegs[1].getNextSample(currentBpm) : 0.0f)
         };
 
-        // ★ 修正: Destination配列を23要素に拡張 (0〜22)
-        float destMods[23] = { 0 };
+        // ★ 修正: Random 波形等の瞬間的な「パキッ」とした変化を丸めるスムージング処理
+        for (int s = 1; s < 9; ++s) {
+            modSourceStates[s] = modAlpha * modSourceStates[s] + (1.0f - modAlpha) * rawSources[s];
+        }
 
+        // ★ 修正: スムージング済みの信号を使って Matrix を再計算する
+        std::fill(std::begin(destMods), std::end(destMods), 0.0f);
         for (int slot = 0; slot < 10; ++slot) {
             int srcIdx = (int)pMatrixSrc[slot]->load(std::memory_order_relaxed);
             int destIdx = (int)pMatrixDest[slot]->load(std::memory_order_relaxed);
             float amt = pMatrixAmt[slot]->load(std::memory_order_relaxed);
 
             if (srcIdx > 0 && srcIdx < 9 && destIdx > 0 && destIdx < 23) {
-                destMods[destIdx] += sources[srcIdx] * amt;
+                destMods[destIdx] += modSourceStates[srcIdx] * amt;
             }
         }
 
@@ -518,19 +528,12 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         float aC = juce::jlimit(-1.0f, 1.0f, smoothedMorphCAmt.getNextValue() + destMods[7]);
         float sC = juce::jlimit(-1.0f, 1.0f, smoothedMorphCShift.getNextValue() + destMods[8]);
 
-        // ★ 追加: 新規モジュレーション・ターゲットの適用
-        float modWtPitch = smoothedWtPitch.getNextValue() + destMods[14] * 24.0f; // ±24st
+        float modWtPitch = smoothedWtPitch.getNextValue() + destMods[14] * 24.0f;
         float modDrive = juce::jlimit(1.0f, 10.0f, smoothedDrive.getNextValue() + destMods[15] * 9.0f);
         float modShpAmt = juce::jlimit(0.0f, 1.0f, smoothedShpAmt.getNextValue() + destMods[16]);
         float modRate = juce::jlimit(1.0f, 20.0f, smoothedShpRate.getNextValue() + destMods[17] * 19.0f);
         float modBits = juce::jlimit(1.0f, 24.0f, smoothedShpBit.getNextValue() + destMods[18] * 23.0f);
         float modColorMix = juce::jlimit(0.0f, 1.0f, smoothedColorMix.getNextValue() + destMods[19]);
-
-        // LFO Rates (destMods[20], [21], [22])
-        for (int m = 0; m < 3; ++m) {
-            float r = juce::jlimit(0.01f, 50.0f, pLfoRate[m]->load() + destMods[20 + m] * 25.0f);
-            lfos[m].setParameters((int)pLfoWave[m]->load(), pLfoSync[m]->load() > 0.5f, r, (int)pLfoBeat[m]->load(), pLfoAmt[m]->load(), (int)pLfoTrig[m]->load());
-        }
 
         if (i == 0) { stft_aA = aA; stft_sA = sA; stft_aB = aB; stft_sB = sB; stft_aC = aC; stft_sC = sC; }
 
@@ -564,7 +567,6 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         tempEnvBuffer.setSample(6, i, destMods[12]);
         tempEnvBuffer.setSample(7, i, destMods[13]);
 
-        // 保存用バッファに新規モジュレーション結果を書き込み
         tempEnvBuffer.setSample(8, i, modDrive);
         tempEnvBuffer.setSample(9, i, modShpAmt);
         tempEnvBuffer.setSample(10, i, modRate);
@@ -616,7 +618,6 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     }
 
     if (pColorOn->load() > 0.5f) {
-        // ★ モジュレーション適用済みのColorMixを取得してパラメータセット
         colorEngine.setParameters(pColorPreHp->load(), pColorPostHp->load(), tempEnvBuffer.getSample(12, numSamples - 1), pColorIrVol->load());
         colorEngine.processIR(buffer);
 

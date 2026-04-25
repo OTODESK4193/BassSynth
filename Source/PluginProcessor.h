@@ -106,7 +106,6 @@ private:
     std::array<float, 512> tempScopeBuffer;
     int scopeWriteIndex = 0;
 
-    // ★ 修正: モジュレーション拡張のため、エンベロープバッファのチャンネル数を8から24へ拡張
     juce::AudioBuffer<float> tempEnvBuffer;
     juce::AudioBuffer<float> tempSubBuffer;
     juce::AudioBuffer<float> tempWavetableBuffer;
@@ -170,9 +169,11 @@ private:
     juce::SmoothedValue<float> smoothedDrive, smoothedShpAmt, smoothedShpRate, smoothedShpBit, smoothedGain;
     juce::SmoothedValue<float> smoothedWtPos, smoothedFm, smoothedDrift, smoothedSubVol, smoothedSubPitch, smoothedWidth;
     juce::SmoothedValue<float> smoothedMorphAAmt, smoothedMorphAShift, smoothedMorphBAmt, smoothedMorphBShift, smoothedMorphCAmt, smoothedMorphCShift;
-    // ★ 追加: Color Mix と LFO Rate のスムージング
     juce::SmoothedValue<float> smoothedColorMix;
     std::array<juce::SmoothedValue<float>, 3> smoothedLfoRates;
+
+    // ★ 追加: 各モジュレーター出力のノイズ除去（スムージング）用配列
+    std::array<float, 9> modSourceStates = { 0.0f };
 
     float lastOscFreq = -1.0f;
     int lastModeA = -1, lastModeB = -1, lastModeC = -1;
