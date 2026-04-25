@@ -227,7 +227,9 @@ private:
     juce::TextButton viewColorBtn{ "COL" };
 
     ColorIrPanel colorPanel;
-    juce::GroupComponent oscGroup, subGroup, shaperGroup, filterGroup, ampEnvGroup, controlGroup, presetGroup;
+
+    // ★ 修正: subGroup を削除し、すべて controlGroup に統一
+    juce::GroupComponent oscGroup, shaperGroup, filterGroup, ampEnvGroup, controlGroup, presetGroup;
 
     juce::ToggleButton oscOnButton{ "ON" };
     juce::Slider wtLevelSlider, wtPosSlider, oscPitchSlider, uniCountSlider, detuneSlider, widthSlider, driftSlider;
@@ -243,9 +245,17 @@ private:
     juce::Slider   morphAShiftSlider, morphBShiftSlider, morphCShiftSlider;
     juce::Label    morphAShiftLabel, morphBShiftLabel, morphCShiftLabel;
 
-    juce::ToggleButton subOnButton{ "ON" };
-    juce::ComboBox subWaveCombo; juce::Label subVolLabel;
-    juce::Slider subVolSlider, subPitchSlider; juce::Label subPitchLabel;
+    // ★ 修正: サブオシレーター関連のUIコンポーネント（独立したラベルを追加）
+    juce::ToggleButton subOnButton{ "SUB ON" };
+    juce::ComboBox subWaveCombo;
+    juce::Label subWaveLabel{ "", "Wave" };
+    juce::Slider subVolSlider, subPitchSlider;
+    juce::Label subVolLabel, subPitchLabel;
+
+    // ★ 修正: リミッター関連のUIコンポーネントを追加
+    juce::ToggleButton limitOnButton{ "LIMIT" };
+    juce::Slider limitCeilSlider;
+    juce::Label limitCeilLabel;
 
     juce::Slider distDriveSlider, shpAmtSlider, bitSlider, rateSlider;
     juce::Label  distDriveLabel, shpAmtLabel, bitLabel, rateLabel;
@@ -282,7 +292,7 @@ private:
     MatrixTab matrixTab;
 
     std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>> attachments;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> oscOnAtt, subOnAtt, legatoAtt, colorOnAtt;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> oscOnAtt, subOnAtt, limitOnAtt, legatoAtt, colorOnAtt;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> subWaveAtt, fmWaveAtt, morphAAtt, morphBAtt, morphCAtt;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> fltATypeAtt, fltBTypeAtt, fltRoutingAtt;
 
@@ -290,7 +300,6 @@ private:
     bool wtChanged = false;
     bool isColorPanelVisible = false;
 
-    // ★ 修正: static だった変数をメンバ変数に格上げし、インスタンス同士の競合を防止
     float lastWaveVal = -999.0f;
     float lastPosVal = -999.0f;
     float lastFmVal = -999.0f;

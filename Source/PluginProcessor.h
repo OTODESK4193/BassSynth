@@ -11,6 +11,7 @@
 #include "DSP/DualFilterEngine.h"
 #include "DSP/SineShaper.h"
 #include "DSP/ColorIREngine.h"
+#include "DSP/ZeroLatencyLimiter.h" // ★ 追加
 #include "Logic/MonoVoiceManager.h"
 #include "Logic/AdsrEnvelope.h"
 #include "Logic/Lfo.h"
@@ -94,6 +95,7 @@ private:
     SineShaper shaper;
     ColorIREngine colorEngine;
     MonoVoiceManager voiceManager;
+    ZeroLatencyLimiter masterLimiter; // ★ 追加
 
     AdsrEnvelope ampEnv, filterEnvA, filterEnvB;
     std::array<AdsrEnvelope, 3> modEnvs;
@@ -116,7 +118,6 @@ private:
     juce::StringArray favoriteWavetables;
     std::atomic<bool> customWavetableLoaded{ false };
 
-    // ★ 修正: processBlock 内の無限ループを防ぐためのメンバ変数
     int lastWaveIdxProcessor = -2;
 
     std::atomic<float>* pOscOn = nullptr; std::atomic<float>* pWave = nullptr; std::atomic<float>* pPos = nullptr;
@@ -151,6 +152,10 @@ private:
     std::atomic<float>* pArpWave = nullptr; std::atomic<float>* pArpMode = nullptr;
     std::atomic<float>* pArpSpeed = nullptr; std::atomic<float>* pArpPitch = nullptr;
     std::atomic<float>* pArpLevel = nullptr;
+
+    // ★ 追加: Limiter パラメータ
+    std::atomic<float>* pLimitOn = nullptr;
+    std::atomic<float>* pLimitCeil = nullptr;
 
     std::array<std::atomic<float>*, 3> pModOn, pModAtk, pModDec, pModSus, pModRel, pModAmt;
     std::array<std::atomic<float>*, 3> pLfoOn, pLfoWave, pLfoSync, pLfoRate, pLfoBeat, pLfoAmt, pLfoTrig;

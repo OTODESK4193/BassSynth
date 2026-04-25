@@ -8,7 +8,6 @@ LiquidDreamAudioProcessor::LiquidDreamAudioProcessor()
     : AudioProcessor(BusesProperties().withOutput("Output", juce::AudioChannelSet::stereo(), true)),
     apvts(*this, nullptr, "PARAMS", createParameterLayout())
 {
-    // ★ 修正: SharedResourcePointer を削除。もう全体を止める元凶はありません。
     outputScopeData.fill(0.0f); tempScopeBuffer.fill(0.0f);
 
     pOscOn = apvts.getRawParameterValue("osc_on"); pWave = apvts.getRawParameterValue("osc_wave"); pPos = apvts.getRawParameterValue("osc_pos");
@@ -43,6 +42,9 @@ LiquidDreamAudioProcessor::LiquidDreamAudioProcessor()
 
     pArpWave = apvts.getRawParameterValue("arp_wave"); pArpMode = apvts.getRawParameterValue("arp_mode");
     pArpSpeed = apvts.getRawParameterValue("arp_speed"); pArpPitch = apvts.getRawParameterValue("arp_pitch"); pArpLevel = apvts.getRawParameterValue("arp_level");
+
+    pLimitOn = apvts.getRawParameterValue("limit_on"); // ★ 追加
+    pLimitCeil = apvts.getRawParameterValue("limit_ceil"); // ★ 追加
 
     for (int i = 0; i < 3; ++i) {
         juce::String ms = "mod" + juce::String(i + 1) + "_";
@@ -125,7 +127,11 @@ juce::AudioProcessorValueTreeState::ParameterLayout LiquidDreamAudioProcessor::c
     params.push_back(std::make_unique<juce::AudioParameterFloat>("flt_mix", "Flt Mix", 0.0f, 1.0f, 0.5f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("flt_a_env_amt", "FltA Env Amt", 0.0f, 1.0f, 0.0f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("flt_b_env_amt", "FltB Env Amt", 0.0f, 1.0f, 0.0f));
+
+    // ★ ゲイン、およびリミッターパラメーターの追加
     params.push_back(std::make_unique<juce::AudioParameterFloat>("m_gain", "Gain", 0.0f, 1.0f, 0.5f));
+    params.push_back(std::make_unique<juce::AudioParameterBool>("limit_on", "Limiter On", true));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("limit_ceil", "Ceiling", -24.0f, 0.0f, 0.0f));
 
     auto glideRange = juce::NormalisableRange<float>(0.0f, 1000.0f, 1.0f, 0.3f);
     params.push_back(std::make_unique<juce::AudioParameterFloat>("m_glide", "Glide", glideRange, 0.0f));
@@ -312,6 +318,7 @@ void LiquidDreamAudioProcessor::prepareToPlay(double sampleRate, int samplesPerB
     shaper.prepare(sampleRate);
     voiceManager.setSampleRate(sampleRate);
     colorEngine.prepare(sampleRate, samplesPerBlock);
+    masterLimiter.prepare(sampleRate); // ★ 追加
 
     ampEnv.setSampleRate(sampleRate);
     filterEnvA.setSampleRate(sampleRate); filterEnvB.setSampleRate(sampleRate);
@@ -345,8 +352,6 @@ void LiquidDreamAudioProcessor::prepareToPlay(double sampleRate, int samplesPerB
 
     lastOscFreq = -1.0f;
     lastModeA = -1; lastModeB = -1; lastModeC = -1;
-
-    // ★ リセット時にインスタンス固有の波形監視変数を初期化
     lastWaveIdxProcessor = -2;
 }
 
@@ -396,7 +401,6 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     smoothedSubVol.setTargetValue(pSubVol->load(std::memory_order_relaxed));
 
     int waveIdx = (int)pWave->load(std::memory_order_relaxed);
-    // ★ 修正: static を廃止し、メンバ変数を利用。無限ループのピンポンを完全根絶！
     if (waveIdx != lastWaveIdxProcessor) {
         if (lastWaveIdxProcessor == -2 && customWavetableLoaded.load()) {
             lastWaveIdxProcessor = waveIdx;
@@ -592,6 +596,15 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         float gainMod = tempEnvBuffer.getSample(7, i);
         float finalGain = juce::jlimit(0.0f, 1.0f, cg + gainMod);
         left[i] *= finalGain; right[i] *= finalGain;
+    }
+
+    // ★ 追加: ゼロレイテンシーリミッターの適用
+    if (pLimitOn->load() > 0.5f) {
+        masterLimiter.setCeiling(pLimitCeil->load());
+        masterLimiter.process(buffer);
+    }
+
+    for (int i = 0; i < numSamples; ++i) {
         tempScopeBuffer[(size_t)scopeWriteIndex] = (left[i] + right[i]) * 0.5f;
         scopeWriteIndex++;
         if (scopeWriteIndex >= 512) { outputScopeData = tempScopeBuffer; scopeWriteIndex = 0; }

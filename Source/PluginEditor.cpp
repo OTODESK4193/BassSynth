@@ -536,7 +536,6 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     colorPanel.setVisible(false);
 
     oscGroup.setText("WAVETABLE"); addAndMakeVisible(oscGroup);
-    subGroup.setText("SUB OSC"); addAndMakeVisible(subGroup);
     shaperGroup.setText("DISTORTION & SHAPER"); addAndMakeVisible(shaperGroup);
     ampEnvGroup.setText("AMP ENVELOPE"); addAndMakeVisible(ampEnvGroup);
     filterGroup.setText("DUAL FILTER & ENV"); addAndMakeVisible(filterGroup);
@@ -556,10 +555,14 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     setupCombo(morphBModeCombo, morphBModeLabel, "Morph B", morphTypes, this); setupS(morphBAmtSlider, morphBAmtLabel, "Amt B", this); setupS(morphBShiftSlider, morphBShiftLabel, "Shift B", this);
     setupCombo(morphCModeCombo, morphCModeLabel, "Morph C", morphTypes, this); setupS(morphCAmtSlider, morphCAmtLabel, "Amt C", this); setupS(morphCShiftSlider, morphCShiftLabel, "Shift C", this);
 
+    // ★ 修正: サブオシレーターUIの初期化
     addAndMakeVisible(subOnButton);
-    setupCombo(subWaveCombo, subVolLabel, "", { "Sine", "Triangle", "Pulse", "Saw" }, this);
-    subVolLabel.setText("Wave", juce::dontSendNotification);
+    setupCombo(subWaveCombo, subWaveLabel, nullptr, { "Sine", "Triangle", "Pulse", "Saw" }, this);
     setupS(subVolSlider, subVolLabel, "Level", this); setupS(subPitchSlider, subPitchLabel, "Pitch", this);
+
+    // ★ 修正: リミッターUIの初期化
+    addAndMakeVisible(limitOnButton);
+    setupS(limitCeilSlider, limitCeilLabel, "Ceiling", this);
 
     setupS(distDriveSlider, distDriveLabel, "Drive", this); setupS(shpAmtSlider, shpAmtLabel, "Shaper", this);
     setupS(bitSlider, bitLabel, "Bits", this); setupS(rateSlider, rateLabel, "Rate", this);
@@ -652,9 +655,14 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     att(morphBAmtSlider, "osc_morph_b_amt"); att(morphBShiftSlider, "osc_morph_b_shift");
     morphCAtt = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(apvts, "osc_morph_c_mode", morphCModeCombo);
     att(morphCAmtSlider, "osc_morph_c_amt"); att(morphCShiftSlider, "osc_morph_c_shift");
+
+    // ★ 修正: サブとリミッターのアタッチメント
     subOnAtt = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(apvts, "sub_on", subOnButton);
     subWaveAtt = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(apvts, "sub_wave", subWaveCombo);
     att(subVolSlider, "sub_vol"); att(subPitchSlider, "sub_pitch");
+    limitOnAtt = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(apvts, "limit_on", limitOnButton);
+    att(limitCeilSlider, "limit_ceil");
+
     legatoAtt = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(apvts, "m_legato", legatoButton);
     att(distDriveSlider, "dist_drive"); att(shpAmtSlider, "shp_amt"); att(bitSlider, "shp_bit"); att(rateSlider, "shp_rate");
     fltATypeAtt = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(apvts, "flt_a_type", fltATypeCombo);
@@ -830,19 +838,53 @@ void LiquidDreamAudioProcessorEditor::resized()
     colorOnBtn.setBounds(navRect.removeFromLeft(35));
     leftArea.removeFromTop(5);
 
-    dualScope.setVisible(!isColorPanelVisible); controlGroup.setVisible(!isColorPanelVisible); legatoButton.setVisible(!isColorPanelVisible);
-    glideSlider.setVisible(!isColorPanelVisible); glideLabel.setVisible(!isColorPanelVisible); pitchSlider.setVisible(!isColorPanelVisible); pitchLabel.setVisible(!isColorPanelVisible);
-    gainSlider.setVisible(!isColorPanelVisible); gainLabel.setVisible(!isColorPanelVisible); subGroup.setVisible(!isColorPanelVisible); subOnButton.setVisible(!isColorPanelVisible);
-    subWaveCombo.setVisible(!isColorPanelVisible); subVolSlider.setVisible(!isColorPanelVisible); subVolLabel.setVisible(!isColorPanelVisible); subPitchSlider.setVisible(!isColorPanelVisible); subPitchLabel.setVisible(!isColorPanelVisible);
+    // ★ 修正: 表示状態の制御にリミッターとサブ波形を追加
+    dualScope.setVisible(!isColorPanelVisible);
+    controlGroup.setVisible(!isColorPanelVisible);
+    legatoButton.setVisible(!isColorPanelVisible);
+    glideSlider.setVisible(!isColorPanelVisible); glideLabel.setVisible(!isColorPanelVisible);
+    pitchSlider.setVisible(!isColorPanelVisible); pitchLabel.setVisible(!isColorPanelVisible);
+    gainSlider.setVisible(!isColorPanelVisible); gainLabel.setVisible(!isColorPanelVisible);
+
+    subOnButton.setVisible(!isColorPanelVisible);
+    subWaveCombo.setVisible(!isColorPanelVisible);
+    subVolSlider.setVisible(!isColorPanelVisible); subVolLabel.setVisible(!isColorPanelVisible);
+    subPitchSlider.setVisible(!isColorPanelVisible); subPitchLabel.setVisible(!isColorPanelVisible);
+
+    limitOnButton.setVisible(!isColorPanelVisible);
+    limitCeilSlider.setVisible(!isColorPanelVisible); limitCeilLabel.setVisible(!isColorPanelVisible);
+
     colorPanel.setVisible(isColorPanelVisible);
 
     if (isColorPanelVisible) { colorPanel.setBounds(leftArea); }
     else {
-        dualScope.setBounds(leftArea.removeFromTop(370)); leftArea.removeFromTop(10); auto ctrlRect = leftArea.removeFromTop(100); controlGroup.setBounds(ctrlRect);
-        int cX = ctrlRect.getX(), cY = ctrlRect.getY() + 15; legatoButton.setBounds(cX + 10, cY + 20, 75, 24);
-        placeKnob(cX + 80, cY, glideLabel, glideSlider); placeKnob(cX + 160, cY, pitchLabel, pitchSlider); placeKnob(cX + 240, cY, gainLabel, gainSlider);
-        leftArea.removeFromTop(10); auto subRect = leftArea.removeFromTop(120); subGroup.setBounds(subRect); int sbX = subRect.getX() + 10, sbY = subRect.getY() + 15;
-        subOnButton.setBounds(sbX, sbY + 20, 50, 24); subWaveCombo.setBounds(sbX + 60, sbY + 25, 70, 24); placeKnob(sbX + 160, sbY, subVolLabel, subVolSlider); placeKnob(sbX + 240, sbY, subPitchLabel, subPitchSlider);
+        dualScope.setBounds(leftArea.removeFromTop(330));
+        leftArea.removeFromTop(10);
+
+        // ★ 修正: 統合された PERFORMANCE グループの3段レイアウト
+        auto ctrlRect = leftArea;
+        controlGroup.setBounds(ctrlRect);
+
+        int cX = ctrlRect.getX() + 10;
+        int r1Y = ctrlRect.getY() + 15;
+        int r2Y = r1Y + 70;
+        int r3Y = r2Y + 70;
+
+        // Row 1: Perf
+        legatoButton.setBounds(cX, r1Y + 20, 65, 24);
+        placeKnob(cX + 80, r1Y, glideLabel, glideSlider);
+        placeKnob(cX + 160, r1Y, pitchLabel, pitchSlider);
+        placeKnob(cX + 240, r1Y, gainLabel, gainSlider);
+
+        // Row 2: Sub
+        subOnButton.setBounds(cX, r2Y + 20, 65, 24);
+        subWaveCombo.setBounds(cX + 80, r2Y + 20, 70, 24);
+        placeKnob(cX + 160, r2Y, subVolLabel, subVolSlider);
+        placeKnob(cX + 240, r2Y, subPitchLabel, subPitchSlider);
+
+        // Row 3: Limiter
+        limitOnButton.setBounds(cX, r3Y + 20, 65, 24);
+        placeKnob(cX + 240, r3Y, limitCeilLabel, limitCeilSlider);
     }
 
     area.removeFromLeft(15); auto rightArea = area; browser.setBounds(rightArea);
