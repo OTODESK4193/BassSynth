@@ -3,7 +3,6 @@
 // ==============================================================================
 #pragma once
 #include <JuceHeader.h>
-#include "../Generated/WavetableData_Generated.h"
 
 class WavetableBrowser : public juce::Component
 {
@@ -11,8 +10,7 @@ public:
     std::function<void(const juce::File&)> onCustomFileSelected;
     std::function<void(int)> onFactoryIndexSelected;
     std::function<void(const juce::StringArray&)> onUserFoldersChanged;
-
-    // ★ 追加: ダブルクリック時にブラウザを閉じるためのコールバック
+    std::function<void(const juce::StringArray&)> onFavoritesChanged;
     std::function<void()> onCloseRequested;
 
     WavetableBrowser(juce::AudioProcessorValueTreeState& vts) : apvts(vts)
@@ -21,17 +19,10 @@ public:
         subCatModel.owner = this;
         fileModel.owner = this;
 
-        categories.add("Basic");
-        categories.add("User");
         categories.add("All");
-
-        for (int i = 0; i < EmbeddedWavetables::numTables; ++i) {
-            juce::StringArray tags;
-            tags.addTokens(EmbeddedWavetables::allTags[i], "|", "");
-            if (tags.size() > 0 && !categories.contains(tags[0])) {
-                categories.add(tags[0]);
-            }
-        }
+        categories.add("Factory");
+        categories.add("Favorite");
+        categories.add("User");
 
         catList.setModel(&catModel);
         subCatList.setModel(&subCatModel);
@@ -57,15 +48,18 @@ public:
         updateSubCategories();
     }
 
+    void setFavorites(const juce::StringArray& favs) {
+        favoritePaths = favs;
+        if (categories[selectedCategoryIdx] == "Favorite") updateFiles();
+    }
+
     void loadUserFolders(const juce::StringArray& folderPaths) {
         userFolders.clear();
         for (auto& path : folderPaths) {
             juce::File dir(path);
-            if (dir.isDirectory()) {
-                addUserFolderInternal(dir, false);
-            }
+            if (dir.isDirectory()) addUserFolderInternal(dir, false);
         }
-        if (categories[selectedCategoryIdx] == "User") updateSubCategories();
+        if (categories[selectedCategoryIdx] == "User" || categories[selectedCategoryIdx] == "All") updateSubCategories();
     }
 
     void updateSubCategories()
@@ -73,20 +67,28 @@ public:
         subCategories.clear();
         juce::String selCat = categories[selectedCategoryIdx];
 
-        if (selCat == "User") {
-            for (auto& uf : userFolders) subCategories.add(uf.name);
+        if (selCat == "Factory") {
+            subCategories.add("Basic");
         }
-        else {
+        else if (selCat == "Favorite") {
             subCategories.add("All");
-            if (selCat == "All" || selCat == "Basic") subCategories.add("Shapes");
-
-            for (int i = 0; i < EmbeddedWavetables::numTables; ++i) {
-                juce::StringArray tags;
-                tags.addTokens(EmbeddedWavetables::allTags[i], "|", "");
-                if (selCat == "All" || (tags.size() > 0 && tags[0] == selCat)) {
-                    for (int j = 1; j < tags.size(); ++j) {
-                        if (!subCategories.contains(tags[j])) subCategories.add(tags[j]);
+        }
+        else if (selCat == "User") {
+            subCategories.add("Uncategorized");
+            for (auto& uf : userFolders) {
+                for (auto& w : uf.wavs) {
+                    if (w.subCategory != "Uncategorized" && !subCategories.contains(w.subCategory)) {
+                        subCategories.add(w.subCategory);
                     }
+                }
+            }
+        }
+        else if (selCat == "All") {
+            subCategories.add("All");
+            subCategories.add("Basic");
+            for (auto& uf : userFolders) {
+                for (auto& w : uf.wavs) {
+                    if (!subCategories.contains(w.subCategory)) subCategories.add(w.subCategory);
                 }
             }
         }
@@ -102,38 +104,42 @@ public:
         juce::String selSub = (selectedSubCategoryIdx >= 0 && selectedSubCategoryIdx < subCategories.size())
             ? subCategories[selectedSubCategoryIdx] : "";
 
-        if (selCat == "User") {
+        auto addFactory = [&]() {
+            if (selSub == "All" || selSub == "Basic") {
+                const char* names[] = { "Basic Morph", "PWM Sweep", "Sync Sweep", "Harmonic Build", "FM Sweep", "Saw Sync", "Vowel Sweep", "Sub Fade", "Metallic Sweep", "Noise Fade" };
+                for (int i = 0; i < 10; ++i) currentList.add({ true, i, juce::File(), names[i] });
+            }
+            };
+
+        auto addUser = [&]() {
             for (auto& uf : userFolders) {
-                if (uf.name == selSub) {
-                    for (auto& f : uf.files) {
-                        currentList.add({ false, -1, f, f.getFileNameWithoutExtension() });
-                    }
-                    break;
-                }
-            }
-        }
-        else {
-            if ((selCat == "All" || selCat == "Basic") && (selSub == "All" || selSub == "Shapes" || selSub.isEmpty())) {
-                currentList.add({ true, -1, juce::File(), "Basic Shapes" });
-            }
-
-            for (int i = 0; i < EmbeddedWavetables::numTables; ++i) {
-                juce::StringArray tags;
-                tags.addTokens(EmbeddedWavetables::allTags[i], "|", "");
-
-                bool matchCat = (selCat == "All") || (tags.size() > 0 && tags[0] == selCat);
-                bool matchSub = (selSub == "All" || selSub.isEmpty());
-                if (!matchSub) {
-                    for (int j = 1; j < tags.size(); ++j) {
-                        if (tags[j] == selSub) { matchSub = true; break; }
+                for (auto& w : uf.wavs) {
+                    if (selSub == "All" || w.subCategory == selSub) {
+                        currentList.add({ false, -1, w.file, w.file.getFileNameWithoutExtension() });
                     }
                 }
+            }
+            };
 
-                if (matchCat && matchSub) {
-                    currentList.add({ true, i, juce::File(), EmbeddedWavetables::allNames[i] });
+        auto addFavorites = [&]() {
+            for (auto& fav : favoritePaths) {
+                if (fav.startsWith("Factory::")) {
+                    int idx = fav.substring(9).getIntValue();
+                    const char* names[] = { "Basic Morph", "PWM Sweep", "Sync Sweep", "Harmonic Build", "FM Sweep", "Saw Sync", "Vowel Sweep", "Sub Fade", "Metallic Sweep", "Noise Fade" };
+                    if (idx >= 0 && idx < 10) currentList.add({ true, idx, juce::File(), names[idx] });
+                }
+                else {
+                    juce::File f(fav);
+                    if (f.existsAsFile()) currentList.add({ false, -1, f, f.getFileNameWithoutExtension() });
                 }
             }
-        }
+            };
+
+        if (selCat == "Factory") addFactory();
+        else if (selCat == "User") addUser();
+        else if (selCat == "Favorite") addFavorites();
+        else if (selCat == "All") { addFactory(); addUser(); }
+
         fileList.updateContent();
     }
 
@@ -150,7 +156,7 @@ public:
             if (onFactoryIndexSelected) onFactoryIndexSelected(item.factoryIndex);
         }
         else {
-            currentFactoryIndex = -2;
+            currentFactoryIndex = -1;
             currentCustomFile = item.file;
             if (onCustomFileSelected) onCustomFileSelected(item.file);
         }
@@ -194,9 +200,10 @@ private:
     std::unique_ptr<juce::FileChooser> chooser;
 
     juce::StringArray categories, subCategories;
+    juce::StringArray favoritePaths;
     int selectedCategoryIdx = 0;
     int selectedSubCategoryIdx = 0;
-    int currentFactoryIndex = -1;
+    int currentFactoryIndex = 0;
     juce::File currentCustomFile;
 
     struct ListItem {
@@ -207,10 +214,14 @@ private:
     };
     juce::Array<ListItem> currentList;
 
+    struct UserWav {
+        juce::File file;
+        juce::String subCategory;
+    };
     struct CustomFolder {
         juce::String name;
         juce::File folder;
-        juce::Array<juce::File> files;
+        juce::Array<UserWav> wavs;
     };
     juce::Array<CustomFolder> userFolders;
 
@@ -222,16 +233,22 @@ private:
             });
     }
 
-    void addUserFolderInternal(const juce::File& folder, bool triggerCallback) {
+    void addUserFolderInternal(const juce::File& rootFolder, bool triggerCallback) {
         for (auto& uf : userFolders) {
-            if (uf.folder == folder) return;
+            if (uf.folder == rootFolder) return;
         }
 
         CustomFolder cf;
-        cf.folder = folder;
-        cf.name = folder.getFileName();
-        auto files = folder.findChildFiles(juce::File::findFiles, false, "*.wav");
-        for (auto& f : files) cf.files.add(f);
+        cf.folder = rootFolder;
+        cf.name = rootFolder.getFileName();
+
+        auto wavFiles = rootFolder.findChildFiles(juce::File::findFiles, true, "*.wav");
+        for (auto& f : wavFiles) {
+            juce::File parent = f.getParentDirectory();
+            juce::String subCat = "Uncategorized";
+            if (parent != rootFolder) subCat = parent.getFileName();
+            cf.wavs.add({ f, subCat });
+        }
         userFolders.add(cf);
 
         if (triggerCallback && onUserFoldersChanged) {
@@ -240,7 +257,7 @@ private:
             onUserFoldersChanged(paths);
         }
 
-        if (categories[selectedCategoryIdx] == "User") updateSubCategories();
+        if (categories[selectedCategoryIdx] == "User" || categories[selectedCategoryIdx] == "All") updateSubCategories();
     }
 
     void moveSelection(int delta) {
@@ -304,15 +321,35 @@ private:
             if (!item.isFactory && item.file == owner->currentCustomFile) isActive = true;
 
             if (isActive) g.fillAll(juce::Colour::fromString("FF6A6A6A"));
+
+            // ★ ★マークの描画
+            juce::String favId = item.isFactory ? "Factory::" + juce::String(item.factoryIndex) : item.file.getFullPathName();
+            bool isFav = owner->favoritePaths.contains(favId);
+
+            g.setColour(isFav ? juce::Colour::fromString("FFFFD700") : juce::Colours::darkgrey);
+            g.setFont(22.0f);
+            g.drawText(isFav ? juce::String::fromUTF8("\xE2\x98\x85") : juce::String::fromUTF8("\xE2\x98\x86"), 8, 0, 25, h, juce::Justification::centred);
+
             g.setColour(isActive ? juce::Colours::white : juce::Colours::lightgrey);
             g.setFont(16.0f);
-            g.drawText(item.name, 15, 0, w - 30, h, juce::Justification::centredLeft);
+            g.drawText(item.name, 38, 0, w - 40, h, juce::Justification::centredLeft);
         }
-        void listBoxItemClicked(int row, const juce::MouseEvent&) override {
+        void listBoxItemClicked(int row, const juce::MouseEvent& e) override {
             if (!owner) return;
-            owner->applySelection(row);
+            if (e.x < 35) { // ★ 星マークのクリック判定
+                auto& item = owner->currentList.getReference(row);
+                juce::String favId = item.isFactory ? "Factory::" + juce::String(item.factoryIndex) : item.file.getFullPathName();
+                if (owner->favoritePaths.contains(favId)) owner->favoritePaths.removeString(favId);
+                else owner->favoritePaths.add(favId);
+
+                if (owner->onFavoritesChanged) owner->onFavoritesChanged(owner->favoritePaths);
+                if (owner->categories[owner->selectedCategoryIdx] == "Favorite") owner->updateFiles();
+                else owner->fileList.repaintRow(row);
+            }
+            else {
+                owner->applySelection(row);
+            }
         }
-        // ★ 追加: ダブルクリック時の処理
         void listBoxItemDoubleClicked(int row, const juce::MouseEvent&) override {
             if (!owner) return;
             owner->applySelection(row);

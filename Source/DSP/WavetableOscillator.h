@@ -7,8 +7,7 @@
 #include <vector>
 #include <complex>
 #include <atomic>
-#include <cmath> // std::isnan, std::floor, std::isfinite を確実に使うため追加
-#include "../Generated/WavetableData_Generated.h"
+#include <cmath>
 
 class WavetableOscillator
 {
@@ -41,11 +40,9 @@ public:
         currentWavetableSet = emptySet;
 
         auto& random = juce::Random::getSystemRandom();
-        for (int i = 0; i < MaxVoices; ++i) {
-            driftRate[i] = 0.1f + random.nextFloat() * 0.4f;
-        }
+        for (int i = 0; i < MaxVoices; ++i) driftRate[i] = 0.1f + random.nextFloat() * 0.4f;
 
-        createDefaultBasicShapes();
+        loadFactoryWavetable(0);
         resetPhase();
     }
 
@@ -56,47 +53,75 @@ public:
 
     void prepare(double sr) { sampleRate = std::max(1.0, sr); }
 
-    void createDefaultBasicShapes() {
+    // ★ 修正: 10種類のファクトリー波形を「64フレームのウェーブテーブル」として生成。Posノブが効くようになります。
+    void loadFactoryWavetable(int index) {
         const int myJobId = ++loadJobId;
         WavetableSet::Ptr newSet = new WavetableSet();
-        newSet->totalSamples = 8192;
+        int numFrames = 64;
+        newSet->totalSamples = 2048 * numFrames;
         newSet->frameSize = 2048;
-        newSet->numFrames = 4;
+        newSet->numFrames = numFrames;
 
         juce::AudioBuffer<float> tempRaw(1, newSet->totalSamples);
-        auto* writePtr = tempRaw.getWritePointer(0);
+        auto* w = tempRaw.getWritePointer(0);
 
-        for (int i = 0; i < 2048; ++i) {
-            float p = i / 2048.0f;
-            writePtr[i] = std::sin(p * juce::MathConstants<float>::twoPi);
-            writePtr[2048 + i] = 2.0f * std::abs(2.0f * (p - std::floor(p + 0.5f))) - 1.0f;
-            writePtr[4096 + i] = 2.0f * (p - std::floor(p + 0.5f));
-            writePtr[6144 + i] = p < 0.5f ? 1.0f : -1.0f;
+        for (int f = 0; f < numFrames; ++f) {
+            float posMod = f / (float)(numFrames - 1); // 0.0 to 1.0 (Position)
+            for (int i = 0; i < 2048; ++i) {
+                float p = i / 2048.0f;
+                float val = 0.0f;
+                switch (index) {
+                case 0: // Basic Morph (Sine -> Tri -> Saw -> Square)
+                    if (posMod < 0.333f) {
+                        float mix = posMod * 3.0f;
+                        val = std::sin(p * 6.2831853f) * (1.0f - mix) + (4.0f * std::abs(p - 0.5f) - 1.0f) * mix;
+                    }
+                    else if (posMod < 0.666f) {
+                        float mix = (posMod - 0.333f) * 3.0f;
+                        val = (4.0f * std::abs(p - 0.5f) - 1.0f) * (1.0f - mix) + (1.0f - 2.0f * p) * mix;
+                    }
+                    else {
+                        float mix = (posMod - 0.666f) * 3.0f;
+                        val = (1.0f - 2.0f * p) * (1.0f - mix) + (p < 0.5f ? 1.0f : -1.0f) * mix;
+                    }
+                    break;
+                case 1: // PWM Sweep (50% to 5%)
+                    val = p < (0.5f - posMod * 0.45f) ? 1.0f : -1.0f;
+                    break;
+                case 2: // Sync Sweep
+                    val = std::sin(std::fmod(p * (1.0f + posMod * 7.0f), 1.0f) * 6.2831853f) * (1.0f - p);
+                    break;
+                case 3: // Harmonic Build-up
+                    for (int h = 1; h <= 1 + (int)(posMod * 15.0f); ++h) val += std::sin(p * h * 6.2831853f) / (float)h;
+                    break;
+                case 4: // FM Sweep
+                    val = std::sin(p * 6.2831853f + std::sin(p * 6.2831853f) * (posMod * 5.0f));
+                    break;
+                case 5: // Saw Sync
+                    val = 1.0f - 2.0f * std::fmod(p * (1.0f + posMod * 3.0f), 1.0f);
+                    break;
+                case 6: // Vowel Sweep (Moving Formant)
+                    for (int h = 1; h <= 12; ++h) {
+                        float amp = std::exp(-std::pow(std::abs((float)h - (2.0f + posMod * 10.0f)), 2.0f) * 0.5f);
+                        val += std::sin(p * h * 6.2831853f) * amp;
+                    }
+                    break;
+                case 7: // Sub Fade
+                    val = std::sin(p * 6.2831853f) + posMod * std::sin(p * 3.14159265f);
+                    break;
+                case 8: // Metallic Sweep
+                    val = std::sin(p * 6.2831853f) + posMod * std::sin(p * 17.34f) + posMod * posMod * std::sin(p * 31.12f);
+                    break;
+                case 9: // Noise Fade
+                    val = std::sin(p * 6.2831853f) * (1.0f - posMod) + (juce::Random::getSystemRandom().nextFloat() * 2.0f - 1.0f) * posMod;
+                    break;
+                }
+                w[f * 2048 + i] = val;
+            }
+            float peak = 1e-9f;
+            for (int i = 0; i < 2048; ++i) peak = std::max(peak, std::abs(w[f * 2048 + i]));
+            for (int i = 0; i < 2048; ++i) w[f * 2048 + i] /= peak;
         }
-
-        for (int lvl = 0; lvl < NumLevels; ++lvl) {
-            newSet->levels[lvl].setSize(1, newSet->totalSamples);
-            newSet->levels[lvl].makeCopyOf(tempRaw);
-        }
-        currentWavetableSet = newSet;
-        runBandlimitingTask(myJobId, newSet, tempRaw);
-    }
-
-    void loadWavetableFile(juce::String fileName) {
-        const int myJobId = ++loadJobId;
-        juce::File file = juce::File(EmbeddedWavetables::wavetablesDir).getChildFile(fileName);
-        if (!file.existsAsFile()) return;
-
-        std::unique_ptr<juce::AudioFormatReader> reader(formatManager.createReaderFor(file));
-        if (reader == nullptr) return;
-
-        WavetableSet::Ptr newSet = new WavetableSet();
-        juce::AudioBuffer<float> tempRaw(1, (int)reader->lengthInSamples);
-        reader->read(&tempRaw, 0, (int)reader->lengthInSamples, 0, true, false);
-
-        newSet->totalSamples = tempRaw.getNumSamples();
-        newSet->frameSize = (newSet->totalSamples >= 2048) ? 2048 : newSet->totalSamples;
-        newSet->numFrames = std::max(1, newSet->totalSamples / newSet->frameSize);
 
         for (int lvl = 0; lvl < NumLevels; ++lvl) {
             newSet->levels[lvl].setSize(1, newSet->totalSamples);
@@ -191,15 +216,15 @@ public:
             else if (fmWaveform == 3) mod = 4.0f * std::abs(phase - 0.5f) - 1.0f;
 
             float tp = phase + mod * fmAmount * 0.1f;
-            tp -= std::floor(tp); // ★修正: マイナス方向への確実なラップ
+            tp -= std::floor(tp);
 
             float syncA = 1.0f, syncB = 1.0f, syncC = 1.0f;
             tp = applyPhaseWarp(tp, morphAMode, morphAAmount, morphAShift, syncA, originalPhase);
             tp = applyPhaseWarp(tp, morphBMode, morphBAmount, morphBShift, syncB, originalPhase);
             tp = applyPhaseWarp(tp, morphCMode, morphCAmount, morphCShift, syncC, originalPhase);
 
-            tp -= std::floor(tp); // ★修正
-            if (!std::isfinite(tp)) tp = 0.0f; // ★修正: NaNガード
+            tp -= std::floor(tp);
+            if (!std::isfinite(tp)) tp = 0.0f;
 
             float floatPos = tp * set->frameSize;
             int pos = (int)floatPos;
@@ -228,10 +253,7 @@ public:
     void setOscOn(bool on) { oscOn = on; }
     void setWavetableLevel(float level) { wtLevel = level; }
     void setWavetablePitchOffset(float semitones) { wtPitchOffset = semitones; }
-    void setPitchDecay(float amount, float timeMs) {
-        pitchDecayAmt = amount;
-        pitchDecayCoef = (timeMs <= 0.001f) ? 0.0f : std::exp(-6.9077f / (timeMs * 0.001f * (float)sampleRate));
-    }
+    void setPitchDecay(float amount, float timeMs) { pitchDecayAmt = amount; pitchDecayCoef = (timeMs <= 0.001f) ? 0.0f : std::exp(-6.9077f / (timeMs * 0.001f * (float)sampleRate)); }
     void setSubOn(bool on) { subOn = on; }
     void setSubWaveform(int shape) { subWaveform = juce::jlimit(0, 3, shape); }
     void setSubVolume(float vol) { subVolume = vol; }
@@ -289,7 +311,6 @@ public:
                 if (vIdx >= unisonCount) { nextP.set(i, p.get(i)); continue; }
 
                 float originalPhase = p.get(i);
-
                 driftPhase[vIdx] += driftRate[vIdx] / (float)sampleRate;
                 if (driftPhase[vIdx] >= 1.0f) driftPhase[vIdx] -= 1.0f;
                 float drift = std::sin(driftPhase[vIdx] * juce::MathConstants<float>::twoPi) * driftAmount * 0.01f;
@@ -300,16 +321,15 @@ public:
                 float lvlFrac = (hL > maxH) ? juce::jlimit(0.0f, 1.0f, (hL - maxH) / (hL * 0.5f)) : 0.0f;
 
                 float tp = tp_simd.get(i);
-                tp -= std::floor(tp); // ★修正: マイナス方向へ確実にラップ
+                tp -= std::floor(tp);
 
                 float sA = 1.0f, sB = 1.0f, sC = 1.0f;
-
                 tp = applyPhaseWarp(tp, morphAMode, morphAAmount, morphAShift, sA, originalPhase);
                 tp = applyPhaseWarp(tp, morphBMode, morphBAmount, morphBShift, sB, originalPhase);
                 tp = applyPhaseWarp(tp, morphCMode, morphCAmount, morphCShift, sC, originalPhase);
 
-                tp -= std::floor(tp); // ★修正: 最終ラップ
-                if (!std::isfinite(tp)) tp = 0.0f; // ★修正: NaNが伝播した場合はゼロクリア
+                tp -= std::floor(tp);
+                if (!std::isfinite(tp)) tp = 0.0f;
 
                 float fPos = tp * set->frameSize; int pos = (int)fPos; float frac = fPos - (float)pos;
                 auto* p0 = set->levels[lvl0].getReadPointer(0); auto* p1 = set->levels[lvl0 + 1].getReadPointer(0);
@@ -323,7 +343,7 @@ public:
 
                 vAmp.set(i, oscOn ? val * amp[b].get(i) : 0.0f);
                 float pNext = p.get(i) + step;
-                pNext -= std::floor(pNext); // ★修正
+                pNext -= std::floor(pNext);
                 nextP.set(i, pNext);
             }
             outL_simd += vAmp * panL[b]; outR_simd += vAmp * panR[b]; phases[b] = nextP;
@@ -333,7 +353,7 @@ public:
 
         if (subOn && subVolume > 0.001f) {
             subPhase += (baseFreq * std::pow(2.0f, subPitchOffset * 0.083333f)) / (float)sampleRate;
-            subPhase -= std::floor(subPhase); // ★修正
+            subPhase -= std::floor(subPhase);
             float rs = 0.0f;
             switch (subWaveform) {
             case 0: rs = std::sin(subPhase * juce::MathConstants<float>::twoPi); break;
@@ -439,7 +459,6 @@ private:
         return ((c3 * t + c2) * t + c1) * t + y1;
     }
 
-    // ★修正: マイナスのインデックスを絶対に防ぐ安全なモジュロ演算へ書き換え
     inline float getHermiteSample(const float* ptr, size_t bOff, int fs, int pos, float t) const {
         int p0 = ((pos - 1) % fs + fs) % fs;
         int p1 = (pos % fs + fs) % fs;

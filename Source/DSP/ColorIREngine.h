@@ -81,7 +81,7 @@ private:
     double sampleRate = 44100.0;
     float depth = 1.0f, upwardAmount = 0.5f, downwardAmount = 0.5f, outGainLinear = 1.0f;
     float attackMs = 10.0f, releaseMs = 100.0f;
-    float envLowL, envLowR, envMidL, envMidR, envHighL, envHighR;
+    float envLowL = 1.0f, envLowR = 1.0f, envMidL = 1.0f, envMidR = 1.0f, envHighL = 1.0f, envHighR = 1.0f;
 
     float calculateGain(float inputAbs, float& envState, int bandIndex)
     {
@@ -101,7 +101,7 @@ private:
         }
 
         float targetGain = juce::Decibels::decibelsToGain(targetDb - inputDb);
-        float alpha = (targetGain < envState) ? std::exp(-1.0f / (sampleRate * attackMs * 0.001f)) : std::exp(-1.0f / (sampleRate * releaseMs * 0.001f));
+        float alpha = (targetGain < envState) ? std::exp(-1.0f / static_cast<float>(sampleRate * attackMs * 0.001)) : std::exp(-1.0f / static_cast<float>(sampleRate * releaseMs * 0.001));
         envState = alpha * envState + (1.0f - alpha) * targetGain;
 
         return envState;
@@ -120,7 +120,7 @@ public:
         currentWave = wave; currentMode = mode;
         currentOctave = (octIdx + 2) * 12;
         targetLevel = level;
-        samplesPerStep = (int)(sampleRate / std::max(1.0f, speedHz));
+        samplesPerStep = (int)(sampleRate / std::max(1.0, static_cast<double>(speedHz)));
     }
 
     void updateChord(const std::vector<int>& learnedNotes) {
@@ -152,23 +152,19 @@ public:
 
             int note = baseNote + currentOctave + intervals[currentStepIndex];
             float freq = (float)juce::MidiMessage::getMidiNoteInHertz(note);
-            float inc = freq / (float)sampleRate;
+            float inc = freq / static_cast<float>(sampleRate);
 
             float sample = generateOscillator(oscPhase, inc, currentWave);
             oscPhase += inc; if (oscPhase >= 1.0f) oscPhase -= 1.0f;
 
-            float env = std::max(0.0f, 1.0f - (envPhase / (float)(samplesPerStep)));
+            float env = std::max(0.0f, 1.0f - (envPhase / static_cast<float>(samplesPerStep)));
             env = std::pow(env, 4.0f);
             envPhase += 1.0f;
 
             currentLevel = currentLevel * 0.999f + targetLevel * 0.001f;
 
-            // ★修正: レベルカーブを2乗にして微小値の急激な立ち上がりを防ぎ、波形ごとの音量差を補正
-            float levelCurve = std::pow(currentLevel, 2.0f);
-            float waveGain = (currentWave >= 3) ? 1.4f : ((currentWave == 0) ? 1.0f : 0.8f);
-
-            // ★修正: ベース係数を下げて、OTTに突っ込んだ時の爆音化を防ぐ
-            float val = sample * env * levelCurve * waveGain * 0.12f * mainAmpEnvBuffer[i];
+            // ★ オリジナルの計算式に完全ロールバック
+            float val = sample * env * currentLevel * 0.24f * mainAmpEnvBuffer[i];
 
             outL[i] += val; outR[i] += val;
             sampleCounter++;
@@ -204,7 +200,7 @@ private:
             }
         }
         else if (currentMode == 3) { // Random
-            currentStepIndex = juce::Random::getSystemRandom().nextInt(intervals.size());
+            currentStepIndex = juce::Random::getSystemRandom().nextInt((int)intervals.size());
         }
     }
 
@@ -216,16 +212,19 @@ private:
 
         if (wave == 0) { out = std::sin(pPi); }
         else if (wave == 1) {
-            for (int h = 1; h <= maxHarmonic; ++h) out += std::sin(pPi * h) / (float)h;
+            for (int h = 1; h <= maxHarmonic; ++h) out += std::sin(pPi * static_cast<float>(h)) / static_cast<float>(h);
             out *= 0.6366f;
         }
         else if (wave == 2) {
-            for (int h = 1; h <= maxHarmonic; h += 2) out += std::sin(pPi * h) / (float)h;
+            for (int h = 1; h <= maxHarmonic; h += 2) out += std::sin(pPi * static_cast<float>(h)) / static_cast<float>(h);
             out *= 1.273f;
         }
         else if (wave == 3 || wave == 4) {
             float duty = (wave == 3) ? 0.25f : 0.125f;
-            for (int h = 1; h <= maxHarmonic; ++h) out += std::sin(h * duty * juce::MathConstants<float>::pi) * std::cos(pPi * h) / (float)h;
+            for (int h = 1; h <= maxHarmonic; ++h) {
+                float hf = static_cast<float>(h);
+                out += std::sin(hf * duty * juce::MathConstants<float>::pi) * std::cos(pPi * hf) / hf;
+            }
             out *= 1.273f;
         }
         return out;
@@ -242,8 +241,12 @@ public:
 
     ColorIREngine()
     {
-        convEngineA.loadImpulseResponse(juce::AudioBuffer<float>(2, 256), 44100.0, juce::dsp::Convolution::Stereo::yes, juce::dsp::Convolution::Trim::no, juce::dsp::Convolution::Normalise::no);
-        convEngineB.loadImpulseResponse(juce::AudioBuffer<float>(2, 256), 44100.0, juce::dsp::Convolution::Stereo::yes, juce::dsp::Convolution::Trim::no, juce::dsp::Convolution::Normalise::no);
+        juce::AudioBuffer<float> emptyA(2, 256); emptyA.clear();
+        juce::AudioBuffer<float> emptyB(2, 256); emptyB.clear();
+
+        convEngineA.loadImpulseResponse(std::move(emptyA), 44100.0, juce::dsp::Convolution::Stereo::yes, juce::dsp::Convolution::Trim::no, juce::dsp::Convolution::Normalise::no);
+        convEngineB.loadImpulseResponse(std::move(emptyB), 44100.0, juce::dsp::Convolution::Stereo::yes, juce::dsp::Convolution::Trim::no, juce::dsp::Convolution::Normalise::no);
+
         preFilterL.setType(juce::dsp::StateVariableTPTFilterType::highpass); preFilterR.setType(juce::dsp::StateVariableTPTFilterType::highpass);
         postFilterL.setType(juce::dsp::StateVariableTPTFilterType::highpass); postFilterR.setType(juce::dsp::StateVariableTPTFilterType::highpass);
     }
@@ -294,14 +297,13 @@ public:
         }
 
         std::sort(currentNotes.begin(), currentNotes.end());
-        sparkleArp.updateChord(currentNotes); // Arpは相対的なので元のノートを使用
+        sparkleArp.updateChord(currentNotes);
 
-        // ★ オート・オクターブ・シフト: どんな位置で弾いても最適な黄金音域（C5〜B5）でIRを生成
         std::vector<int> optimizedNotes;
         int root = currentNotes[0];
-        int shift = ((root % 12) + 60) - root; // C5(72)を基準にピッチクラスを維持してシフト
+        int shift = ((root % 12) + 60) - root;
         for (int note : currentNotes) {
-            optimizedNotes.push_back(std::clamp(note + shift, 0, 127)); // MIDI範囲外エラーを防止
+            optimizedNotes.push_back(std::clamp(note + shift, 0, 127));
         }
 
         const int myJobId = ++irGenJobId;
@@ -316,29 +318,25 @@ public:
 
             juce::AudioBuffer<float> tempIR(2, numSamples); tempIR.clear();
             std::vector<float> phases(optimizedNotes.size(), 0.0f), incs(optimizedNotes.size(), 0.0f);
-            auto& random = juce::Random::getSystemRandom();
-
-            float baseFreq = (float)juce::MidiMessage::getMidiNoteInHertz(optimizedNotes[0]);
 
             for (size_t n = 0; n < optimizedNotes.size(); ++n) {
                 float freq = (float)juce::MidiMessage::getMidiNoteInHertz(optimizedNotes[n]);
                 incs[n] = freq / (float)sr;
-                phases[n] = 0.0f; // ★ ゼロ位相完全同期
+                phases[n] = 0.0f;
             }
 
-            float atkSamples = std::max(1.0f, (attackMs / 1000.0f) * (float)sr);
-            float decSamples = (actualDecayMs / 1000.0f) * (float)sr;
+            float atkSamples = std::max(1.0f, (attackMs / 1000.0f) * static_cast<float>(sr));
+            float decSamples = (actualDecayMs / 1000.0f) * static_cast<float>(sr);
             auto* outL = tempIR.getWritePointer(0); auto* outR = tempIR.getWritePointer(1);
-            float norm = 1.0f / (float)optimizedNotes.size();
+            float norm = 1.0f / static_cast<float>(optimizedNotes.size());
 
             for (int i = 0; i < numSamples; ++i) {
                 if (myJobId != irGenJobId.load()) return;
 
-                float timeRatio = (float)i / (float)numSamples;
+                float timeRatio = static_cast<float>(i) / static_cast<float>(numSamples);
                 float sampleL = 0.0f, sampleR = 0.0f;
 
                 if (irType == 0) {
-                    // Type 0: Crystal Saw
                     for (size_t n = 0; n < optimizedNotes.size(); ++n) {
                         float phL = phases[n];
                         float phR = std::fmod(phases[n] + getPhaseOffset(n, 1), 1.0f);
@@ -360,7 +358,6 @@ public:
                     sampleR *= norm * 0.75f;
                 }
                 else if (irType == 1) {
-                    // Type 1: Shimmer PWM
                     float duty = 0.5f - 0.2f * timeRatio;
                     for (size_t n = 0; n < optimizedNotes.size(); ++n) {
                         float phL = phases[n];
@@ -385,7 +382,6 @@ public:
                     sampleR *= norm;
                 }
                 else if (irType == 2) {
-                    // Type 2: Harmonic Bell
                     float modDepth = 1.5f * (1.0f - timeRatio * 0.7f);
                     for (size_t n = 0; n < optimizedNotes.size(); ++n) {
                         float phL = phases[n];
@@ -408,7 +404,6 @@ public:
                     sampleR *= norm * 0.55f;
                 }
                 else if (irType == 3) {
-                    // Type 3: Stacked Chord Shimmer
                     for (size_t n = 0; n < optimizedNotes.size(); ++n) {
                         float phL = phases[n];
                         float phR = std::fmod(phases[n] + getPhaseOffset(n, 1), 1.0f);
@@ -441,7 +436,6 @@ public:
                     sampleR *= norm * 0.5f;
                 }
                 else if (irType == 4) {
-                    // Type 4: Crystal Pluck
                     for (size_t n = 0; n < optimizedNotes.size(); ++n) {
                         float phL = phases[n];
                         float phR = std::fmod(phases[n] + getPhaseOffset(n, 1), 1.0f);
@@ -450,10 +444,11 @@ public:
 
                         float valL = 0.0f, valR = 0.0f;
                         for (int h = 1; h <= 8; ++h) {
-                            float harmonicDecay = std::exp(-(float)(h * h) * timeRatio * 3.0f);
-                            float amplitude = 1.0f / (float)h * harmonicDecay;
-                            valL += std::sin(pPiL * (float)h) * amplitude;
-                            valR += std::sin(pPiR * (float)h) * amplitude;
+                            float hf = static_cast<float>(h);
+                            float harmonicDecay = std::exp(-(hf * hf) * timeRatio * 3.0f);
+                            float amplitude = 1.0f / hf * harmonicDecay;
+                            valL += std::sin(pPiL * hf) * amplitude;
+                            valR += std::sin(pPiR * hf) * amplitude;
                         }
 
                         sampleL += valL;
@@ -465,16 +460,15 @@ public:
                     sampleR *= norm * 0.6f;
                 }
 
-                // 出力段（ステレオ化・クリッピング・エンベロープ）
                 float clippedL = std::tanh(sampleL * 4.0f);
                 float clippedR = std::tanh(sampleR * 4.0f);
 
-                float atkFade = (i < (int)atkSamples) ? ((float)i / atkSamples) : 1.0f;
-                float decFade = (i < (int)atkSamples) ? 1.0f : std::pow(std::max(0.0f, 1.0f - ((float)(i - (int)atkSamples) / decSamples)), 4.0f);
+                float atkFade = (i < (int)atkSamples) ? (static_cast<float>(i) / atkSamples) : 1.0f;
+                float decFade = (i < (int)atkSamples) ? 1.0f : std::pow(std::max(0.0f, 1.0f - (static_cast<float>(i - (int)atkSamples) / decSamples)), 4.0f);
 
-                // ★修正: IRの生成音量ゲインを調整
-                outL[i] = clippedL * atkFade * decFade * 0.06f;
-                outR[i] = clippedR * atkFade * decFade * 0.06f;
+                // ★ オリジナルの計算式に完全ロールバック
+                outL[i] = clippedL * atkFade * decFade * 0.025f;
+                outR[i] = clippedR * atkFade * decFade * 0.025f;
             }
 
             if (activeEngineIsA.load()) convEngineB.loadImpulseResponse(std::move(tempIR), sr, juce::dsp::Convolution::Stereo::yes, juce::dsp::Convolution::Trim::no, juce::dsp::Convolution::Normalise::no);
@@ -527,7 +521,7 @@ public:
         auto* outL = buffer.getWritePointer(0); auto* outR = buffer.getWritePointer(1);
         auto* wBL = wetBufferB.getReadPointer(0); auto* wBR = wetBufferB.getReadPointer(1);
 
-        float fadeInc = 1.0f / (float)(currentSampleRate * 0.05);
+        float fadeInc = 1.0f / static_cast<float>(currentSampleRate * 0.05);
         for (int i = 0; i < numSamples; ++i) {
             if (fadeVolA < fadeTargetA) fadeVolA = std::min(fadeVolA + fadeInc, fadeTargetA); else if (fadeVolA > fadeTargetA) fadeVolA = std::max(fadeVolA - fadeInc, fadeTargetA);
             if (fadeVolB < fadeTargetB) fadeVolB = std::min(fadeVolB + fadeInc, fadeTargetB); else if (fadeVolB > fadeTargetB) fadeVolB = std::max(fadeVolB - fadeInc, fadeTargetB);
@@ -576,7 +570,7 @@ private:
     static inline float getPhaseOffset(size_t noteIndex, int channel)
     {
         const float spread = 0.07f;
-        float base = (float)noteIndex * spread;
+        float base = static_cast<float>(noteIndex) * spread;
         return (channel == 0) ? base : (1.0f - base);
     }
 

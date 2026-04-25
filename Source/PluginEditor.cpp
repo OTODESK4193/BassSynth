@@ -34,8 +34,9 @@ static void setupCombo(juce::ComboBox& c, juce::Label& l, const char* txt, juce:
 // ==============================================================================
 // MSEG Editor Component (Canvas) Implementation
 // ==============================================================================
-MsegEditorComponent::MsegEditorComponent(Mseg& engine, const MsegState& initialState)
-    : msegEngine(engine), state(initialState) {
+// ★ 修正: MsegStateを「参照」として受け取り、初期化リストで紐付ける
+MsegEditorComponent::MsegEditorComponent(Mseg& engine, MsegState& linkedState)
+    : msegEngine(engine), state(linkedState) {
 }
 
 float MsegEditorComponent::getXPos(float x) const { return 10.0f + x * (getWidth() - 20.0f); }
@@ -50,6 +51,11 @@ int MsegEditorComponent::hitTestNode(const juce::Point<float>& pos) const {
         if (pos.getDistanceFrom(juce::Point<float>(nx, ny)) < 8.0f) return i;
     }
     return -1;
+}
+
+void MsegEditorComponent::loadState(const MsegState& newState) {
+    state = newState;
+    repaint();
 }
 
 void MsegEditorComponent::updateDSP() {
@@ -171,6 +177,11 @@ MsegTab::MsegTab(LiquidDreamAudioProcessor& p, juce::AudioProcessorValueTreeStat
         sliderAtts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, pfx + "amt", msegs[i].amt));
         btnAtts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(apvts, pfx + "sync", msegs[i].sync));
     }
+}
+
+void MsegTab::updateFromProcessor() {
+    msegs[0].editor->loadState(processor.msegStates[0]);
+    msegs[1].editor->loadState(processor.msegStates[1]);
 }
 
 void MsegTab::paint(juce::Graphics& g) {
@@ -517,7 +528,6 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     addAndMakeVisible(openBrowserButton); addAndMakeVisible(prevWaveButton);
     addAndMakeVisible(nextWaveButton); addAndMakeVisible(rndWaveButton);
 
-    // ★ 表示切替ボタンとColor DSPオンオフを配置
     addAndMakeVisible(viewWaveBtn); addAndMakeVisible(viewColorBtn); addAndMakeVisible(colorOnBtn);
     viewWaveBtn.onClick = [this] { isColorPanelVisible = false; resized(); };
     viewColorBtn.onClick = [this] { isColorPanelVisible = true; resized(); };
@@ -584,7 +594,6 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     setupS(glideSlider, glideLabel, "Glide", this); setupS(pitchSlider, pitchLabel, "Pitch", this); setupS(gainSlider, gainLabel, "Gain", this);
     addAndMakeVisible(legatoButton);
 
-    // ★ Initプリセット動作とLoadボタン削除の対応
     addAndMakeVisible(presetCombo); presetCombo.setJustificationType(juce::Justification::centred);
     addAndMakeVisible(savePresetBtn);
     savePresetBtn.setColour(juce::TextButton::buttonColourId, juce::Colour::fromString("FF2A2A2A"));
@@ -592,13 +601,13 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     scanPresets();
     presetCombo.onChange = [this]() {
         int id = presetCombo.getSelectedId();
-        if (id == 1) { // Init
+        if (id == 1) {
             for (auto* p : audioProcessor.getParameters()) {
                 if (auto* floatParam = dynamic_cast<juce::AudioProcessorParameterWithID*>(p)) {
                     floatParam->setValueNotifyingHost(floatParam->getDefaultValue());
                 }
             }
-            audioProcessor.loadFactoryWavetable(-1);
+            audioProcessor.loadFactoryWavetable(0);
         }
         else if (id > 1) {
             int index = id - 2;
@@ -632,7 +641,7 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     auto att = [&](juce::Slider& s, const juce::String& id) { attachments.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, id, s)); };
 
     oscOnAtt = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(apvts, "osc_on", oscOnButton);
-    colorOnAtt = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(apvts, "color_on", colorOnBtn); // ★
+    colorOnAtt = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(apvts, "color_on", colorOnBtn);
     att(wtLevelSlider, "osc_level"); att(wtPosSlider, "osc_pos"); att(oscPitchSlider, "osc_pitch");
     att(pitchDecayAmtSlider, "osc_pdecay_amt"); att(pitchDecayTimeSlider, "osc_pdecay_time");
     att(driftSlider, "osc_drift"); att(uniCountSlider, "osc_uni"); att(detuneSlider, "osc_detune");
@@ -669,9 +678,13 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     openBrowserButton.onClick = [this] { browser.setVisible(!browser.isVisible()); if (browser.isVisible()) browser.toFront(true); };
     prevWaveButton.onClick = [this] { browser.selectPrev(); }; nextWaveButton.onClick = [this] { browser.selectNext(); };
     rndWaveButton.onClick = [this] { browser.selectRandom(); };
+
     browser.onCustomFileSelected = [this](const juce::File& f) { audioProcessor.loadCustomWavetable(f); };
     browser.onFactoryIndexSelected = [this](int idx) { audioProcessor.loadFactoryWavetable(idx); };
     browser.onUserFoldersChanged = [this](const juce::StringArray& folders) { audioProcessor.setUserFolders(folders); };
+    browser.onFavoritesChanged = [this](const juce::StringArray& favs) { audioProcessor.setFavorites(favs); };
+
+    browser.setFavorites(audioProcessor.getFavorites());
     browser.loadUserFolders(audioProcessor.getUserFolders());
     browser.onCloseRequested = [this] { browser.setVisible(false); };
 
@@ -717,6 +730,22 @@ void LiquidDreamAudioProcessorEditor::timerCallback() {
     blinkCounter = (blinkCounter + 1) % 20;
     auto& apvts = audioProcessor.getAPVTS();
 
+    if (audioProcessor.presetLoadedFlag.exchange(false)) {
+        msegTab.updateFromProcessor();
+        browser.setFavorites(audioProcessor.getFavorites());
+        browser.loadUserFolders(audioProcessor.getUserFolders());
+
+        if (audioProcessor.isCustomWavetableLoaded()) {
+            browser.onCustomFileSelected = nullptr;
+            browser.onCustomFileSelected = [this](const juce::File& f) { audioProcessor.loadCustomWavetable(f); };
+        }
+    }
+
+    // ★ 追加: RNDボタンやカスタム波形読み込み時の強制再描画
+    if (audioProcessor.forceScopeUpdate.exchange(false)) {
+        wtChanged = true;
+    }
+
     static float lastWave = -999, lastPos = -999, lastFm = -999;
     static float lastMa = -999, lastMb = -999, lastMc = -999;
     static float lastSa = -999, lastSb = -999, lastSc = -999;
@@ -728,7 +757,6 @@ void LiquidDreamAudioProcessorEditor::timerCallback() {
     float curModeB = apvts.getRawParameterValue("osc_morph_b_mode")->load();
     float curModeC = apvts.getRawParameterValue("osc_morph_c_mode")->load();
 
-    // ★ ModeがNone(0)の時は無駄な再描画判定を防ぐ
     float curMa = (curModeA > 0.5f) ? apvts.getRawParameterValue("osc_morph_a_amt")->load() : 0.0f;
     float curSa = (curModeA > 0.5f) ? apvts.getRawParameterValue("osc_morph_a_shift")->load() : 0.0f;
     float curMb = (curModeB > 0.5f) ? apvts.getRawParameterValue("osc_morph_b_amt")->load() : 0.0f;
@@ -760,7 +788,6 @@ void LiquidDreamAudioProcessorEditor::timerCallback() {
         if (srcIdx > 0 && destIdx > 0 && destIdx < 14) { modDepths[destIdx] += amt; }
     }
 
-    // ★ モジュレーション時の動的再描画
     bool isModulated = (modDepths[1] > 0.001f || modDepths[2] > 0.001f || modDepths[3] > 0.001f || modDepths[4] > 0.001f ||
         modDepths[5] > 0.001f || modDepths[6] > 0.001f || modDepths[7] > 0.001f || modDepths[8] > 0.001f);
 
@@ -804,9 +831,8 @@ void LiquidDreamAudioProcessorEditor::resized()
     nextWaveButton.setBounds(navRect.removeFromLeft(25)); navRect.removeFromLeft(5);
     rndWaveButton.setBounds(navRect.removeFromLeft(40)); navRect.removeFromLeft(5);
 
-    // ★表示切替ボタン配置
     viewWaveBtn.setBounds(navRect.removeFromLeft(50)); navRect.removeFromLeft(5);
-    viewColorBtn.setBounds(navRect.removeFromLeft(50)); navRect.removeFromLeft(5);
+    viewColorBtn.setBounds(navRect.removeFromLeft(40)); navRect.removeFromLeft(5);
     colorOnBtn.setBounds(navRect.removeFromLeft(35));
     leftArea.removeFromTop(5);
 

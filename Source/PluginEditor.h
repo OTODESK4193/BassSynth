@@ -6,10 +6,64 @@
 #include "PluginProcessor.h"
 #include "UI/AbletonLookAndFeel.h"
 #include "UI/WavetableBrowser.h"
-#include "UI/DualScopeComponent.h"
-#include "Logic/Mseg.h"
 
-// --- Custom Tab Components for Modulation ---
+class DualScopeComponent : public juce::Component, public juce::Timer
+{
+public:
+    DualScopeComponent(float* outDataPtr) : outputData(outDataPtr) {
+        sourceWave.fill(0.0f);
+        startTimerHz(60);
+    }
+
+    void updateStaticWave(const float* data, int size) {
+        if (size <= 0) return;
+        for (int i = 0; i < 512; ++i) {
+            sourceWave[i] = data[juce::jlimit(0, size - 1, (i * size) / 512)];
+        }
+    }
+
+    void paint(juce::Graphics& g) override {
+        g.fillAll(juce::Colour::fromString("FF121212"));
+        auto area = getLocalBounds();
+
+        auto top = area.removeFromTop(area.getHeight() / 2).reduced(5);
+        drawWave(g, top, sourceWave.data(), 512, "SOURCE (Wavetable Shape)", juce::Colour::fromString("FF00FFCC"));
+
+        auto bottom = area.reduced(5);
+        drawWave(g, bottom, outputData, 512, "OUTPUT (Dynamic Stream)", juce::Colour::fromString("FFFF764D"));
+    }
+
+    void timerCallback() override { repaint(); }
+private:
+    void drawWave(juce::Graphics& g, juce::Rectangle<int> r, const float* data, int size, const char* label, juce::Colour col) {
+        g.setColour(juce::Colours::black.withAlpha(0.6f));
+        g.fillRoundedRectangle(r.toFloat(), 4.0f);
+
+        g.saveState();
+        g.reduceClipRegion(r);
+
+        g.setColour(col);
+        juce::Path p;
+        float xStep = (float)r.getWidth() / size;
+        for (int i = 0; i < size; ++i) {
+            float x = r.getX() + i * xStep;
+            float val = juce::jlimit(-1.1f, 1.1f, data[i]);
+            float y = r.getCentreY() - (val * r.getHeight() * 0.45f);
+            if (i == 0) p.startNewSubPath(x, y);
+            else p.lineTo(x, y);
+        }
+        g.strokePath(p, juce::PathStrokeType(1.5f));
+        g.restoreState();
+
+        g.setColour(juce::Colours::white.withAlpha(0.5f));
+        g.setFont(10.0f);
+        g.drawText(label, r.reduced(5), juce::Justification::topRight);
+    }
+
+    std::array<float, 512> sourceWave;
+    float* outputData;
+};
+
 class LfoTab : public juce::Component {
 public:
     LfoTab(juce::AudioProcessorValueTreeState& vts);
@@ -32,16 +86,18 @@ private:
 
 class MsegEditorComponent : public juce::Component {
 public:
-    MsegEditorComponent(Mseg& engine, const MsegState& initialState);
+    // ★ 修正: MsegStateを「参照渡し」で受け取ることでプロセッサ本体のデータを直接編集する
+    MsegEditorComponent(Mseg& engine, MsegState& linkedState);
     void paint(juce::Graphics& g) override;
     void mouseDown(const juce::MouseEvent& e) override;
     void mouseDrag(const juce::MouseEvent& e) override;
     void mouseUp(const juce::MouseEvent& e) override;
     void mouseDoubleClick(const juce::MouseEvent& e) override;
+    void loadState(const MsegState& newState);
 
 private:
     Mseg& msegEngine;
-    MsegState state;
+    MsegState& state; // ★ 修正: 参照保持
     int draggingNodeIndex = -1;
     bool draggingCurve = false;
 
@@ -58,6 +114,7 @@ public:
     MsegTab(LiquidDreamAudioProcessor& p, juce::AudioProcessorValueTreeState& vts);
     void paint(juce::Graphics& g) override;
     void resized() override;
+    void updateFromProcessor();
 private:
     LiquidDreamAudioProcessor& processor;
     juce::AudioProcessorValueTreeState& apvts;
@@ -109,7 +166,6 @@ private:
     std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment>> comboAtts;
 };
 
-// --- ColorIR Vertical Rack Panel ---
 class ColorIrPanel : public juce::Component {
 public:
     ColorIrPanel(LiquidDreamAudioProcessor& p);
@@ -146,7 +202,6 @@ private:
     std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment>> comboAtts;
 };
 
-// --- Main Editor Class ---
 class LiquidDreamAudioProcessorEditor : public juce::AudioProcessorEditor, public juce::Timer
 {
 public:
@@ -163,22 +218,18 @@ private:
     DualScopeComponent dualScope;
     WavetableBrowser browser;
 
-    // Nav
     juce::TextButton openBrowserButton{ "BROWSE" };
     juce::TextButton prevWaveButton{ juce::String::fromUTF8("\xe2\x97\x80") };
     juce::TextButton nextWaveButton{ juce::String::fromUTF8("\xe2\x96\xb6") };
     juce::TextButton rndWaveButton{ "RND" };
 
-    // ★修正: パネル表示切替ボタンとColor DSPオンオフを分離
     juce::ToggleButton colorOnBtn{ "ON" };
     juce::TextButton viewWaveBtn{ "SCOPE" };
-    juce::TextButton viewColorBtn{ "COLOR" };
+    juce::TextButton viewColorBtn{ "COL" };
 
-    // Overlays & Groups
     ColorIrPanel colorPanel;
     juce::GroupComponent oscGroup, subGroup, shaperGroup, filterGroup, ampEnvGroup, controlGroup, presetGroup;
 
-    // Osc Params
     juce::ToggleButton oscOnButton{ "ON" };
     juce::Slider wtLevelSlider, wtPosSlider, oscPitchSlider, uniCountSlider, detuneSlider, widthSlider, driftSlider;
     juce::Label  wtLevelLabel, wtPosLabel, oscPitchLabel, uniCountLabel, detuneLabel, widthLabel, driftLabel;
@@ -186,7 +237,6 @@ private:
     juce::Label  pitchDecayAmtLabel, pitchDecayTimeLabel, fmAmtLabel;
     juce::ComboBox fmWaveCombo; juce::Label fmWaveLabel;
 
-    // Morph Params
     juce::ComboBox morphAModeCombo, morphBModeCombo, morphCModeCombo;
     juce::Label    morphAModeLabel, morphBModeLabel, morphCModeLabel;
     juce::Slider   morphAAmtSlider, morphBAmtSlider, morphCAmtSlider;
@@ -194,54 +244,44 @@ private:
     juce::Slider   morphAShiftSlider, morphBShiftSlider, morphCShiftSlider;
     juce::Label    morphAShiftLabel, morphBShiftLabel, morphCShiftLabel;
 
-    // Sub Osc
     juce::ToggleButton subOnButton{ "ON" };
     juce::ComboBox subWaveCombo; juce::Label subVolLabel;
     juce::Slider subVolSlider, subPitchSlider; juce::Label subPitchLabel;
 
-    // Shaper
     juce::Slider distDriveSlider, shpAmtSlider, bitSlider, rateSlider;
     juce::Label  distDriveLabel, shpAmtLabel, bitLabel, rateLabel;
 
-    // Dual Filter UI
     juce::TextButton fltABtn{ "A" }, fltBBtn{ "B" };
     juce::ComboBox fltATypeCombo, fltBTypeCombo, fltRoutingCombo;
     juce::Slider fltACutoffSlider, fltBCutoffSlider, fltAResSlider, fltBResSlider;
     juce::Label  fltACutoffLabel, fltBCutoffLabel, fltAResLabel, fltBResLabel;
     juce::Slider fltMixSlider; juce::Label fltMixLabel;
 
-    // A/B 独立 Envelope Amount
     juce::Slider fltAEnvAmtSlider, fltBEnvAmtSlider;
     juce::Label  fltAEnvAmtLabel, fltBEnvAmtLabel;
 
-    // A/B 独立 ADSR
     juce::Slider fltAAtkSlider, fltADecSlider, fltASusSlider, fltARelSlider;
     juce::Label  fltAAtkLabel, fltADecLabel, fltASusLabel, fltARelLabel;
     juce::Slider fltBAtkSlider, fltBDecSlider, fltBSusSlider, fltBRelSlider;
     juce::Label  fltBAtkLabel, fltBDecLabel, fltBSusLabel, fltBRelLabel;
 
-    // Amp Envelope
     juce::Slider ampAtkSlider, ampDecSlider, ampSusSlider, ampRelSlider;
     juce::Label  ampAtkLabel, ampDecLabel, ampSusLabel, ampRelLabel;
 
-    // Performance
     juce::ToggleButton legatoButton{ "LEGATO" };
     juce::Slider glideSlider, pitchSlider, gainSlider;
     juce::Label  glideLabel, pitchLabel, gainLabel;
 
-    // Preset UI
     juce::ComboBox presetCombo;
     juce::TextButton savePresetBtn{ "Save" };
     juce::Array<juce::File> presetFiles;
 
-    // Modulation Tabs
     juce::TabbedComponent modTabs;
     LfoTab lfoTab;
     MsegTab msegTab;
     ModEnvTab modEnvTab;
     MatrixTab matrixTab;
 
-    // Attachments
     std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>> attachments;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> oscOnAtt, subOnAtt, legatoAtt, colorOnAtt;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> subWaveAtt, fmWaveAtt, morphAAtt, morphBAtt, morphCAtt;
@@ -249,7 +289,7 @@ private:
 
     int blinkCounter = 0;
     bool wtChanged = false;
-    bool isColorPanelVisible = false; // ★追加: パネルの表示状態管理
+    bool isColorPanelVisible = false;
 
     void updateFilterUI();
 

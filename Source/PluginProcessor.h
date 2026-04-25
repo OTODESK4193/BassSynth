@@ -14,8 +14,7 @@
 #include "Logic/MonoVoiceManager.h"
 #include "Logic/AdsrEnvelope.h"
 #include "Logic/Lfo.h"
-#include "Logic/Mseg.h" // ★ 追加: MSEGコア
-#include "Generated/WavetableData_Generated.h"
+#include "Logic/Mseg.h"
 
 class LiquidDreamAudioProcessor : public juce::AudioProcessor
 {
@@ -69,12 +68,21 @@ public:
 
     void loadCustomWavetable(const juce::File& file);
     void loadFactoryWavetable(int index);
+
     void setUserFolders(const juce::StringArray& folders);
     juce::StringArray getUserFolders() const { return userWavetableFolders; }
 
-    // ★ 追加: GUI から MSEG データを取得・更新するための窓口
+    void setFavorites(const juce::StringArray& favs) { favoriteWavetables = favs; }
+    juce::StringArray getFavorites() const { return favoriteWavetables; }
+
     MsegState msegStates[2];
     Mseg& getMsegEngine(int index) { return msegs[index]; }
+
+    std::atomic<bool> presetLoadedFlag{ false };
+    std::atomic<bool> forceScopeUpdate{ false }; // ★ 追加: 波形強制更新フラグ
+    bool isCustomWavetableLoaded() const { return customWavetableLoaded.load(); }
+    juce::String getCustomWavetablePath() const { return currentCustomWavetablePath; }
+    int getFactoryIndex() const { return (int)pWave->load(); }
 
 private:
     juce::AudioProcessorValueTreeState apvts;
@@ -90,7 +98,7 @@ private:
     AdsrEnvelope ampEnv, filterEnvA, filterEnvB;
     std::array<AdsrEnvelope, 3> modEnvs;
     std::array<Lfo, 3> lfos;
-    std::array<Mseg, 2> msegs; // ★ 追加: 2基の MSEG
+    std::array<Mseg, 2> msegs;
 
     std::array<float, 512> outputScopeData;
     std::array<float, 512> tempScopeBuffer;
@@ -105,9 +113,9 @@ private:
 
     juce::String currentCustomWavetablePath;
     juce::StringArray userWavetableFolders;
+    juce::StringArray favoriteWavetables;
     std::atomic<bool> customWavetableLoaded{ false };
 
-    // Core Params
     std::atomic<float>* pOscOn = nullptr; std::atomic<float>* pWave = nullptr; std::atomic<float>* pPos = nullptr;
     std::atomic<float>* pOscLevel = nullptr; std::atomic<float>* pOscPitch = nullptr;
     std::atomic<float>* pPDecayAmt = nullptr; std::atomic<float>* pPDecayTime = nullptr;
@@ -143,8 +151,6 @@ private:
 
     std::array<std::atomic<float>*, 3> pModOn, pModAtk, pModDec, pModSus, pModRel, pModAmt;
     std::array<std::atomic<float>*, 3> pLfoOn, pLfoWave, pLfoSync, pLfoRate, pLfoBeat, pLfoAmt, pLfoTrig;
-
-    // ★ 追加: MSEG 用パラメータ
     std::array<std::atomic<float>*, 2> pMsegOn, pMsegSync, pMsegRate, pMsegBeat, pMsegAmt, pMsegTrig;
 
     std::array<std::atomic<float>*, 10> pMatrixSrc;
@@ -160,7 +166,6 @@ private:
     float lastOscFreq = -1.0f;
     int lastModeA = -1, lastModeB = -1, lastModeC = -1;
 
-    // ★ 追加: MSEG シリアライズ / デシリアライズ用関数
     juce::String serializeMsegState(const MsegState& state) {
         juce::String result;
         for (int i = 0; i < state.numPoints; ++i) {
