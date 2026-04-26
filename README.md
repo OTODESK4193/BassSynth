@@ -40,10 +40,9 @@
 
 ### For Users (Download)
 1. Download the latest release from the [Releases](https://github.com/yourusername/BassSynth/releases) page. 
-2. Move the `BassSynth.vst3` (Windows) or `BassSynth.component` (Mac) to your DAW's plugin folder.
+2. Move the `BassSynth.vst3` (Windows)  to your DAW's plugin folder.
    - **Windows VST3**: `C:\Program Files\Common Files\VST3`
-   - **macOS AU**: `/Library/Audio/Plug-Ins/Components`
-   - **macOS VST3**: `/Library/Audio/Plug-Ins/VST3`
+
 
 
 ---
