@@ -3,7 +3,7 @@
 
 **BassSynth** is a next-generation wavetable bass synthesizer plugin (VST3/AU) built with C++ and the JUCE framework. Designed for modern electronic music producers, it combines earth-shattering low-end with crystalline top-end textures, featuring an intuitive Ableton-style dark UI.
 
-<img src="Assets/screenshot.png" width="600">
+<img src="ScreenShots/Screenshot_1.png" width="600">
 
 👉 **[Watch the Demo Video on X (動作デモ動画はこちら！)]([https://x.com/kijyoumusic/**](https://x.com/kijyoumusic/status/2047948478392021324?s=20)）
 
