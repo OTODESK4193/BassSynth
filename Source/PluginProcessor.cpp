@@ -78,6 +78,21 @@ LiquidDreamAudioProcessor::LiquidDreamAudioProcessor()
 
     msegs[0].pushNewState(msegStates[0]);
     msegs[1].pushNewState(msegStates[1]);
+
+    // グローバル設定からのフォルダ復元
+    juce::PropertiesFile::Options options;
+    options.applicationName = "BassSynth";
+    options.filenameSuffix = ".settings";
+    options.osxLibrarySubFolder = "Application Support";
+    options.folderName = "LiquidDreamAudio";
+
+    juce::PropertiesFile propertiesFile(options);
+    juce::String foldersStr = propertiesFile.getValue("UserFolders", "");
+    if (foldersStr.isNotEmpty()) {
+        userWavetableFolders.clear();
+        userWavetableFolders.addTokens(foldersStr, "|", "");
+    }
+
 }
 
 LiquidDreamAudioProcessor::~LiquidDreamAudioProcessor() {}
@@ -235,6 +250,9 @@ void LiquidDreamAudioProcessor::getStateInformation(juce::MemoryBlock& destData)
         xml->setAttribute("mseg0_data", serializeMsegState(msegStates[0]));
         xml->setAttribute("mseg1_data", serializeMsegState(msegStates[1]));
 
+        // ★ 追加：選ばれたプリセットIDを保存
+        xml->setAttribute("SelectedPresetID", lastSelectedPresetID);
+
         copyXmlToBinary(*xml, destData);
     }
 }
@@ -286,6 +304,9 @@ void LiquidDreamAudioProcessor::setStateInformation(const void* data, int sizeIn
             colorEngine.setLearnState(ColorIREngine::LearnState::Idle);
         }
 
+        // ★ 追加：保存されていたプリセットIDを復元
+        lastSelectedPresetID = xmlState->getIntAttribute("SelectedPresetID", 1);
+
         presetLoadedFlag.store(true);
     }
 }
@@ -307,6 +328,16 @@ void LiquidDreamAudioProcessor::loadFactoryWavetable(int index) {
 
 void LiquidDreamAudioProcessor::setUserFolders(const juce::StringArray& folders) {
     userWavetableFolders = folders;
+
+    juce::PropertiesFile::Options options;
+    options.applicationName = "BassSynth";
+    options.filenameSuffix = ".settings";
+    options.osxLibrarySubFolder = "Application Support";
+    options.folderName = "LiquidDreamAudio";
+
+    juce::PropertiesFile propertiesFile(options);
+    propertiesFile.setValue("UserFolders", folders.joinIntoString("|"));
+    propertiesFile.saveIfNeeded();
 }
 
 void LiquidDreamAudioProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
@@ -352,7 +383,6 @@ void LiquidDreamAudioProcessor::prepareToPlay(double sampleRate, int samplesPerB
     smoothedPDecayTime.setCurrentAndTargetValue(pPDecayTime->load(std::memory_order_relaxed));
     smoothedDrift.setCurrentAndTargetValue(pDrift->load(std::memory_order_relaxed));
 
-    // ★ モジュレーションの内部スムージング（ノイズ対策用）の初期化
     modSourceStates.fill(0.0f);
 
     lastOscFreq = -1.0f;
@@ -476,15 +506,11 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
     auto* wtL = tempWavetableBuffer.getWritePointer(0); auto* wtR = tempWavetableBuffer.getWritePointer(1);
     float stft_aA = 0.0f, stft_sA = 0.0f, stft_aB = 0.0f, stft_sB = 0.0f, stft_aC = 0.0f, stft_sC = 0.0f;
 
-    // ★ 修正: モジュレーション出力にかける「3ミリ秒」のスムージング係数
     float modAlpha = std::exp(-1.0f / static_cast<float>(getSampleRate() * 0.003));
-
-    // ★ 修正: サンプルループを跨いで保持されるべき Matrix の変調量
     float destMods[23] = { 0.0f };
 
     for (int i = 0; i < numSamples; ++i) {
 
-        // ★ 修正: LFO Rateの変調を、LFOの次のサンプルを生成する「直前」に毎サンプル適用する
         for (int m = 0; m < 3; ++m) {
             float r = juce::jlimit(0.01f, 50.0f, smoothedLfoRates[m].getNextValue() + destMods[20 + m] * 25.0f);
             lfos[m].setParameters((int)pLfoWave[m]->load(), pLfoSync[m]->load() > 0.5f, r, (int)pLfoBeat[m]->load(), pLfoAmt[m]->load(), (int)pLfoTrig[m]->load());
@@ -502,12 +528,10 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
             (pMsegOn[1]->load(std::memory_order_relaxed) > 0.5f ? msegs[1].getNextSample(currentBpm) : 0.0f)
         };
 
-        // ★ 修正: Random 波形等の瞬間的な「パキッ」とした変化を丸めるスムージング処理
         for (int s = 1; s < 9; ++s) {
             modSourceStates[s] = modAlpha * modSourceStates[s] + (1.0f - modAlpha) * rawSources[s];
         }
 
-        // ★ 修正: スムージング済みの信号を使って Matrix を再計算する
         std::fill(std::begin(destMods), std::end(destMods), 0.0f);
         for (int slot = 0; slot < 10; ++slot) {
             int srcIdx = (int)pMatrixSrc[slot]->load(std::memory_order_relaxed);

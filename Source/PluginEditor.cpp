@@ -631,8 +631,16 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     savePresetBtn.setColour(juce::TextButton::buttonColourId, juce::Colour::fromString("FF2A2A2A"));
 
     scanPresets();
+
+    // ★ 追記：DAWから復元されたIDを画面のコンボボックスに反映させる
+    presetCombo.setSelectedId(audioProcessor.lastSelectedPresetID, juce::dontSendNotification);
+
     presetCombo.onChange = [this]() {
         int id = presetCombo.getSelectedId();
+
+        // ★ 追記：ユーザーが選んだプリセットIDをプロセッサに記憶させる（保存用）
+        audioProcessor.lastSelectedPresetID = id;
+
         if (id == 1) { // Init
             for (auto* p : audioProcessor.getParameters()) {
                 if (auto* floatParam = dynamic_cast<juce::AudioProcessorParameterWithID*>(p)) {

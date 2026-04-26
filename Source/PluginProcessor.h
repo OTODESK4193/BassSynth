@@ -85,6 +85,11 @@ public:
     juce::String getCustomWavetablePath() const { return currentCustomWavetablePath; }
     int getFactoryIndex() const { return (int)pWave->load(); }
 
+    // ==============================================================================
+    // ★ 追記箇所：現在選ばれているプリセットのIDを記憶する変数（初期値 1 = INIT）
+    int lastSelectedPresetID = 1;
+    // ==============================================================================
+
 private:
     juce::AudioProcessorValueTreeState apvts;
     juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
@@ -172,7 +177,6 @@ private:
     juce::SmoothedValue<float> smoothedColorMix;
     std::array<juce::SmoothedValue<float>, 3> smoothedLfoRates;
 
-    // ★ 追加: 各モジュレーター出力のノイズ除去（スムージング）用配列
     std::array<float, 9> modSourceStates = { 0.0f };
 
     float lastOscFreq = -1.0f;
