@@ -41,7 +41,7 @@
 
 ### 📖 User Manual
 For detailed instructions on all parameters and advanced synthesis techniques, please refer to the:
-👉 [**BassSynth Official User Manual (PDF)**](BassSynth_Officia_User_Manual.pdf)
+👉 [**BassSynth Official User Manual (PDF)**](BassSynth_User_Manual.pdf)
 
 ### For Users (Download)
 1. Download the latest release from the [Releases](https://github.com/OTODESK4193/BassSynth/releases) page. 
