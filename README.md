@@ -66,7 +66,7 @@ For commercial distribution without open-sourcing, a commercial JUCE license is 
 ---
 
 ## 👨‍💻 Credits
-- Developed by　OTODESK
+- Developed by　OTODESK　https://x.com/kijyoumusic
 - Built with [JUCE](https://juce.com/)
 - UI Inspired by modern digital workstations.
 
