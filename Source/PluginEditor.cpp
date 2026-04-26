@@ -309,7 +309,6 @@ MatrixTab::MatrixTab(juce::AudioProcessorValueTreeState& vts) : apvts(vts) {
     juce::StringArray sources = {
         "None", "MOD 1", "MOD 2", "MOD 3", "LFO 1", "LFO 2", "LFO 3", "MSEG 1", "MSEG 2"
     };
-    // ★ 修正: 追加されたDestinationリストを反映
     juce::StringArray dests = {
         "None", "WT: Position", "WT: FM Amt", "WT: MorphA Amt", "WT: MorphA Shf",
         "WT: MorphB Amt", "WT: MorphB Shf", "WT: MorphC Amt", "WT: MorphC Shf",
@@ -517,6 +516,9 @@ void ColorIrPanel::updateState(ColorIREngine::LearnState state, const juce::Stri
     }
 }
 
+// ==============================================================================
+// LiquidDreamAudioProcessorEditor
+// ==============================================================================
 LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudioProcessor& p)
     : AudioProcessorEditor(&p), audioProcessor(p),
     dualScope(p.getOutputScopePtr()), browser(p.getAPVTS()),
@@ -525,7 +527,6 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
 {
     setLookAndFeel(&abletonLnF);
 
-    // 1. 各ボタン・コンポーネントを画面に追加
     addAndMakeVisible(openBrowserButton);
     addAndMakeVisible(prevWaveButton);
     addAndMakeVisible(nextWaveButton);
@@ -548,7 +549,6 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
 
     addAndMakeVisible(oscOnButton);
 
-    // 2. スライダー・コンボボックスのセットアップ
     setupS(wtLevelSlider, wtLevelLabel, "Level", this);
     setupS(wtPosSlider, wtPosLabel, "Pos", this);
     setupS(oscPitchSlider, oscPitchLabel, "Pitch", this);
@@ -608,7 +608,6 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     setupS(fltBResSlider, fltBResLabel, "Reso", this);
     setupS(fltMixSlider, fltMixLabel, "Mix (Wet/B)", this);
 
-    // ★ 修正箇所：正しいラベル名（fltAEnvAmtLabel）に変更
     setupS(fltAEnvAmtSlider, fltAEnvAmtLabel, "EnvAmt", this);
     setupS(fltBEnvAmtSlider, fltBEnvAmtLabel, "EnvAmt", this);
 
@@ -624,7 +623,7 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     setupS(glideSlider, glideLabel, "Glide", this); setupS(pitchSlider, pitchLabel, "Pitch", this); setupS(gainSlider, gainLabel, "Gain", this);
     addAndMakeVisible(legatoButton);
 
-    // 3. プリセット関連
+    // ★ ここからプリセット部分 ★
     addAndMakeVisible(presetCombo);
     presetCombo.setJustificationType(juce::Justification::centred);
     addAndMakeVisible(savePresetBtn);
@@ -632,14 +631,26 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
 
     scanPresets();
 
-    // ★ 追記：DAWから復元されたIDを画面のコンボボックスに反映させる
-    presetCombo.setSelectedId(audioProcessor.lastSelectedPresetID, juce::dontSendNotification);
+    // ★ 追加：名前から一致するIDを探してセットするヘルパー
+    auto syncPresetCombo = [this]() {
+        bool found = false;
+        for (int i = 0; i < presetCombo.getNumItems(); ++i) {
+            if (presetCombo.getItemText(i) == audioProcessor.lastSelectedPresetName) {
+                presetCombo.setSelectedId(presetCombo.getItemId(i), juce::dontSendNotification);
+                found = true; break;
+            }
+        }
+        if (!found) presetCombo.setSelectedId(1, juce::dontSendNotification);
+        };
 
+    syncPresetCombo(); // 開いた瞬間に反映させる
+
+    presetCombo.onChange = nullptr;
     presetCombo.onChange = [this]() {
         int id = presetCombo.getSelectedId();
 
-        // ★ 追記：ユーザーが選んだプリセットIDをプロセッサに記憶させる（保存用）
-        audioProcessor.lastSelectedPresetID = id;
+        // ★ 変更：選択された「名前」をプロセッサに記憶させる
+        audioProcessor.lastSelectedPresetName = presetCombo.getText();
 
         if (id == 1) { // Init
             for (auto* p : audioProcessor.getParameters()) {
@@ -652,8 +663,12 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
         else if (id > 1) {
             int index = id - 2;
             if (juce::isPositiveAndBelow(index, (int)presetFiles.size())) {
-                juce::MemoryBlock mb; presetFiles[index].loadFileAsData(mb);
+                juce::MemoryBlock mb;
+                presetFiles[index].loadFileAsData(mb);
                 audioProcessor.setStateInformation(mb.getData(), (int)mb.getSize());
+
+                // ★ 読み込みによって名前がINITに上書きされるのを防ぐ
+                audioProcessor.lastSelectedPresetName = presetCombo.getText();
             }
         }
         };
@@ -668,16 +683,25 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
             auto file = fc.getResult();
             if (file != juce::File{}) {
                 if (!file.hasFileExtension("xml")) file = file.withFileExtension("xml");
-                juce::MemoryBlock mb; audioProcessor.getStateInformation(mb);
-                file.replaceWithData(mb.getData(), mb.getSize()); scanPresets();
+                juce::MemoryBlock mb;
+                audioProcessor.getStateInformation(mb);
+                file.replaceWithData(mb.getData(), mb.getSize());
+
+                // 新しいプリセットをスキャンしてリストを更新
+                scanPresets();
+
+                // 保存したファイルを選択状態にする
                 for (int i = 0; i < (int)presetFiles.size(); ++i) {
-                    if (presetFiles[i] == file) { presetCombo.setSelectedId(i + 2, juce::dontSendNotification); break; }
+                    if (presetFiles[i] == file) {
+                        presetCombo.setSelectedId(i + 2, juce::sendNotification);
+                        break;
+                    }
                 }
             }
             });
         };
 
-    // 4. APVTS パラメータ・アタッチメント (スライダーとパラメータの紐付け)
+    // APVTS アタッチメント
     auto& apvts = audioProcessor.getAPVTS();
     auto att = [&](juce::Slider& s, const juce::String& id) {
         attachments.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, id, s));
@@ -723,19 +747,21 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
 
     att(glideSlider, "m_glide"); att(pitchSlider, "m_pb"); att(gainSlider, "m_gain");
 
-    // 5. タブ・コンポーネントの設定
+    // タブ・コンポーネントの設定
     addAndMakeVisible(modTabs);
     modTabs.addTab("LFOs", juce::Colour::fromString("FF2A2A2A"), &lfoTab, false);
     modTabs.addTab("MSEGs", juce::Colour::fromString("FF2A2A2A"), &msegTab, false);
     modTabs.addTab("MOD ENVs", juce::Colour::fromString("FF2A2A2A"), &modEnvTab, false);
     modTabs.addTab("MATRIX", juce::Colour::fromString("FF2A2A2A"), &matrixTab, false);
 
-    // 6. ブラウザの設定と同期 (DAW再起動時の復元)
+    // ブラウザの設定と同期
     addChildComponent(browser);
     browser.setVisible(false);
     browser.onCloseRequested = [this] { browser.setVisible(false); };
 
+    // グローバル設定からのロード
     browser.loadUserFolders(audioProcessor.getUserFolders());
+
     browser.onUserFoldersChanged = [this](const juce::StringArray& folders) {
         audioProcessor.setUserFolders(folders);
         };
@@ -751,11 +777,10 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     nextWaveButton.onClick = [this] { browser.selectNext(); };
     rndWaveButton.onClick = [this] { browser.selectRandom(); };
 
-    // 7. 最終セットアップ
     updateFilterUI();
     startTimerHz(60);
     setSize(1300, 700);
-} // ← コンストラクタを閉じるカッコ
+}
 
 LiquidDreamAudioProcessorEditor::~LiquidDreamAudioProcessorEditor() { setLookAndFeel(nullptr); }
 
@@ -780,12 +805,18 @@ void LiquidDreamAudioProcessorEditor::updateFilterUI() {
 }
 
 void LiquidDreamAudioProcessorEditor::scanPresets() {
-    presetCombo.clear(); presetCombo.addItem("Init", 1);
+    presetCombo.clear();
+    presetCombo.addItem("Init", 1);
     auto presetDir = juce::File::getSpecialLocation(juce::File::userDocumentsDirectory).getChildFile("BassSynthPresets");
     if (!presetDir.exists()) presetDir.createDirectory();
     presetFiles = presetDir.findChildFiles(juce::File::findFiles, false, "*.xml");
-    int id = 2; for (auto& f : presetFiles) { presetCombo.addItem(f.getFileNameWithoutExtension(), id++); }
-    if (presetCombo.getSelectedId() == 0) { presetCombo.setSelectedId(1, juce::dontSendNotification); }
+    int id = 2;
+    for (auto& f : presetFiles) {
+        presetCombo.addItem(f.getFileNameWithoutExtension(), id++);
+    }
+
+    // ★ 修正箇所：初期化時にむやみに setSelectedId(1) を呼ばない
+    // これにより、起動時に強制的に INIT に戻されるのを防ぎます
 }
 
 void LiquidDreamAudioProcessorEditor::paint(juce::Graphics& g) { g.fillAll(juce::Colour::fromString("FF1E1E1E")); }
@@ -803,6 +834,16 @@ void LiquidDreamAudioProcessorEditor::timerCallback() {
             browser.onCustomFileSelected = nullptr;
             browser.onCustomFileSelected = [this](const juce::File& f) { audioProcessor.loadCustomWavetable(f); };
         }
+
+        // ★ 変更：DAWからロードされた「名前」を使ってコンボボックスを同期する
+        bool found = false;
+        for (int i = 0; i < presetCombo.getNumItems(); ++i) {
+            if (presetCombo.getItemText(i) == audioProcessor.lastSelectedPresetName) {
+                presetCombo.setSelectedId(presetCombo.getItemId(i), juce::dontSendNotification);
+                found = true; break;
+            }
+        }
+        if (!found) presetCombo.setSelectedId(1, juce::dontSendNotification);
     }
 
     if (audioProcessor.forceScopeUpdate.exchange(false)) {
@@ -839,12 +880,12 @@ void LiquidDreamAudioProcessorEditor::timerCallback() {
         colorPanel.updateState(state, text, blinkCounter < 10);
     }
 
-    float modDepths[23] = { 0.0f }; // ★ 配列拡張
+    float modDepths[23] = { 0.0f };
     for (int slot = 0; slot < 10; ++slot) {
         int srcIdx = (int)apvts.getRawParameterValue("matrix_src_" + juce::String(slot))->load();
         int destIdx = (int)apvts.getRawParameterValue("matrix_dest_" + juce::String(slot))->load();
         float amt = std::abs(apvts.getRawParameterValue("matrix_amt_" + juce::String(slot))->load());
-        if (srcIdx > 0 && destIdx > 0 && destIdx < 23) { modDepths[destIdx] += amt; } // ★ 上限拡張
+        if (srcIdx > 0 && destIdx > 0 && destIdx < 23) { modDepths[destIdx] += amt; }
     }
 
     bool isModulated = false;
@@ -878,14 +919,11 @@ void LiquidDreamAudioProcessorEditor::timerCallback() {
     updateRing(fltACutoffSlider, modDepths[9]); updateRing(fltAResSlider, modDepths[10]); updateRing(fltBCutoffSlider, modDepths[11]); updateRing(fltBResSlider, modDepths[12]);
     updateRing(gainSlider, modDepths[13]);
 
-    // ★ 追加モジュレーションのUIリング反映
     updateRing(oscPitchSlider, modDepths[14]);
     updateRing(distDriveSlider, modDepths[15]);
     updateRing(shpAmtSlider, modDepths[16]);
     updateRing(rateSlider, modDepths[17]);
     updateRing(bitSlider, modDepths[18]);
-
-    // Color Mix と LFO Rate はタブ内にいるため参照渡し等の工夫が必要ですが、とりあえず実装を完結させます
 }
 
 void LiquidDreamAudioProcessorEditor::resized()

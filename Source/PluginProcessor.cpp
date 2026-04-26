@@ -243,15 +243,12 @@ void LiquidDreamAudioProcessor::getStateInformation(juce::MemoryBlock& destData)
     std::unique_ptr<juce::XmlElement> xml(state.createXml());
     if (xml != nullptr) {
         xml->setAttribute("CustomWavePath", currentCustomWavetablePath);
-        xml->setAttribute("UserFolders", userWavetableFolders.joinIntoString("|"));
-        xml->setAttribute("Favorites", favoriteWavetables.joinIntoString("|"));
         xml->setAttribute("ColorChord", serializeChord(colorEngine.getLearnedNotes()));
-
         xml->setAttribute("mseg0_data", serializeMsegState(msegStates[0]));
         xml->setAttribute("mseg1_data", serializeMsegState(msegStates[1]));
 
-        // ★ 追加：選ばれたプリセットIDを保存
-        xml->setAttribute("SelectedPresetID", lastSelectedPresetID);
+        // ★ 変更：プリセットの「名前」を保存する
+        xml->setAttribute("SelectedPresetName", lastSelectedPresetName);
 
         copyXmlToBinary(*xml, destData);
     }
@@ -264,13 +261,6 @@ void LiquidDreamAudioProcessor::setStateInformation(const void* data, int sizeIn
         if (xmlState->hasTagName(apvts.state.getType())) {
             apvts.replaceState(juce::ValueTree::fromXml(*xmlState));
         }
-        userWavetableFolders.clear();
-        juce::String foldersStr = xmlState->getStringAttribute("UserFolders", "");
-        if (foldersStr.isNotEmpty()) userWavetableFolders.addTokens(foldersStr, "|", "");
-
-        favoriteWavetables.clear();
-        juce::String favStr = xmlState->getStringAttribute("Favorites", "");
-        if (favStr.isNotEmpty()) favoriteWavetables.addTokens(favStr, "|", "");
 
         juce::String customPath = xmlState->getStringAttribute("CustomWavePath", "");
         if (customPath.isNotEmpty() && juce::File(customPath).existsAsFile()) {
@@ -304,8 +294,8 @@ void LiquidDreamAudioProcessor::setStateInformation(const void* data, int sizeIn
             colorEngine.setLearnState(ColorIREngine::LearnState::Idle);
         }
 
-        // ★ 追加：保存されていたプリセットIDを復元
-        lastSelectedPresetID = xmlState->getIntAttribute("SelectedPresetID", 1);
+        // ★ 変更：プリセットの「名前」を復元する
+        lastSelectedPresetName = xmlState->getStringAttribute("SelectedPresetName", "Init");
 
         presetLoadedFlag.store(true);
     }

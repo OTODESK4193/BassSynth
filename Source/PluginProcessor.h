@@ -85,10 +85,8 @@ public:
     juce::String getCustomWavetablePath() const { return currentCustomWavetablePath; }
     int getFactoryIndex() const { return (int)pWave->load(); }
 
-    // ==============================================================================
-    // ★ 追記箇所：現在選ばれているプリセットのIDを記憶する変数（初期値 1 = INIT）
-    int lastSelectedPresetID = 1;
-    // ==============================================================================
+    // ★ 変更：ID（番号）ではなく、プリセットの「名前」を記憶する
+    juce::String lastSelectedPresetName = "Init";
 
 private:
     juce::AudioProcessorValueTreeState apvts;
