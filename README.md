@@ -3,7 +3,9 @@
 
 **BassSynth** is a next-generation wavetable bass synthesizer plugin (VST3/AU) built with C++ and the JUCE framework. Designed for modern electronic music producers, it combines earth-shattering low-end with crystalline top-end textures, featuring an intuitive Ableton-style dark UI.
 
-![BassSynth UI](https://via.placeholder.com/800x450.png?text=BassSynth+UI+Screenshot) *(※ここにUIのスクショURLを貼ってください)*
+<img src="Assets/screenshot.png" width="600">
+
+👉 **[Watch the Demo Video on X (動作デモ動画はこちら！)]([https://x.com/kijyoumusic/**](https://x.com/kijyoumusic/status/2047948478392021324?s=20)）
 
 ## ✨ Key Features
 
@@ -38,10 +40,9 @@
 
 ### For Users (Download)
 1. Download the latest release from the [Releases](https://github.com/yourusername/BassSynth/releases) page. 
-2. Move the `BassSynth.vst3` (Windows) or `BassSynth.component` (Mac) to your DAW's plugin folder.
+2. Move the `BassSynth.vst3` (Windows)  to your DAW's plugin folder.
    - **Windows VST3**: `C:\Program Files\Common Files\VST3`
-   - **macOS AU**: `/Library/Audio/Plug-Ins/Components`
-   - **macOS VST3**: `/Library/Audio/Plug-Ins/VST3`
+![Downloads](https://img.shields.io/github/downloads/OTODESK4193/OTODESK-Rhythm-Matrix/total.svg)
 
 
 ---
@@ -65,7 +66,7 @@ For commercial distribution without open-sourcing, a commercial JUCE license is 
 ---
 
 ## 👨‍💻 Credits
-- Developed by　OTODESK　https://x.com/kijyoumusic
+- Developed by　OTODESK
 - Built with [JUCE](https://juce.com/)
 - UI Inspired by modern digital workstations.
-```
+
