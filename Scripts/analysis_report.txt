@@ -1,0 +1,2582 @@
+--- Wavetable Analysis Report ---
+
+File: 01-Square-Saw I.wav
+Tags: Basic
+Frames: 2
+
+File: 06-Groan IV.wav
+Tags: Sub
+Frames: 4
+
+File: 07-Crude.wav
+Tags: Others
+Frames: 4
+
+File: 10-Roughmath III.wav
+Tags: Others
+Frames: 4
+
+File: 13-Dirty Needle.wav
+Tags: Atmospheric
+Frames: 11
+
+File: 14-SinFormant.wav
+Tags: Vocal|Sub|Atmospheric
+Frames: 16
+
+File: 19-Kangaroo.wav
+Tags: Sub|Atmospheric
+Frames: 30
+
+File: 22-Silver.wav
+Tags: Atmospheric
+Frames: 6
+
+File: Airhead.wav
+Tags: Sub|Atmospheric
+Frames: 256
+
+File: Aloe.wav
+Tags: Sub|Atmospheric
+Frames: 103
+
+File: Analog PWM Custom 01.wav
+Tags: Analog|Modern|Atmospheric
+Frames: 198
+
+File: Analog PWM Custom 02.wav
+Tags: Analog|Modern|Atmospheric
+Frames: 256
+
+File: Analog PWM Custom 03.wav
+Tags: Analog|Modern|Sub
+Frames: 255
+
+File: Analog PWM Custom 04.wav
+Tags: Analog|Modern|Atmospheric
+Frames: 255
+
+File: Analog PWM Custom 05.wav
+Tags: Analog|Modern|Atmospheric
+Frames: 255
+
+File: Analog PWM Custom 06.wav
+Tags: Analog|Modern|Sub
+Frames: 255
+
+File: Analog PWM Custom 07.wav
+Tags: Analog|Modern|Atmospheric
+Frames: 255
+
+File: Analog PWM Custom 08.wav
+Tags: Analog|Modern|Atmospheric
+Frames: 255
+
+File: Analog PWM Custom 09.wav
+Tags: Analog|Modern|Atmospheric
+Frames: 255
+
+File: Analog PWM Custom 10.wav
+Tags: Analog|Modern|Atmospheric
+Frames: 255
+
+File: Analog PWM Custom 11.wav
+Tags: Analog|Modern|Atmospheric
+Frames: 255
+
+File: Analog PWM Custom 12.wav
+Tags: Analog|Modern|Sub
+Frames: 255
+
+File: Analog PWM Custom 13.wav
+Tags: Analog|Modern|Atmospheric
+Frames: 255
+
+File: Analog PWM Custom 14.wav
+Tags: Analog|Modern|Atmospheric
+Frames: 255
+
+File: Analog PWM Custom 15.wav
+Tags: Analog|Modern|Atmospheric
+Frames: 255
+
+File: Analog PWM Custom 16.wav
+Tags: Analog|Modern|Sub
+Frames: 255
+
+File: Analog PWM Custom 17.wav
+Tags: Analog|Modern|Atmospheric
+Frames: 255
+
+File: Analog PWM Custom 18.wav
+Tags: Analog|Modern|Atmospheric
+Frames: 256
+
+File: Analog PWM Custom 19.wav
+Tags: Analog|Modern|Atmospheric
+Frames: 256
+
+File: Analog PWM Custom 20.wav
+Tags: Analog|Modern|Sub
+Frames: 244
+
+File: Analog PWM Saw 01.wav
+Tags: Analog|Basic|Sub
+Frames: 247
+
+File: Analog PWM Saw 02.wav
+Tags: Analog|Basic|Sub
+Frames: 255
+
+File: Analog PWM Saw 03.wav
+Tags: Analog|Basic|Atmospheric
+Frames: 255
+
+File: Analog PWM Saw 04.wav
+Tags: Analog|Basic|Atmospheric
+Frames: 255
+
+File: Analog PWM Saw 05.wav
+Tags: Analog|Basic|Atmospheric
+Frames: 256
+
+File: Analog PWM Saw 06.wav
+Tags: Analog|Basic|Sub
+Frames: 256
+
+File: Analog PWM Saw 07.wav
+Tags: Analog|Basic|Atmospheric
+Frames: 256
+
+File: Analog PWM Square 01.wav
+Tags: Analog|Basic|Sub
+Frames: 256
+
+File: Analog PWM Square 02.wav
+Tags: Analog|Basic|Atmospheric
+Frames: 255
+
+File: Analog PWM Square 03.wav
+Tags: Analog|Basic|Atmospheric
+Frames: 255
+
+File: Analog PWM Square 04.wav
+Tags: Analog|Basic|Atmospheric
+Frames: 255
+
+File: Analog PWM Square 05.wav
+Tags: Analog|Basic|Atmospheric
+Frames: 255
+
+File: Analog PWM Square 06.wav
+Tags: Analog|Basic|Atmospheric
+Frames: 256
+
+File: Analog PWM Sub 01.wav
+Tags: Analog|Sub|Atmospheric
+Frames: 251
+
+File: Analog PWM Sub 02.wav
+Tags: Analog|Sub|Atmospheric
+Frames: 255
+
+File: Analog PWM Sub 03.wav
+Tags: Analog|Sub|Atmospheric
+Frames: 255
+
+File: Analog PWM Sub 04.wav
+Tags: Analog|Sub|Atmospheric
+Frames: 255
+
+File: Analog PWM Sub 05.wav
+Tags: Analog|Sub|Atmospheric
+Frames: 256
+
+File: Analog PWM Sub 06.wav
+Tags: Analog|Sub|Atmospheric
+Frames: 256
+
+File: Analog PWM Sub 07.wav
+Tags: Analog|Sub|Atmospheric
+Frames: 256
+
+File: Analog PWM Sub 08.wav
+Tags: Analog|Sub|Atmospheric
+Frames: 256
+
+File: Arena-02.wav
+Tags: Others
+Frames: 4
+
+File: Atlantis.wav
+Tags: Atmospheric
+Frames: 236
+
+File: Balloon.wav
+Tags: Sub|Atmospheric
+Frames: 188
+
+File: Bottom End.wav
+Tags: Vocal|Atmospheric
+Frames: 256
+
+File: Bowing Organ.wav
+Tags: Sub|Atmospheric
+Frames: 14
+
+File: Broken Square.wav
+Tags: Basic|Agressive|Sub
+Frames: 255
+
+File: Cello.wav
+Tags: Sub|Atmospheric
+Frames: 250
+
+File: Citruz.wav
+Tags: Sub|Atmospheric
+Frames: 102
+
+File: CodeOrange-01.wav
+Tags: Atmospheric
+Frames: 72
+
+File: Comb Your Hair.wav
+Tags: Atmospheric
+Frames: 255
+
+File: Cutie Patooty.wav
+Tags: Atmospheric
+Frames: 223
+
+File: Dist - Asym.wav
+Tags: Agressive|Sub|Atmospheric
+Frames: 189
+
+File: Dist - Diode 1.wav
+Tags: Agressive|Sub|Atmospheric
+Frames: 238
+
+File: Dist - Diode 2.wav
+Tags: Agressive|Sub|Atmospheric
+Frames: 224
+
+File: Dist - Downsample.wav
+Tags: Agressive|Sub|Atmospheric
+Frames: 256
+
+File: Dist - Filter Drive.wav
+Tags: Agressive|Sub|Atmospheric
+Frames: 145
+
+File: Dist - Hard Clipping Extra.wav
+Tags: Agressive|Sub|Atmospheric
+Frames: 164
+
+File: Dist - Hard Clipping.wav
+Tags: Agressive|Sub|Atmospheric
+Frames: 73
+
+File: Dist - Lin.Fold.wav
+Tags: Agressive|Sub|Atmospheric
+Frames: 47
+
+File: Dist - Rectify.wav
+Tags: Agressive|Sub|Atmospheric
+Frames: 149
+
+File: Dist - Sin.Fold.wav
+Tags: Agressive|Sub|Atmospheric
+Frames: 106
+
+File: Dist - Sine Shaper.wav
+Tags: Basic|Agressive|Sub
+Frames: 255
+
+File: Dist - Soft Clipping.wav
+Tags: Agressive|Sub|Atmospheric
+Frames: 195
+
+File: Dist - Stomp Box.wav
+Tags: Agressive|Sub|Atmospheric
+Frames: 162
+
+File: Dist - Tape.wav
+Tags: Agressive|Sub|Atmospheric
+Frames: 150
+
+File: Dist - Tube.wav
+Tags: Agressive|Sub|Atmospheric
+Frames: 256
+
+File: Dist - Zero Square.wav
+Tags: Basic|Agressive|Sub
+Frames: 256
+
+File: Dragon.wav
+Tags: Sub|Atmospheric
+Frames: 24
+
+File: ESW - 70's Super Saw.wav
+Tags: Modern|Basic|Atmospheric
+Frames: 256
+
+File: ESW - 90's Super Saw.wav
+Tags: Modern|Basic|Atmospheric
+Frames: 256
+
+File: ESW - ADHD Sub.wav
+Tags: Modern|Sub|Atmospheric
+Frames: 27
+
+File: ESW - Arp Pattern.wav
+Tags: Atmospheric|Modern|Sub
+Frames: 120
+
+File: ESW - Bass It.wav
+Tags: Modern|Atmospheric
+Frames: 256
+
+File: ESW - Bass Ready.wav
+Tags: Modern|Sub|Atmospheric
+Frames: 256
+
+File: ESW - Brutish.wav
+Tags: Modern|Agressive|Sub
+Frames: 12
+
+File: ESW - Bubbles.wav
+Tags: Modern|Atmospheric
+Frames: 242
+
+File: ESW - Chaos 01.wav
+Tags: Modern|Experimental|Atmospheric
+Frames: 256
+
+File: ESW - Chimes.wav
+Tags: Modern|Sub|Atmospheric
+Frames: 255
+
+File: ESW - Circus.wav
+Tags: Modern|Sub|Atmospheric
+Frames: 238
+
+File: ESW - Clean Saw.wav
+Tags: Basic|Modern|Atmospheric
+Frames: 256
+
+File: ESW - Cut Saw.wav
+Tags: Basic|Modern|Atmospheric
+Frames: 88
+
+File: ESW - D Saw.wav
+Tags: Basic|Modern|Atmospheric
+Frames: 25
+
+File: ESW - D Sine.wav
+Tags: Basic|Modern|Sub
+Frames: 88
+
+File: ESW - Deep Saw.wav
+Tags: Basic|Modern|Sub
+Frames: 256
+
+File: ESW - Digital Noise.wav
+Tags: Modern|Atmospheric
+Frames: 256
+
+File: ESW - Dope Triangle.wav
+Tags: Basic|Modern|Atmospheric
+Frames: 131
+
+File: ESW - Dual Pulse.wav
+Tags: Basic|Analog|Modern
+Frames: 256
+
+File: ESW - Dual Sine.wav
+Tags: Basic|Modern|Sub
+Frames: 10
+
+File: ESW - Duo Saw.wav
+Tags: Basic|Modern|Atmospheric
+Frames: 226
+
+File: ESW - Echo Saw.wav
+Tags: Basic|Modern|Atmospheric
+Frames: 256
+
+File: ESW - Fake Acid.wav
+Tags: Modern|Agressive|Sub
+Frames: 256
+
+File: ESW - Filtered Saw.wav
+Tags: Basic|Modern|Sub
+Frames: 113
+
+File: ESW - Free Run Saw.wav
+Tags: Basic|Modern|Atmospheric
+Frames: 256
+
+File: ESW - Gated Saw.wav
+Tags: Basic|Modern|Sub
+Frames: 256
+
+File: ESW - Groan Tube.wav
+Tags: Modern|Sub|Atmospheric
+Frames: 217
+
+File: ESW - Jitter Sub.wav
+Tags: Sub|Modern|Atmospheric
+Frames: 256
+
+File: ESW - Metronome.wav
+Tags: Modern|Sub|Atmospheric
+Frames: 45
+
+File: ESW - Modular Perc 1.wav
+Tags: Modern|FX|Atmospheric
+Frames: 256
+
+File: ESW - Mumbling Saw.wav
+Tags: Basic|Modern|Atmospheric
+Frames: 256
+
+File: ESW - Open Up.wav
+Tags: Modern|Atmospheric
+Frames: 184
+
+File: ESW - Pitch Jumper.wav
+Tags: Modern|Sub|Atmospheric
+Frames: 256
+
+File: ESW - Pitched Drift Square.wav
+Tags: Basic|Modern|Atmospheric
+Frames: 256
+
+File: ESW - Pulsar.wav
+Tags: Modern|Atmospheric
+Frames: 256
+
+File: ESW - Pulse Series.wav
+Tags: Analog|Modern|Atmospheric
+Frames: 256
+
+File: ESW - Pulse Wide.wav
+Tags: Analog|Modern|Atmospheric
+Frames: 256
+
+File: ESW - Reflection.wav
+Tags: Modern|Sub|Atmospheric
+Frames: 256
+
+File: ESW - Remakes.wav
+Tags: Modern|Sub|Atmospheric
+Frames: 255
+
+File: ESW - Rolling Blox.wav
+Tags: Modern|Sub|Atmospheric
+Frames: 256
+
+File: ESW - Sallen Key Steps.wav
+Tags: Modern|Sub|Atmospheric
+Frames: 256
+
+File: ESW - Saw Formants.wav
+Tags: Basic|Modern|Vocal
+Frames: 256
+
+File: ESW - Saw It First.wav
+Tags: Basic|Modern|Atmospheric
+Frames: 108
+
+File: ESW - Saw Partials.wav
+Tags: Basic|Modern|Sub
+Frames: 33
+
+File: ESW - Saw Subtle.wav
+Tags: Basic|Modern|Sub
+Frames: 218
+
+File: ESW - Saw Sweep.wav
+Tags: Atmospheric|Basic|Modern
+Frames: 225
+
+File: ESW - Simple Morph.wav
+Tags: Modern|Basic|Sub
+Frames: 256
+
+File: ESW - SinTriSqrSaw.wav
+Tags: Basic|Modern|Sub
+Frames: 226
+
+File: ESW - Sine Here.wav
+Tags: Basic|Modern|Sub
+Frames: 256
+
+File: ESW - Sine To Saw.wav
+Tags: Basic|Modern|Sub
+Frames: 254
+
+File: ESW - Sine X3.wav
+Tags: Basic|Modern|Sub
+Frames: 256
+
+File: ESW - Soft Shift.wav
+Tags: Modern|Sub|Atmospheric
+Frames: 225
+
+File: ESW - Squared Sub.wav
+Tags: Basic|Modern|Sub
+Frames: 256
+
+File: ESW - Starts as Bell.wav
+Tags: Modern|Metallic|Sub
+Frames: 256
+
+File: ESW - Step Ladder.wav
+Tags: Modern|Atmospheric
+Frames: 256
+
+File: ESW - Subtle Partials.wav
+Tags: Sub|Modern|Atmospheric
+Frames: 256
+
+File: ESW - Super Mario Rage.wav
+Tags: Modern|Atmospheric
+Frames: 119
+
+File: ESW - Super Sync.wav
+Tags: Modern|Atmospheric
+Frames: 223
+
+File: ESW - Talking Arp.wav
+Tags: Atmospheric|Modern
+Frames: 256
+
+File: ESW - Thick Jumps.wav
+Tags: Modern|Atmospheric
+Frames: 49
+
+File: ESW - VCO Drift.wav
+Tags: Modern|Sub|Atmospheric
+Frames: 256
+
+File: ESW - Vintage Growl.wav
+Tags: Analog|Modern|Agressive
+Frames: 50
+
+File: ESW - Wasp Sine.wav
+Tags: Basic|Modern|Sub
+Frames: 111
+
+File: ESW - Weird Square.wav
+Tags: Basic|Modern|Experimental
+Frames: 256
+
+File: ESW - Whoa Sine.wav
+Tags: Basic|Modern|Sub
+Frames: 21
+
+File: ESW Analog - 303 Saw.wav
+Tags: Analog|Basic|Modern
+Frames: 256
+
+File: ESW Analog - 80's PWM.wav
+Tags: Analog|Modern|Sub
+Frames: 31
+
+File: ESW Analog - ARP Pulse.wav
+Tags: Analog|Modern|Atmospheric
+Frames: 2
+
+File: ESW Analog - ARP Saw.wav
+Tags: Atmospheric|Basic|Analog
+Frames: 256
+
+File: ESW Analog - ARP Square.wav
+Tags: Basic|Analog|Modern
+Frames: 2
+
+File: ESW Analog - ARP Triangle.wav
+Tags: Basic|Analog|Modern
+Frames: 2
+
+File: ESW Analog - Arp Sine.wav
+Tags: Atmospheric|Analog|Basic
+Frames: 256
+
+File: ESW Analog - Brute Saw.wav
+Tags: Analog|Basic|Modern
+Frames: 2
+
+File: ESW Analog - Circle PWM.wav
+Tags: Analog|Modern|Sub
+Frames: 255
+
+File: ESW Analog - JP800 Saw.wav
+Tags: Basic|Analog|Modern
+Frames: 2
+
+File: ESW Analog - JP800 Square.wav
+Tags: Basic|Analog|Modern
+Frames: 256
+
+File: ESW Analog - Juno 60 Sine 01.wav
+Tags: Analog|Basic|Modern
+Frames: 2
+
+File: ESW Analog - Juno 60 Square.wav
+Tags: Analog|Basic|Modern
+Frames: 2
+
+File: ESW Analog - Jupiter 8 Saw.wav
+Tags: Basic|Analog|Modern
+Frames: 2
+
+File: ESW Analog - Jupiter 8 Square.wav
+Tags: Basic|Analog|Modern
+Frames: 2
+
+File: ESW Analog - Jupiter 8 Triang.wav
+Tags: Analog|Basic|Modern
+Frames: 255
+
+File: ESW Analog - Korg Pro Saw.wav
+Tags: Basic|Analog|Modern
+Frames: 2
+
+File: ESW Analog - MS20 Square.wav
+Tags: Analog|Basic|Modern
+Frames: 2
+
+File: ESW Analog - Mini Moog Pulse.wav
+Tags: Analog|Modern|Atmospheric
+Frames: 256
+
+File: ESW Analog - Moog Saw 01.wav
+Tags: Analog|Basic|Modern
+Frames: 2
+
+File: ESW Analog - Moog Saw 02.wav
+Tags: Analog|Basic|Modern
+Frames: 252
+
+File: ESW Analog - Moog Saw 03.wav
+Tags: Analog|Basic|Modern
+Frames: 149
+
+File: ESW Analog - Moog Sine 02.wav
+Tags: Analog|Basic|Modern
+Frames: 149
+
+File: ESW Analog - Moog Square 01 .wav
+Tags: Analog|Basic|Modern
+Frames: 2
+
+File: ESW Analog - Moog Triangle.wav
+Tags: Analog|Basic|Modern
+Frames: 2
+
+File: ESW Analog - PWM Drift.wav
+Tags: Analog|Modern|Atmospheric
+Frames: 211
+
+File: ESW Analog - Pluse Waves.wav
+Tags: Analog|Modern|Atmospheric
+Frames: 255
+
+File: ESW Analog - Prophet Saw.wav
+Tags: Analog|Basic|Modern
+Frames: 2
+
+File: ESW Analog - Prophet Square.wav
+Tags: Analog|Basic|Modern
+Frames: 2
+
+File: ESW Analog - Prophet Triangle.wav
+Tags: Basic|Analog|Modern
+Frames: 2
+
+File: ESW Analog - Russians.wav
+Tags: Analog|Modern|Sub
+Frames: 33
+
+File: ESW Analog - SH101 Saw.wav
+Tags: Basic|Analog|Modern
+Frames: 2
+
+File: ESW Analog - SH101 Square 1.wav
+Tags: Basic|Analog|Modern
+Frames: 2
+
+File: ESW Analog - SH101 Square 2.wav
+Tags: Analog|Basic|Modern
+Frames: 2
+
+File: ESW Analog - Sys8.wav
+Tags: Analog|Modern|Atmospheric
+Frames: 92
+
+File: ESW Analog - Ultra Saw.wav
+Tags: Analog|Basic|Modern
+Frames: 31
+
+File: ESW Analog - VMS Saw.wav
+Tags: Analog|Basic|Modern
+Frames: 256
+
+File: ESW Basics - Deep High.wav
+Tags: Sub|Basic|Modern
+Frames: 10
+
+File: ESW Basics - MB Saw.wav
+Tags: Basic|Modern|Atmospheric
+Frames: 256
+
+File: ESW Basics - PWM Pulse 01.wav
+Tags: Analog|Basic|Modern
+Frames: 256
+
+File: ESW Basics - PWM Saw 01.wav
+Tags: Basic|Analog|Modern
+Frames: 256
+
+File: ESW Basics - Pulse Acid.wav
+Tags: Analog|Basic|Modern
+Frames: 72
+
+File: ESW Basics - Saw Collection.wav
+Tags: Basic|Modern|Atmospheric
+Frames: 11
+
+File: ESW Basics - Saw Dual 01.wav
+Tags: Basic|Modern|Atmospheric
+Frames: 235
+
+File: ESW Basics - Saw Dual 02.wav
+Tags: Basic|Modern|Atmospheric
+Frames: 256
+
+File: ESW Basics - Saw Dual 03.wav
+Tags: Basic|Modern|Atmospheric
+Frames: 256
+
+File: ESW Basics - Saw Dual 04.wav
+Tags: Basic|Modern|Atmospheric
+Frames: 256
+
+File: ESW Basics - Saw Dual 05.wav
+Tags: Basic|Modern|Atmospheric
+Frames: 256
+
+File: ESW Basics - Saw Fifth 01.wav
+Tags: Basic|Modern|Atmospheric
+Frames: 233
+
+File: ESW Basics - Saw Fifth 02.wav
+Tags: Basic|Modern|Atmospheric
+Frames: 111
+
+File: ESW Basics - Saw Fifth 03.wav
+Tags: Basic|Modern|Atmospheric
+Frames: 256
+
+File: ESW Basics - Saw Mellow.wav
+Tags: Basic|Sub|Modern
+Frames: 192
+
+File: ESW Basics - Saw Morph 01.wav
+Tags: Basic|Modern|Atmospheric
+Frames: 256
+
+File: ESW Basics - Saw Morph 02.wav
+Tags: Basic|Modern|Sub
+Frames: 256
+
+File: ESW Basics - Saw Morph 03.wav
+Tags: Basic|Modern|Atmospheric
+Frames: 256
+
+File: ESW Basics - Saw Phaser.wav
+Tags: Basic|Modern|Sub
+Frames: 256
+
+File: ESW Basics - Saw Reece.wav
+Tags: Basic|Modern|Atmospheric
+Frames: 248
+
+File: ESW Basics - Saw Squeeze.wav
+Tags: Basic|Modern|Atmospheric
+Frames: 256
+
+File: ESW Basics - Saw Thin.wav
+Tags: Basic|Modern|Atmospheric
+Frames: 9
+
+File: ESW Basics - Sine 03.wav
+Tags: Basic|Modern|Atmospheric
+Frames: 256
+
+File: ESW Basics - Sine 909.wav
+Tags: Basic|Modern|Atmospheric
+Frames: 8
+
+File: ESW Basics - Sine Dwmsmple.wav
+Tags: Basic|Modern|Sub
+Frames: 255
+
+File: ESW Basics - Sine PWM.wav
+Tags: Basic|Analog|Modern
+Frames: 8
+
+File: ESW Basics - Sine Pulse.wav
+Tags: Basic|Analog|Modern
+Frames: 64
+
+File: ESW Basics - Sine Saw Reveal.wav
+Tags: Basic|Modern|Atmospheric
+Frames: 256
+
+File: ESW Basics - Sine Soft.wav
+Tags: Basic|Modern|Sub
+Frames: 2
+
+File: ESW Basics - Sine to Saw.wav
+Tags: Basic|Modern|Sub
+Frames: 256
+
+File: ESW Basics - Sine to Square.wav
+Tags: Basic|Modern|Sub
+Frames: 5
+
+File: ESW Basics - Square Collection.wav
+Tags: Basic|Modern|Atmospheric
+Frames: 10
+
+File: ESW Basics - Square Morph 01.wav
+Tags: Basic|Modern|Sub
+Frames: 256
+
+File: ESW Basics - Square Pushy.wav
+Tags: Basic|Modern|Atmospheric
+Frames: 256
+
+File: ESW Basics - Square Saw 01.wav
+Tags: Basic|Modern|Atmospheric
+Frames: 19
+
+File: ESW Basics - Square Saw.wav
+Tags: Basic|Modern
+Frames: 2
+
+File: ESW Basics - Square Sine.wav
+Tags: Basic|Modern|Sub
+Frames: 13
+
+File: ESW Basics - Sub Sine 01.wav
+Tags: Basic|Sub|Modern
+Frames: 129
+
+File: ESW Basics - Sub Sine 02.wav
+Tags: Basic|Sub|Modern
+Frames: 255
+
+File: ESW Basics - Sub Sine 03.wav
+Tags: Basic|Sub|Modern
+Frames: 122
+
+File: ESW Basics - Sylenth VA.wav
+Tags: Basic|Modern|Atmospheric
+Frames: 7
+
+File: ESW Basics - Triangle Saw.wav
+Tags: Basic|Modern|Atmospheric
+Frames: 256
+
+File: ESW Chill - Axis.wav
+Tags: Atmospheric|Modern|Sub
+Frames: 64
+
+File: ESW Chill - Bad Signs.wav
+Tags: Atmospheric|Modern|Sub
+Frames: 256
+
+File: ESW Chill - Cloudy.wav
+Tags: Atmospheric|Modern|Sub
+Frames: 255
+
+File: ESW Chill - Cosine.wav
+Tags: Atmospheric|Basic|Modern
+Frames: 256
+
+File: ESW Chill - Foamer.wav
+Tags: Atmospheric|Modern|Sub
+Frames: 256
+
+File: ESW Chill - Kick it.wav
+Tags: Atmospheric|Modern|Agressive
+Frames: 256
+
+File: ESW Chill - Meshy.wav
+Tags: Atmospheric|Modern|Sub
+Frames: 256
+
+File: ESW Chill - Purple Haze.wav
+Tags: Atmospheric|Modern|Sub
+Frames: 256
+
+File: ESW Chill - Top Down.wav
+Tags: Atmospheric|Modern|Sub
+Frames: 256
+
+File: ESW Chill - Topix.wav
+Tags: Atmospheric|Modern|Sub
+Frames: 255
+
+File: ESW Digital - Acid Saw 02.wav
+Tags: Modern|Basic|Agressive
+Frames: 256
+
+File: ESW Digital - Acid Saw.wav
+Tags: Modern|Basic|Agressive
+Frames: 23
+
+File: ESW Digital - Acid.wav
+Tags: Modern|Agressive|Atmospheric
+Frames: 128
+
+File: ESW Digital - Additive Tones.wav
+Tags: Modern|Sub|Atmospheric
+Frames: 33
+
+File: ESW Digital - Air Lazer.wav
+Tags: Modern|Atmospheric
+Frames: 256
+
+File: ESW Digital - Angry 02.wav
+Tags: Modern|Atmospheric
+Frames: 256
+
+File: ESW Digital - Aries.wav
+Tags: Modern|Atmospheric
+Frames: 256
+
+File: ESW Digital - Astro Scorpio.wav
+Tags: Modern|Atmospheric
+Frames: 235
+
+File: ESW Digital - Bass Angry 01.wav
+Tags: Modern|Atmospheric
+Frames: 256
+
+File: ESW Digital - Big Booty Saws.wav
+Tags: Modern|Basic|Atmospheric
+Frames: 256
+
+File: ESW Digital - Bit Bass.wav
+Tags: Modern|Atmospheric
+Frames: 256
+
+File: ESW Digital - Chill 808.wav
+Tags: Modern|Atmospheric|Sub
+Frames: 101
+
+File: ESW Digital - Chill Sines.wav
+Tags: Modern|Atmospheric|Basic
+Frames: 64
+
+File: ESW Digital - Circuit Bending.wav
+Tags: Modern|Atmospheric
+Frames: 256
+
+File: ESW Digital - Complex Saw 01.wav
+Tags: Modern|Basic|Atmospheric
+Frames: 256
+
+File: ESW Digital - Cypher.wav
+Tags: Modern|Atmospheric
+Frames: 256
+
+File: ESW Digital - Deep House.wav
+Tags: Modern|Sub|Atmospheric
+Frames: 256
+
+File: ESW Digital - Evo.wav
+Tags: Modern|Sub|Atmospheric
+Frames: 256
+
+File: ESW Digital - Expansion.wav
+Tags: Modern|Atmospheric
+Frames: 256
+
+File: ESW Digital - Felicity.wav
+Tags: Modern|Atmospheric
+Frames: 256
+
+File: ESW Digital - Filter Sweep Pulse.wav
+Tags: Modern|Atmospheric|Analog
+Frames: 78
+
+File: ESW Digital - Filter Sweep.wav
+Tags: Modern|Atmospheric|FX
+Frames: 148
+
+File: ESW Digital - Flanger Talk.wav
+Tags: Modern|Atmospheric
+Frames: 256
+
+File: ESW Digital - Flanges Saw.wav
+Tags: Modern|Basic|Atmospheric
+Frames: 64
+
+File: ESW Digital - Flavor X.wav
+Tags: Modern|Atmospheric
+Frames: 229
+
+File: ESW Digital - Flavors.wav
+Tags: Modern|Sub|Atmospheric
+Frames: 256
+
+File: ESW Digital - Fluffy.wav
+Tags: Modern|Atmospheric
+Frames: 256
+
+File: ESW Digital - Folded Saws.wav
+Tags: Modern|Basic|Atmospheric
+Frames: 256
+
+File: ESW Digital - Formantish.wav
+Tags: Modern|Vocal|Atmospheric
+Frames: 256
+
+File: ESW Digital - Frion.wav
+Tags: Modern|Atmospheric
+Frames: 139
+
+File: ESW Digital - Fuzz Saw.wav
+Tags: Modern|Basic|Atmospheric
+Frames: 256
+
+File: ESW Digital - Fuzz Screech.wav
+Tags: Modern|Atmospheric
+Frames: 256
+
+File: ESW Digital - Gemini.wav
+Tags: Modern|Sub|Atmospheric
+Frames: 256
+
+File: ESW Digital - Glass Formant.wav
+Tags: Modern|Vocal|Metallic
+Frames: 256
+
+File: ESW Digital - Gruff Throat.wav
+Tags: Modern|Atmospheric
+Frames: 256
+
+File: ESW Digital - Hex Code .wav
+Tags: Modern|Atmospheric
+Frames: 140
+
+File: ESW Digital - Hot Folds.wav
+Tags: Modern|Sub|Atmospheric
+Frames: 256
+
+File: ESW Digital - I Dunno Know 2.wav
+Tags: Modern|Atmospheric
+Frames: 256
+
+File: ESW Digital - I Dunno Know.wav
+Tags: Modern|Atmospheric
+Frames: 209
+
+File: ESW Digital - Leo.wav
+Tags: Modern|Atmospheric
+Frames: 256
+
+File: ESW Digital - Libra.wav
+Tags: Modern|Agressive|Sub
+Frames: 256
+
+File: ESW Digital - Loli Pops.wav
+Tags: Modern|Atmospheric
+Frames: 256
+
+File: ESW Digital - Magix.wav
+Tags: Modern|Atmospheric
+Frames: 256
+
+File: ESW Digital - Megatron.wav
+Tags: Modern|Sub|Atmospheric
+Frames: 256
+
+File: ESW Digital - Metalish.wav
+Tags: Modern|Sub|Atmospheric
+Frames: 32
+
+File: ESW Digital - Mirror.wav
+Tags: Modern|Sub|Atmospheric
+Frames: 256
+
+File: ESW Digital - Neurotic.wav
+Tags: Modern|Atmospheric
+Frames: 256
+
+File: ESW Digital - Phase Spectra Wide.wav
+Tags: Modern|Sub|Atmospheric
+Frames: 256
+
+File: ESW Digital - Phase Spectra.wav
+Tags: Modern|Sub|Atmospheric
+Frames: 117
+
+File: ESW Digital - Phaser Saw.wav
+Tags: Modern|Basic|Atmospheric
+Frames: 256
+
+File: ESW Digital - Protozoa.wav
+Tags: Modern|Atmospheric
+Frames: 256
+
+File: ESW Digital - Pulse Acid.wav
+Tags: Modern|Analog|Agressive
+Frames: 72
+
+File: ESW Digital - Pyramid Scheme.wav
+Tags: Modern|Atmospheric
+Frames: 256
+
+File: ESW Digital - Redish.wav
+Tags: Modern|Sub|Atmospheric
+Frames: 256
+
+File: ESW Digital - Roboto.wav
+Tags: Modern|Vocal|Atmospheric
+Frames: 256
+
+File: ESW Digital - SSW 01.wav
+Tags: Modern|Agressive|Atmospheric
+Frames: 256
+
+File: ESW Digital - SSW 02.wav
+Tags: Modern|Agressive|Atmospheric
+Frames: 252
+
+File: ESW Digital - SSW 03.wav
+Tags: Modern|Agressive|Atmospheric
+Frames: 256
+
+File: ESW Digital - SSW 04.wav
+Tags: Modern|Agressive|Atmospheric
+Frames: 256
+
+File: ESW Digital - Saw Formant.wav
+Tags: Modern|Basic|Vocal
+Frames: 256
+
+File: ESW Digital - Saw Harmonics.wav
+Tags: Modern|Basic|Atmospheric
+Frames: 256
+
+File: ESW Digital - Saw Square Sync.wav
+Tags: Modern|Basic|Atmospheric
+Frames: 13
+
+File: ESW Digital - Screamer Saw.wav
+Tags: Modern|Basic|Atmospheric
+Frames: 256
+
+File: ESW Digital - Scrums.wav
+Tags: Modern|Atmospheric
+Frames: 256
+
+File: ESW Digital - Simple Formant.wav
+Tags: Modern|Basic|Vocal
+Frames: 11
+
+File: ESW Digital - Sine Fingers.wav
+Tags: Modern|Basic|Sub
+Frames: 256
+
+File: ESW Digital - Sqaure Saw Bits.wav
+Tags: Modern|Basic|Atmospheric
+Frames: 256
+
+File: ESW Digital - Square Bendz.wav
+Tags: Modern|Basic|Sub
+Frames: 256
+
+File: ESW Digital - Square Cutoff.wav
+Tags: Modern|Basic|Sub
+Frames: 32
+
+File: ESW Digital - Square Harmonics.wav
+Tags: Modern|Basic|Sub
+Frames: 256
+
+File: ESW Digital - Super Dirt.wav
+Tags: Modern|Atmospheric
+Frames: 256
+
+File: ESW Digital - Sweep 01.wav
+Tags: Modern|Atmospheric|FX
+Frames: 21
+
+File: ESW Digital - Sync House.wav
+Tags: Modern|Sub|Atmospheric
+Frames: 256
+
+File: ESW Digital - Sync Ring.wav
+Tags: Modern|Atmospheric
+Frames: 208
+
+File: ESW Digital - Synth Brass.wav
+Tags: Modern|Real|Agressive
+Frames: 111
+
+File: ESW Digital - Synth Bug.wav
+Tags: Modern|Atmospheric
+Frames: 64
+
+File: ESW Digital - Tadpoles.wav
+Tags: Modern|Atmospheric
+Frames: 256
+
+File: ESW Digital - Taurus.wav
+Tags: Modern|Atmospheric
+Frames: 256
+
+File: ESW Digital - Throaty.wav
+Tags: Modern|Atmospheric
+Frames: 256
+
+File: ESW Digital - Virgo.wav
+Tags: Modern|Sub|Atmospheric
+Frames: 256
+
+File: ESW Digital - Warm Tubes.wav
+Tags: Modern|Analog|Atmospheric
+Frames: 139
+
+File: ESW Digital Bell 03.wav
+Tags: Modern|Metallic|Atmospheric
+Frames: 211
+
+File: ESW Digitial - Danger.wav
+Tags: Modern|Sub|Atmospheric
+Frames: 256
+
+File: ESW FM - Acetate.wav
+Tags: Modern|Atmospheric
+Frames: 256
+
+File: ESW FM - Acidic.wav
+Tags: Modern|Agressive|Atmospheric
+Frames: 256
+
+File: ESW FM - Advanced.wav
+Tags: Modern|Atmospheric
+Frames: 256
+
+File: ESW FM - Angry Robot.wav
+Tags: Modern|Vocal|Atmospheric
+Frames: 256
+
+File: ESW FM - Brutal.wav
+Tags: Modern|Agressive|Atmospheric
+Frames: 235
+
+File: ESW FM - Buzz Saw.wav
+Tags: Modern|Basic|Atmospheric
+Frames: 256
+
+File: ESW FM - Comb Filtered.wav
+Tags: Modern|Atmospheric
+Frames: 256
+
+File: ESW FM - Feliz.wav
+Tags: Modern|Atmospheric
+Frames: 250
+
+File: ESW FM - Freaky.wav
+Tags: Modern|Sub|Atmospheric
+Frames: 256
+
+File: ESW FM - Grizzly.wav
+Tags: Modern|Sub|Atmospheric
+Frames: 64
+
+File: ESW FM - Groxy.wav
+Tags: Modern|Atmospheric
+Frames: 256
+
+File: ESW FM - Harmful If Swallowed.wav
+Tags: Modern|Sub|Atmospheric
+Frames: 256
+
+File: ESW FM - Harmonics 01.wav
+Tags: Modern|Sub|Atmospheric
+Frames: 256
+
+File: ESW FM - Harmonics 02.wav
+Tags: Modern|Sub|Atmospheric
+Frames: 256
+
+File: ESW FM - Modal.wav
+Tags: Modern|Sub|Atmospheric
+Frames: 139
+
+File: ESW FM - Paper Cut.wav
+Tags: Modern|Atmospheric
+Frames: 256
+
+File: ESW FM - Pig Squeel.wav
+Tags: Modern|Atmospheric|Agressive
+Frames: 256
+
+File: ESW FM - Reverrsed.wav
+Tags: Modern|Atmospheric
+Frames: 256
+
+File: ESW FM - Saw FM8.wav
+Tags: Modern|Basic|Atmospheric
+Frames: 64
+
+File: ESW FM - Sine Folds.wav
+Tags: Modern|Basic|Sub
+Frames: 256
+
+File: ESW FM - Squealer 01.wav
+Tags: Modern|Sub|Atmospheric
+Frames: 64
+
+File: ESW FM - Squealer 02.wav
+Tags: Modern|Sub|Atmospheric
+Frames: 64
+
+File: ESW FM - Sticky.wav
+Tags: Modern|Sub|Atmospheric
+Frames: 256
+
+File: ESW FM - Sub Grits.wav
+Tags: Modern|Sub|Atmospheric
+Frames: 256
+
+File: ESW FM - Swirlys.wav
+Tags: Modern|Atmospheric
+Frames: 256
+
+File: ESW FM - Translator.wav
+Tags: Modern|Atmospheric
+Frames: 256
+
+File: ESW FM - X Noise.wav
+Tags: Modern|Atmospheric
+Frames: 256
+
+File: ESW Growl - Angular.wav
+Tags: Modern|Agressive|Atmospheric
+Frames: 256
+
+File: ESW Growl - Banimal.wav
+Tags: Modern|Agressive|Sub
+Frames: 255
+
+File: ESW Growl - Beats.wav
+Tags: Modern|Agressive|Atmospheric
+Frames: 256
+
+File: ESW Growl - Dark Matter.wav
+Tags: Modern|Agressive|Atmospheric
+Frames: 256
+
+File: ESW Growl - Dino.wav
+Tags: Modern|Agressive|Atmospheric
+Frames: 256
+
+File: ESW Growl - Emmie.wav
+Tags: Modern|Agressive|Atmospheric
+Frames: 256
+
+File: ESW Growl - Engine Noise.wav
+Tags: Modern|Agressive|Atmospheric
+Frames: 256
+
+File: ESW Growl - Flubs.wav
+Tags: Modern|Agressive|Atmospheric
+Frames: 231
+
+File: ESW Growl - Grizzly.wav
+Tags: Modern|Agressive|Atmospheric
+Frames: 256
+
+File: ESW Growl - Machine Gun.wav
+Tags: Modern|Agressive|Atmospheric
+Frames: 256
+
+File: ESW Growl - Mission.wav
+Tags: Modern|Agressive|Atmospheric
+Frames: 256
+
+File: ESW Growl - Monsters.wav
+Tags: Modern|Agressive|Sub
+Frames: 256
+
+File: ESW Growl - Outer Space.wav
+Tags: Modern|Agressive|Atmospheric
+Frames: 256
+
+File: ESW Growl - Roar.wav
+Tags: Modern|Agressive|Atmospheric
+Frames: 256
+
+File: ESW Growl - Sputter.wav
+Tags: Modern|Agressive|Sub
+Frames: 256
+
+File: ESW Growl - Thorns.wav
+Tags: Modern|Agressive|Atmospheric
+Frames: 256
+
+File: ESW Growl - Ugh.wav
+Tags: Modern|Agressive|Atmospheric
+Frames: 256
+
+File: ESW Growl - V8.wav
+Tags: Modern|Agressive|Atmospheric
+Frames: 256
+
+File: ESW Growl - Vocal Nodes.wav
+Tags: Modern|Vocal|Agressive
+Frames: 256
+
+File: ESW Growl - We Wow.wav
+Tags: Modern|Agressive|Atmospheric
+Frames: 256
+
+File: ESW Metalic - Zipper.wav
+Tags: Modern|Sub|Atmospheric
+Frames: 84
+
+File: ESW Metallic - Bell 01.wav
+Tags: Metallic|Modern|Sub
+Frames: 230
+
+File: ESW Metallic - Bell 02.wav
+Tags: Metallic|Modern|Sub
+Frames: 244
+
+File: ESW Metallic - Bell 03.wav
+Tags: Metallic|Modern|Atmospheric
+Frames: 256
+
+File: ESW Metallic - Bell 04.wav
+Tags: Metallic|Modern|Sub
+Frames: 139
+
+File: ESW Metallic - Bell 05.wav
+Tags: Metallic|Modern|Sub
+Frames: 256
+
+File: ESW Metallic - Chime 01.wav
+Tags: Modern|Metallic|Atmospheric
+Frames: 256
+
+File: ESW Metallic - Fuzzy Bells.wav
+Tags: Metallic|Modern|Sub
+Frames: 256
+
+File: ESW Metallic - Ogran Bell.wav
+Tags: Metallic|Modern|Sub
+Frames: 256
+
+File: ESW Metallic - Ring Tone.wav
+Tags: Modern|Metallic|Sub
+Frames: 256
+
+File: ESW Metallic - Vocal Bell.wav
+Tags: Metallic|Modern|Vocal
+Frames: 256
+
+File: ESW Metallic - Waves.wav
+Tags: Modern|Metallic|Atmospheric
+Frames: 256
+
+File: ESW Real - Acoustic Guitar.wav
+Tags: Real|Modern|Sub
+Frames: 64
+
+File: ESW Real - BR French Horn 01.wav
+Tags: Modern|Real|Agressive
+Frames: 197
+
+File: ESW Real - BR Trombone 01.wav
+Tags: Modern|Real|Agressive
+Frames: 250
+
+File: ESW Real - BR Trombone Clean.wav
+Tags: Modern|Real|Agressive
+Frames: 250
+
+File: ESW Real - BR Trumpeter 02.wav
+Tags: Modern|Real|Agressive
+Frames: 244
+
+File: ESW Real - BR Trumpeter 03.wav
+Tags: Modern|Real|Agressive
+Frames: 256
+
+File: ESW Real - BS Elect.wav
+Tags: Modern|Real|Sub
+Frames: 256
+
+File: ESW Real - BS Upright .wav
+Tags: Modern|Real|Atmospheric
+Frames: 190
+
+File: ESW Real - Bell Thin Metal.wav
+Tags: Modern|Real|Metallic
+Frames: 256
+
+File: ESW Real - Big Brass 01.wav
+Tags: Real|Modern|Agressive
+Frames: 256
+
+File: ESW Real - Big Brass 02.wav
+Tags: Real|Modern|Agressive
+Frames: 256
+
+File: ESW Real - Brass Brass Stab.wav
+Tags: Real|Modern|Agressive
+Frames: 84
+
+File: ESW Real - Brass Shorts.wav
+Tags: Real|Modern|Agressive
+Frames: 256
+
+File: ESW Real - Brassy Bell.wav
+Tags: Real|Modern|Agressive
+Frames: 256
+
+File: ESW Real - Cello.wav
+Tags: Modern|Real|Atmospheric
+Frames: 188
+
+File: ESW Real - Clarinet.wav
+Tags: Modern|Real|Sub
+Frames: 256
+
+File: ESW Real - Electric Guitar.wav
+Tags: Real|Basic|Modern
+Frames: 64
+
+File: ESW Real - GT Acoustic 01.wav
+Tags: Real|Modern|Sub
+Frames: 256
+
+File: ESW Real - Gibson Acoustic.wav
+Tags: Real|Modern|Sub
+Frames: 256
+
+File: ESW Real - Glass Marimba.wav
+Tags: Modern|Real|Metallic
+Frames: 64
+
+File: ESW Real - Guitar Acou Harm 01.wav
+Tags: Real|Modern|Atmospheric
+Frames: 256
+
+File: ESW Real - Guitar Palm Pluck.wav
+Tags: Real|Modern|Sub
+Frames: 256
+
+File: ESW Real - Guitar Petit Acoustic.wav
+Tags: Real|Modern|Atmospheric
+Frames: 256
+
+File: ESW Real - Harp.wav
+Tags: Atmospheric|Modern|Real
+Frames: 256
+
+File: ESW Real - Horn 01.wav
+Tags: Modern|Real|Sub
+Frames: 217
+
+File: ESW Real - KY Rhodes Classic.wav
+Tags: Modern|Real|Sub
+Frames: 256
+
+File: ESW Real - Key Music Box.wav
+Tags: Modern|Real|Atmospheric
+Frames: 256
+
+File: ESW Real - Key Piano Like.wav
+Tags: Modern|Real|Sub
+Frames: 105
+
+File: ESW Real - Keys Digital.wav
+Tags: Modern|Real|Sub
+Frames: 256
+
+File: ESW Real - Mallet Senza.wav
+Tags: Real|Modern|Atmospheric
+Frames: 196
+
+File: ESW Real - Mallet Toy Bell.wav
+Tags: Real|Modern|Metallic
+Frames: 256
+
+File: ESW Real - Mallet Vibra.wav
+Tags: Real|Modern|Agressive
+Frames: 64
+
+File: ESW Real - Marimba.wav
+Tags: Modern|Real|Sub
+Frames: 253
+
+File: ESW Real - Nylon Guitar.wav
+Tags: Real|Modern|Sub
+Frames: 256
+
+File: ESW Real - Organ 01.wav
+Tags: Modern|Real|Sub
+Frames: 139
+
+File: ESW Real - Organ 02.wav
+Tags: Modern|Real|Sub
+Frames: 256
+
+File: ESW Real - Pan Flue.wav
+Tags: Modern|Real|Sub
+Frames: 256
+
+File: ESW Real - Pizzo String.wav
+Tags: Real|Basic|Modern
+Frames: 239
+
+File: ESW Real - Rhodes Hybrid.wav
+Tags: Modern|Real|Agressive
+Frames: 256
+
+File: ESW Real - Rhodes Wurli.wav
+Tags: Modern|Real|Sub
+Frames: 256
+
+File: ESW Real - ST Cello Solo.wav
+Tags: Modern|Real|Atmospheric
+Frames: 105
+
+File: ESW Real - ST Violin Stac.wav
+Tags: Modern|Real|Atmospheric
+Frames: 256
+
+File: ESW Real - Saxaphone.wav
+Tags: Modern|Real|Atmospheric
+Frames: 256
+
+File: ESW Real - Simple Brass.wav
+Tags: Real|Basic|Modern
+Frames: 256
+
+File: ESW Real - String Electric Stac.wav
+Tags: Real|Basic|Modern
+Frames: 139
+
+File: ESW Real - String Quartet.wav
+Tags: Real|Basic|Modern
+Frames: 198
+
+File: ESW Real - String Violins.wav
+Tags: Real|Basic|Modern
+Frames: 248
+
+File: ESW Real - String World Vio.wav
+Tags: Real|Atmospheric|Basic
+Frames: 188
+
+File: ESW Real - Trumpeter 01.wav
+Tags: Modern|Real|Atmospheric
+Frames: 240
+
+File: ESW Real - Vibraphone.wav
+Tags: Modern|Real|Agressive
+Frames: 64
+
+File: ESW Real - Violin.wav
+Tags: Modern|Real|Atmospheric
+Frames: 254
+
+File: ESW Real - WW Chill Sax .wav
+Tags: Atmospheric|Modern|Real
+Frames: 256
+
+File: ESW Real - WW Flutey.wav
+Tags: Modern|Real|Sub
+Frames: 256
+
+File: ESW Real - World Digidoo.wav
+Tags: Real|Atmospheric|Modern
+Frames: 90
+
+File: ESW Real - World Japanese Guitar.wav
+Tags: Real|Atmospheric|Modern
+Frames: 256
+
+File: ESW Real - World Mibira.wav
+Tags: Real|Atmospheric|Modern
+Frames: 255
+
+File: ESW Real - World Tambura.wav
+Tags: Real|Atmospheric|Modern
+Frames: 256
+
+File: ESW Spectral - Bearish.wav
+Tags: Modern|Metallic|Atmospheric
+Frames: 256
+
+File: ESW Spectral - Burpie.wav
+Tags: Modern|Metallic|Atmospheric
+Frames: 256
+
+File: ESW Spectral - Conix.wav
+Tags: Modern|Metallic|Atmospheric
+Frames: 256
+
+File: ESW Spectral - Groans.wav
+Tags: Modern|Metallic|Atmospheric
+Frames: 256
+
+File: ESW Spectral - Gyro.wav
+Tags: Modern|Metallic|Atmospheric
+Frames: 256
+
+File: ESW Spectral - Kronk.wav
+Tags: Modern|Metallic|Atmospheric
+Frames: 256
+
+File: ESW Spectral - Over Tones.wav
+Tags: Modern|Metallic|Atmospheric
+Frames: 256
+
+File: ESW Spectral - Quesis.wav
+Tags: Modern|Metallic|Atmospheric
+Frames: 256
+
+File: ESW Spectral - Ring Mod.wav
+Tags: Modern|Metallic|Atmospheric
+Frames: 128
+
+File: ESW Spectral - Robo Cop.wav
+Tags: Modern|Metallic|Atmospheric
+Frames: 256
+
+File: ESW Spectral - Stubble.wav
+Tags: Modern|Metallic|Atmospheric
+Frames: 256
+
+File: ESW Spectral - Throaty.wav
+Tags: Modern|Metallic|Sub
+Frames: 256
+
+File: ESW Spectral - Tribal.wav
+Tags: Basic|Modern|Metallic
+Frames: 256
+
+File: ESW Spectral - Vectors.wav
+Tags: Modern|Metallic|Atmospheric
+Frames: 256
+
+File: ESW Spectral - Yayiiii.wav
+Tags: Modern|Metallic|Atmospheric
+Frames: 139
+
+File: ESW Vocal -  AhWoYeYo.wav
+Tags: Modern|Vocal|Atmospheric
+Frames: 64
+
+File: ESW Vocal - 80's 01.wav
+Tags: Modern|Vocal|Sub
+Frames: 129
+
+File: ESW Vocal - Ah 02.wav
+Tags: Modern|Vocal|Atmospheric
+Frames: 256
+
+File: ESW Vocal - Ahhh 01.wav
+Tags: Modern|Vocal|Atmospheric
+Frames: 256
+
+File: ESW Vocal - Ahhh 02.wav
+Tags: Modern|Vocal|Sub
+Frames: 256
+
+File: ESW Vocal - Ahhh 03.wav
+Tags: Modern|Vocal|Sub
+Frames: 240
+
+File: ESW Vocal - Animal Ahh.wav
+Tags: Modern|Vocal|Atmospheric
+Frames: 256
+
+File: ESW Vocal - Ayee Ahh 02.wav
+Tags: Modern|Vocal|Atmospheric
+Frames: 256
+
+File: ESW Vocal - Ayee Ahh.wav
+Tags: Modern|Vocal|Atmospheric
+Frames: 32
+
+File: ESW Vocal - Blowing It.wav
+Tags: Modern|Vocal|Sub
+Frames: 256
+
+File: ESW Vocal - Bright Vowel.wav
+Tags: Modern|Vocal|Agressive
+Frames: 64
+
+File: ESW Vocal - Cheap Choir 01.wav
+Tags: Vocal|Modern|Sub
+Frames: 147
+
+File: ESW Vocal - Chops for Days.wav
+Tags: Modern|Vocal|Atmospheric
+Frames: 232
+
+File: ESW Vocal - Digital Choir 01.wav
+Tags: Modern|Vocal|Sub
+Frames: 253
+
+File: ESW Vocal - Digital Choir 02.wav
+Tags: Modern|Vocal|Atmospheric
+Frames: 256
+
+File: ESW Vocal - Digital Choir 03.wav
+Tags: Modern|Vocal|Sub
+Frames: 256
+
+File: ESW Vocal - Digital Choir.wav
+Tags: Modern|Vocal|Sub
+Frames: 132
+
+File: ESW Vocal - Digital Mouth.wav
+Tags: Modern|Vocal|Atmospheric
+Frames: 256
+
+File: ESW Vocal - Digital Throat.wav
+Tags: Modern|Vocal
+Frames: 4
+
+File: ESW Vocal - Digital Vowel.wav
+Tags: Modern|Vocal|Atmospheric
+Frames: 64
+
+File: ESW Vocal - Digital Vowels.wav
+Tags: Modern|Vocal|Atmospheric
+Frames: 256
+
+File: ESW Vocal - Fairlight 01.wav
+Tags: Modern|Vocal|Atmospheric
+Frames: 256
+
+File: ESW Vocal - Felicity.wav
+Tags: Modern|Vocal|Atmospheric
+Frames: 256
+
+File: ESW Vocal - Flight Ahh.wav
+Tags: Modern|Vocal|Atmospheric
+Frames: 256
+
+File: ESW Vocal - Flute Vox.wav
+Tags: Modern|Vocal|Atmospheric
+Frames: 122
+
+File: ESW Vocal - Formant Bot 01.wav
+Tags: Vocal|Modern|Atmospheric
+Frames: 256
+
+File: ESW Vocal - Formant Bot 02.wav
+Tags: Vocal|Modern|Atmospheric
+Frames: 256
+
+File: ESW Vocal - Formant Bot 03.wav
+Tags: Vocal|Modern|Sub
+Frames: 254
+
+File: ESW Vocal - Formant Bot 04.wav
+Tags: Vocal|Modern|Sub
+Frames: 256
+
+File: ESW Vocal - Formant Bot 05.wav
+Tags: Vocal|Modern|Atmospheric
+Frames: 140
+
+File: ESW Vocal - Fuzzy Vox.wav
+Tags: Modern|Vocal|Atmospheric
+Frames: 256
+
+File: ESW Vocal - Guttural.wav
+Tags: Modern|Vocal|Sub
+Frames: 139
+
+File: ESW Vocal - Hummer.wav
+Tags: Modern|Vocal|Sub
+Frames: 256
+
+File: ESW Vocal - Monks.wav
+Tags: Modern|Vocal|Atmospheric
+Frames: 256
+
+File: ESW Vocal - Multi Vowel.wav
+Tags: Modern|Vocal|Atmospheric
+Frames: 256
+
+File: ESW Vocal - Mumbles.wav
+Tags: Modern|Vocal|Atmospheric
+Frames: 56
+
+File: ESW Vocal - Nasal 01.wav
+Tags: Modern|Vocal|Sub
+Frames: 27
+
+File: ESW Vocal - Now.wav
+Tags: Modern|Vocal|Atmospheric
+Frames: 109
+
+File: ESW Vocal - Origami.wav
+Tags: Modern|Vocal|Atmospheric
+Frames: 256
+
+File: ESW Vocal - Phrase 01.wav
+Tags: Modern|Vocal|Sub
+Frames: 101
+
+File: ESW Vocal - Roniit.wav
+Tags: Modern|Vocal|Sub
+Frames: 256
+
+File: ESW Vocal - Serum Voice 01.wav
+Tags: Modern|Vocal|Atmospheric
+Frames: 256
+
+File: ESW Vocal - Serum Voice 02.wav
+Tags: Modern|Vocal|Sub
+Frames: 256
+
+File: ESW Vocal - Serum Voice 03.wav
+Tags: Modern|Vocal|Atmospheric
+Frames: 256
+
+File: ESW Vocal - Serum Voice 04.wav
+Tags: Modern|Vocal|Atmospheric
+Frames: 59
+
+File: ESW Vocal - Serum Voice 05.wav
+Tags: Modern|Vocal|Atmospheric
+Frames: 256
+
+File: ESW Vocal - Serum Voice 06.wav
+Tags: Modern|Vocal|Atmospheric
+Frames: 15
+
+File: ESW Vocal - Simple Hum.wav
+Tags: Basic|Modern|Vocal
+Frames: 256
+
+File: ESW Vocal - Sine Throat.wav
+Tags: Basic|Modern|Vocal
+Frames: 256
+
+File: ESW Vocal - Slow Ah.wav
+Tags: Modern|Vocal|Sub
+Frames: 256
+
+File: ESW Vocal - Summer.wav
+Tags: Modern|Vocal|Sub
+Frames: 256
+
+File: ESW Vocal - Swarm.wav
+Tags: Analog|Modern|Vocal
+Frames: 256
+
+File: ESW Vocal - Talking 01.wav
+Tags: Modern|Vocal|Atmospheric
+Frames: 256
+
+File: ESW Vocal - Throaty 01.wav
+Tags: Modern|Vocal|Sub
+Frames: 256
+
+File: ESW Vocal - Vocoder 01.wav
+Tags: Modern|Vocal|Atmospheric
+Frames: 147
+
+File: ESW Vocal - Vowel Sweep.wav
+Tags: Atmospheric|Modern|Vocal
+Frames: 256
+
+File: ESW Vocal - Voxus.wav
+Tags: Modern|Vocal|Sub
+Frames: 152
+
+File: ESW Vocal - Yelling.wav
+Tags: Modern|Vocal|Sub
+Frames: 139
+
+File: ESW Vocal Table 03.wav
+Tags: Modern|Vocal|Sub
+Frames: 256
+
+File: Evolve.wav
+Tags: Atmospheric
+Frames: 256
+
+File: FM 01.wav
+Tags: Modern|Sub|Atmospheric
+Frames: 255
+
+File: FM 02.wav
+Tags: Modern|Sub|Atmospheric
+Frames: 183
+
+File: FM 03.wav
+Tags: Modern|Sub|Atmospheric
+Frames: 70
+
+File: FM 04.wav
+Tags: Modern|Sub|Atmospheric
+Frames: 203
+
+File: FM 05.wav
+Tags: Modern|Sub|Atmospheric
+Frames: 256
+
+File: FM 06.wav
+Tags: Modern|Sub|Atmospheric
+Frames: 97
+
+File: FM 07.wav
+Tags: Modern|Sub|Atmospheric
+Frames: 256
+
+File: FM 08.wav
+Tags: Modern|Sub|Atmospheric
+Frames: 256
+
+File: FM 09.wav
+Tags: Modern|Atmospheric
+Frames: 256
+
+File: FM 10.wav
+Tags: Modern|Sub|Atmospheric
+Frames: 256
+
+File: FM 11.wav
+Tags: Modern|Sub|Atmospheric
+Frames: 256
+
+File: FM 12.wav
+Tags: Modern|Sub|Atmospheric
+Frames: 256
+
+File: FM 13.wav
+Tags: Modern|Sub|Atmospheric
+Frames: 255
+
+File: FM 14.wav
+Tags: Modern|Sub|Atmospheric
+Frames: 256
+
+File: FM 15.wav
+Tags: Modern|Sub|Atmospheric
+Frames: 239
+
+File: FM 16.wav
+Tags: Modern|Sub|Atmospheric
+Frames: 255
+
+File: FM 17.wav
+Tags: Modern|Sub|Atmospheric
+Frames: 160
+
+File: FROST_Dual.wav
+Tags: Atmospheric|Basic
+Frames: 256
+
+File: FROST_Movement.wav
+Tags: Atmospheric
+Frames: 256
+
+File: FROST_Phazed.wav
+Tags: Atmospheric
+Frames: 256
+
+File: FROST_Screams.wav
+Tags: Atmospheric
+Frames: 256
+
+File: FROST_Weird.wav
+Tags: Atmospheric|Experimental|Sub
+Frames: 256
+
+File: Fake Square.wav
+Tags: Basic|Sub|Atmospheric
+Frames: 256
+
+File: Father Time 2.wav
+Tags: Atmospheric
+Frames: 256
+
+File: Filtered Pulse.wav
+Tags: Analog|Modern|Atmospheric
+Frames: 14
+
+File: Formant Sweep.wav
+Tags: Atmospheric|Vocal|FX
+Frames: 255
+
+File: Futuristic.wav
+Tags: Atmospheric
+Frames: 47
+
+File: Grittiest Sine.wav
+Tags: Basic|Modern|Atmospheric
+Frames: 256
+
+File: Growl 01.wav
+Tags: Agressive|Atmospheric
+Frames: 128
+
+File: Growl 02.wav
+Tags: Agressive|Atmospheric
+Frames: 256
+
+File: Growl 03.wav
+Tags: Agressive|Atmospheric
+Frames: 256
+
+File: Growl 04.wav
+Tags: Agressive|Atmospheric
+Frames: 256
+
+File: Growl 05.wav
+Tags: Agressive|Atmospheric
+Frames: 256
+
+File: Growl 06.wav
+Tags: Agressive|Atmospheric
+Frames: 135
+
+File: Growl 07.wav
+Tags: Agressive|Atmospheric
+Frames: 256
+
+File: Growl 08.wav
+Tags: Agressive|Atmospheric
+Frames: 256
+
+File: Growl 09.wav
+Tags: Agressive|Atmospheric
+Frames: 256
+
+File: Growl 10.wav
+Tags: Agressive|Atmospheric
+Frames: 256
+
+File: Growl 11.wav
+Tags: Agressive|Atmospheric
+Frames: 256
+
+File: Growl 12.wav
+Tags: Agressive|Atmospheric
+Frames: 256
+
+File: Growl 13.wav
+Tags: Agressive|Atmospheric
+Frames: 256
+
+File: Growl 14.wav
+Tags: Agressive|Atmospheric
+Frames: 253
+
+File: Growl 15.wav
+Tags: Agressive|Atmospheric
+Frames: 256
+
+File: Growl 16.wav
+Tags: Agressive|Atmospheric
+Frames: 256
+
+File: Growl 17.wav
+Tags: Agressive|Atmospheric
+Frames: 199
+
+File: Growl 18.wav
+Tags: Agressive|Atmospheric
+Frames: 256
+
+File: Guitar Acoustic.wav
+Tags: Real|Sub|Atmospheric
+Frames: 168
+
+File: Guitar Picked.wav
+Tags: Real|FX|Sub
+Frames: 168
+
+File: HTP.wav
+Tags: Sub|Atmospheric
+Frames: 130
+
+File: Hang Ten.wav
+Tags: Atmospheric
+Frames: 256
+
+File: Harmonic Saw.wav
+Tags: Basic|Atmospheric
+Frames: 256
+
+File: Holes.wav
+Tags: Sub|Atmospheric
+Frames: 256
+
+File: Hollywood Lovers.wav
+Tags: Atmospheric
+Frames: 110
+
+File: Holy Mountain.wav
+Tags: Sub|Atmospheric
+Frames: 256
+
+File: Hyper 01.wav
+Tags: Modern|Atmospheric
+Frames: 36
+
+File: Hyper 02.wav
+Tags: Modern|Atmospheric
+Frames: 128
+
+File: Hyper 03.wav
+Tags: Modern|Atmospheric
+Frames: 256
+
+File: Hyper 04.wav
+Tags: Modern|Atmospheric
+Frames: 199
+
+File: Hyper 05.wav
+Tags: Modern|Atmospheric
+Frames: 256
+
+File: Hyper 06.wav
+Tags: Modern|Atmospheric
+Frames: 256
+
+File: Hyper 07.wav
+Tags: Modern|Atmospheric
+Frames: 256
+
+File: Ice Cream.wav
+Tags: Atmospheric
+Frames: 162
+
+File: Inside Out.wav
+Tags: Atmospheric
+Frames: 256
+
+File: Inverted Sweep.wav
+Tags: Atmospheric|FX
+Frames: 246
+
+File: Jagged Sine 1.wav
+Tags: Basic|Atmospheric
+Frames: 256
+
+File: Mallet.wav
+Tags: Real|Atmospheric
+Frames: 59
+
+File: Modern Chatter FM.wav
+Tags: Modern|Atmospheric
+Frames: 256
+
+File: Module.wav
+Tags: Atmospheric
+Frames: 256
+
+File: Movement.wav
+Tags: Atmospheric
+Frames: 256
+
+File: Nap Time.wav
+Tags: Atmospheric
+Frames: 256
+
+File: Nice Waves.wav
+Tags: Sub|Atmospheric
+Frames: 256
+
+File: Orange.wav
+Tags: Sub|Atmospheric
+Frames: 76
+
+File: PWM Double Saw.wav
+Tags: Analog|Basic|Atmospheric
+Frames: 173
+
+File: PWM Exode.wav
+Tags: Analog|Sub|Atmospheric
+Frames: 173
+
+File: PWM Saw.wav
+Tags: Basic|Analog|Atmospheric
+Frames: 256
+
+File: PWM Square.wav
+Tags: Analog|Basic|Sub
+Frames: 148
+
+File: Phasey Monsters.wav
+Tags: Atmospheric
+Frames: 19
+
+File: Pizzicato Strings.wav
+Tags: Basic|Real|Atmospheric
+Frames: 67
+
+File: Racoon.wav
+Tags: Atmospheric
+Frames: 186
+
+File: Razer.wav
+Tags: Atmospheric
+Frames: 256
+
+File: Resosymmetric.wav
+Tags: Basic|Atmospheric
+Frames: 256
+
+File: Romantic.wav
+Tags: Atmospheric
+Frames: 105
+
+File: SAH_Carolyn.wav
+Tags: Metallic|Atmospheric
+Frames: 256
+
+File: SAH_Charles.wav
+Tags: Metallic|Sub|Atmospheric
+Frames: 256
+
+File: SAH_Distressed.wav
+Tags: Agressive|Metallic|Atmospheric
+Frames: 256
+
+File: SAH_Hewitt.wav
+Tags: Metallic|Sub|Atmospheric
+Frames: 256
+
+File: SAH_Huntly.wav
+Tags: Metallic|Sub|Atmospheric
+Frames: 256
+
+File: SAH_Intellectual.wav
+Tags: Metallic|Atmospheric
+Frames: 256
+
+File: SAH_Kummer.wav
+Tags: Metallic|Sub|Atmospheric
+Frames: 256
+
+File: SAH_Lecky.wav
+Tags: Metallic
+Frames: 5
+
+File: SAH_Modified.wav
+Tags: Metallic|Atmospheric
+Frames: 256
+
+File: SAH_Numb.wav
+Tags: Metallic|Atmospheric
+Frames: 256
+
+File: SAH_Oneida.wav
+Tags: Metallic|Sub|Atmospheric
+Frames: 256
+
+File: SAH_Parlar.wav
+Tags: Metallic|Atmospheric
+Frames: 256
+
+File: SAH_Politic.wav
+Tags: Metallic|Atmospheric
+Frames: 256
+
+File: SAH_Politic2.wav
+Tags: Metallic|Atmospheric
+Frames: 254
+
+File: SAH_Politic3.wav
+Tags: Metallic|Atmospheric
+Frames: 256
+
+File: SAH_Ressource.wav
+Tags: Metallic|Atmospheric
+Frames: 256
+
+File: SAH_Saapui.wav
+Tags: Metallic|Sub|Atmospheric
+Frames: 256
+
+File: SAH_Upland.wav
+Tags: Metallic|Atmospheric
+Frames: 256
+
+File: SAH_Vante.wav
+Tags: Metallic|Sub|Atmospheric
+Frames: 256
+
+File: SAH_Verbs.wav
+Tags: Metallic|Sub|Atmospheric
+Frames: 256
+
+File: SAH_Worm.wav
+Tags: Metallic|Sub|Atmospheric
+Frames: 256
+
+File: SAH_Zuchtte.wav
+Tags: Metallic|Sub|Atmospheric
+Frames: 256
+
+File: Scan.wav
+Tags: Atmospheric
+Frames: 256
+
+File: Shark.wav
+Tags: Atmospheric
+Frames: 256
+
+File: Silk Road.wav
+Tags: Sub|Atmospheric
+Frames: 153
+
+File: Sine Squared.wav
+Tags: Basic|Atmospheric
+Frames: 256
+
+File: Smooth Sailing.wav
+Tags: Atmospheric
+Frames: 207
+
+File: Snakes.wav
+Tags: Atmospheric
+Frames: 256
+
+File: Snakeskin.wav
+Tags: Atmospheric
+Frames: 23
+
+File: Solo Strings.wav
+Tags: Basic|Real|Sub
+Frames: 254
+
+File: Square Up.wav
+Tags: Basic|Atmospheric
+Frames: 211
+
+File: Squary.wav
+Tags: Atmospheric
+Frames: 256
+
+File: Staggered.wav
+Tags: Atmospheric
+Frames: 256
+
+File: Steel Drum.wav
+Tags: Atmospheric
+Frames: 34
+
+File: Strawberry.wav
+Tags: Sub|Atmospheric
+Frames: 181
+
+File: Tapestry.wav
+Tags: Atmospheric
+Frames: 21
+
+File: Thin.wav
+Tags: Modern|Atmospheric|Agressive
+Frames: 256
+
+File: Thinny.wav
+Tags: Sub
+Frames: 3
+
+File: Through the Woods.wav
+Tags: Sub|Atmospheric
+Frames: 256
+
+File: Timpani I.wav
+Tags: Atmospheric
+Frames: 152
+
+File: Timpani II.wav
+Tags: Atmospheric|Agressive
+Frames: 65
+
+File: Trianglez 1.wav
+Tags: Basic|Sub|Atmospheric
+Frames: 256
+
+File: Udukku I.wav
+Tags: Atmospheric
+Frames: 53
+
+File: Wavetable 1.wav
+Tags: Atmospheric
+Frames: 256
+
+File: Wavetable 10.wav
+Tags: Atmospheric
+Frames: 256
+
+File: Wavetable 2.wav
+Tags: Atmospheric|Agressive
+Frames: 256
+
+File: Wavetable 3.wav
+Tags: Atmospheric
+Frames: 256
+
+File: Wavetable 4.wav
+Tags: Atmospheric
+Frames: 256
+
+File: Wavetable 5.wav
+Tags: FX|Modern|Atmospheric
+Frames: 256
+
+File: Wavetable 6.wav
+Tags: Atmospheric
+Frames: 256
+
+File: Wavetable 7.wav
+Tags: Atmospheric
+Frames: 256
+
+File: Wavetable 8.wav
+Tags: Sub|Atmospheric
+Frames: 256
+
+File: Wavetable 9.wav
+Tags: Atmospheric
+Frames: 256
+
+File: Worms.wav
+Tags: Atmospheric
+Frames: 256
+
+File: Yodle.wav
+Tags: Atmospheric
+Frames: 256
+
+File: Zoom.wav
+Tags: Sub|Atmospheric
+Frames: 246
+
