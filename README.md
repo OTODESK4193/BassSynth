@@ -69,4 +69,4 @@ For commercial distribution without open-sourcing, a commercial JUCE license is 
 - Developed by　OTODESK
 - Built with [JUCE](https://juce.com/)
 - UI Inspired by modern digital workstations.
-```
+
