@@ -517,9 +517,6 @@ void ColorIrPanel::updateState(ColorIREngine::LearnState state, const juce::Stri
     }
 }
 
-// ==============================================================================
-// LiquidDreamAudioProcessorEditor Implementation
-// ==============================================================================
 LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudioProcessor& p)
     : AudioProcessorEditor(&p), audioProcessor(p),
     dualScope(p.getOutputScopePtr()), browser(p.getAPVTS()),
@@ -527,12 +524,16 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     lfoTab(p.getAPVTS()), msegTab(p, p.getAPVTS()), modEnvTab(p.getAPVTS()), matrixTab(p.getAPVTS())
 {
     setLookAndFeel(&abletonLnF);
-    addAndMakeVisible(openBrowserButton); addAndMakeVisible(prevWaveButton);
-    addAndMakeVisible(nextWaveButton); addAndMakeVisible(rndWaveButton);
 
-    addAndMakeVisible(viewWaveBtn); addAndMakeVisible(viewColorBtn); addAndMakeVisible(colorOnBtn);
-    viewWaveBtn.onClick = [this] { isColorPanelVisible = false; resized(); };
-    viewColorBtn.onClick = [this] { isColorPanelVisible = true; resized(); };
+    // 1. 各ボタン・コンポーネントを画面に追加
+    addAndMakeVisible(openBrowserButton);
+    addAndMakeVisible(prevWaveButton);
+    addAndMakeVisible(nextWaveButton);
+    addAndMakeVisible(rndWaveButton);
+
+    addAndMakeVisible(viewWaveBtn);
+    addAndMakeVisible(viewColorBtn);
+    addAndMakeVisible(colorOnBtn);
 
     addAndMakeVisible(dualScope);
     addAndMakeVisible(colorPanel);
@@ -546,33 +547,51 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     controlGroup.setText("PERFORMANCE"); addAndMakeVisible(controlGroup);
 
     addAndMakeVisible(oscOnButton);
-    setupS(wtLevelSlider, wtLevelLabel, "Level", this); setupS(wtPosSlider, wtPosLabel, "Pos", this);
-    setupS(oscPitchSlider, oscPitchLabel, "Pitch", this); setupS(pitchDecayAmtSlider, pitchDecayAmtLabel, "P.Decay", this);
-    setupS(pitchDecayTimeSlider, pitchDecayTimeLabel, "P.Time", this); setupS(driftSlider, driftLabel, "Drift", this);
-    setupS(uniCountSlider, uniCountLabel, "Unison", this); setupS(detuneSlider, detuneLabel, "Detune", this);
-    setupS(widthSlider, widthLabel, "Width", this); setupS(fmAmtSlider, fmAmtLabel, "FM Amt", this);
+
+    // 2. スライダー・コンボボックスのセットアップ
+    setupS(wtLevelSlider, wtLevelLabel, "Level", this);
+    setupS(wtPosSlider, wtPosLabel, "Pos", this);
+    setupS(oscPitchSlider, oscPitchLabel, "Pitch", this);
+    setupS(pitchDecayAmtSlider, pitchDecayAmtLabel, "P.Decay", this);
+    setupS(pitchDecayTimeSlider, pitchDecayTimeLabel, "P.Time", this);
+    setupS(driftSlider, driftLabel, "Drift", this);
+    setupS(uniCountSlider, uniCountLabel, "Unison", this);
+    setupS(detuneSlider, detuneLabel, "Detune", this);
+    setupS(widthSlider, widthLabel, "Width", this);
+    setupS(fmAmtSlider, fmAmtLabel, "FM Amt", this);
     setupCombo(fmWaveCombo, fmWaveLabel, "FM Mod", { "Sine", "Saw", "Pulse", "Triangle" }, this);
 
     juce::StringArray morphTypes = { "None", "Bend (+/-)", "PWM", "Sync", "Mirror", "Flip", "Quantize", "Remap", "Smear", "Vocode", "Stretch", "SpecCut", "Shepard", "Comb" };
-    setupCombo(morphAModeCombo, morphAModeLabel, "Morph A", morphTypes, this); setupS(morphAAmtSlider, morphAAmtLabel, "Amt A", this); setupS(morphAShiftSlider, morphAShiftLabel, "Shift A", this);
-    setupCombo(morphBModeCombo, morphBModeLabel, "Morph B", morphTypes, this); setupS(morphBAmtSlider, morphBAmtLabel, "Amt B", this); setupS(morphBShiftSlider, morphBShiftLabel, "Shift B", this);
-    setupCombo(morphCModeCombo, morphCModeLabel, "Morph C", morphTypes, this); setupS(morphCAmtSlider, morphCAmtLabel, "Amt C", this); setupS(morphCShiftSlider, morphCShiftLabel, "Shift C", this);
+    setupCombo(morphAModeCombo, morphAModeLabel, "Morph A", morphTypes, this);
+    setupS(morphAAmtSlider, morphAAmtLabel, "Amt A", this);
+    setupS(morphAShiftSlider, morphAShiftLabel, "Shift A", this);
+    setupCombo(morphBModeCombo, morphBModeLabel, "Morph B", morphTypes, this);
+    setupS(morphBAmtSlider, morphBAmtLabel, "Amt B", this);
+    setupS(morphBShiftSlider, morphBShiftLabel, "Shift B", this);
+    setupCombo(morphCModeCombo, morphCModeLabel, "Morph C", morphTypes, this);
+    setupS(morphCAmtSlider, morphCAmtLabel, "Amt C", this);
+    setupS(morphCShiftSlider, morphCShiftLabel, "Shift C", this);
 
     addAndMakeVisible(subOnButton);
     setupCombo(subWaveCombo, subWaveLabel, nullptr, { "Sine", "Triangle", "Pulse", "Saw" }, this);
-    setupS(subVolSlider, subVolLabel, "Level", this); setupS(subPitchSlider, subPitchLabel, "Pitch", this);
+    setupS(subVolSlider, subVolLabel, "Level", this);
+    setupS(subPitchSlider, subPitchLabel, "Pitch", this);
 
     addAndMakeVisible(limitOnButton);
     setupS(limitCeilSlider, limitCeilLabel, "Ceiling", this);
 
-    setupS(distDriveSlider, distDriveLabel, "Drive", this); setupS(shpAmtSlider, shpAmtLabel, "Shaper", this);
-    setupS(bitSlider, bitLabel, "Bits", this); setupS(rateSlider, rateLabel, "Rate", this);
+    setupS(distDriveSlider, distDriveLabel, "Drive", this);
+    setupS(shpAmtSlider, shpAmtLabel, "Shaper", this);
+    setupS(bitSlider, bitLabel, "Bits", this);
+    setupS(rateSlider, rateLabel, "Rate", this);
 
-    addAndMakeVisible(fltABtn); addAndMakeVisible(fltBBtn);
-    fltABtn.setRadioGroupId(1); fltBBtn.setRadioGroupId(1);
-    fltABtn.setClickingTogglesState(true); fltBBtn.setClickingTogglesState(true);
+    addAndMakeVisible(fltABtn);
+    addAndMakeVisible(fltBBtn);
+    fltABtn.setRadioGroupId(1);
+    fltBBtn.setRadioGroupId(1);
+    fltABtn.setClickingTogglesState(true);
+    fltBBtn.setClickingTogglesState(true);
     fltABtn.setToggleState(true, juce::dontSendNotification);
-
     fltABtn.setColour(juce::TextButton::buttonColourId, juce::Colour::fromString("FF333333"));
     fltABtn.setColour(juce::TextButton::buttonOnColourId, juce::Colour::fromString("FFFF764D"));
     fltBBtn.setColour(juce::TextButton::buttonColourId, juce::Colour::fromString("FF333333"));
@@ -583,12 +602,20 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     setupCombo(fltBTypeCombo, fltBCutoffLabel, nullptr, fTypes, this);
     setupCombo(fltRoutingCombo, fltMixLabel, nullptr, { "Serial", "Parallel" }, this);
 
-    setupS(fltACutoffSlider, fltACutoffLabel, "Cutoff", this); setupS(fltBCutoffSlider, fltBCutoffLabel, "Cutoff", this);
-    setupS(fltAResSlider, fltAResLabel, "Reso", this); setupS(fltBResSlider, fltBResLabel, "Reso", this);
+    setupS(fltACutoffSlider, fltACutoffLabel, "Cutoff", this);
+    setupS(fltBCutoffSlider, fltBCutoffLabel, "Cutoff", this);
+    setupS(fltAResSlider, fltAResLabel, "Reso", this);
+    setupS(fltBResSlider, fltBResLabel, "Reso", this);
     setupS(fltMixSlider, fltMixLabel, "Mix (Wet/B)", this);
-    setupS(fltAEnvAmtSlider, fltAEnvAmtLabel, "EnvAmt", this); setupS(fltBEnvAmtSlider, fltBEnvAmtLabel, "EnvAmt", this);
 
-    fltABtn.onClick = [this] { updateFilterUI(); }; fltBBtn.onClick = [this] { updateFilterUI(); };
+    // ★ 修正箇所：正しいラベル名（fltAEnvAmtLabel）に変更
+    setupS(fltAEnvAmtSlider, fltAEnvAmtLabel, "EnvAmt", this);
+    setupS(fltBEnvAmtSlider, fltBEnvAmtLabel, "EnvAmt", this);
+
+    viewWaveBtn.onClick = [this] { isColorPanelVisible = false; resized(); };
+    viewColorBtn.onClick = [this] { isColorPanelVisible = true; resized(); };
+    fltABtn.onClick = [this] { updateFilterUI(); };
+    fltBBtn.onClick = [this] { updateFilterUI(); };
 
     setupS(ampAtkSlider, ampAtkLabel, "A", this); setupS(ampDecSlider, ampDecLabel, "D", this); setupS(ampSusSlider, ampSusLabel, "S", this); setupS(ampRelSlider, ampRelLabel, "R", this);
     setupS(fltAAtkSlider, fltAAtkLabel, "A", this); setupS(fltADecSlider, fltADecLabel, "D", this); setupS(fltASusSlider, fltASusLabel, "S", this); setupS(fltARelSlider, fltARelLabel, "R", this);
@@ -597,14 +624,16 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     setupS(glideSlider, glideLabel, "Glide", this); setupS(pitchSlider, pitchLabel, "Pitch", this); setupS(gainSlider, gainLabel, "Gain", this);
     addAndMakeVisible(legatoButton);
 
-    addAndMakeVisible(presetCombo); presetCombo.setJustificationType(juce::Justification::centred);
+    // 3. プリセット関連
+    addAndMakeVisible(presetCombo);
+    presetCombo.setJustificationType(juce::Justification::centred);
     addAndMakeVisible(savePresetBtn);
     savePresetBtn.setColour(juce::TextButton::buttonColourId, juce::Colour::fromString("FF2A2A2A"));
 
     scanPresets();
     presetCombo.onChange = [this]() {
         int id = presetCombo.getSelectedId();
-        if (id == 1) {
+        if (id == 1) { // Init
             for (auto* p : audioProcessor.getParameters()) {
                 if (auto* floatParam = dynamic_cast<juce::AudioProcessorParameterWithID*>(p)) {
                     floatParam->setValueNotifyingHost(floatParam->getDefaultValue());
@@ -614,7 +643,7 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
         }
         else if (id > 1) {
             int index = id - 2;
-            if (juce::isPositiveAndBelow(index, presetFiles.size())) {
+            if (juce::isPositiveAndBelow(index, (int)presetFiles.size())) {
                 juce::MemoryBlock mb; presetFiles[index].loadFileAsData(mb);
                 audioProcessor.setStateInformation(mb.getData(), (int)mb.getSize());
             }
@@ -633,22 +662,27 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
                 if (!file.hasFileExtension("xml")) file = file.withFileExtension("xml");
                 juce::MemoryBlock mb; audioProcessor.getStateInformation(mb);
                 file.replaceWithData(mb.getData(), mb.getSize()); scanPresets();
-                for (int i = 0; i < presetFiles.size(); ++i) {
+                for (int i = 0; i < (int)presetFiles.size(); ++i) {
                     if (presetFiles[i] == file) { presetCombo.setSelectedId(i + 2, juce::dontSendNotification); break; }
                 }
             }
             });
         };
 
+    // 4. APVTS パラメータ・アタッチメント (スライダーとパラメータの紐付け)
     auto& apvts = audioProcessor.getAPVTS();
-    auto att = [&](juce::Slider& s, const juce::String& id) { attachments.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, id, s)); };
+    auto att = [&](juce::Slider& s, const juce::String& id) {
+        attachments.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, id, s));
+        };
 
     oscOnAtt = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(apvts, "osc_on", oscOnButton);
     colorOnAtt = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(apvts, "color_on", colorOnBtn);
+
     att(wtLevelSlider, "osc_level"); att(wtPosSlider, "osc_pos"); att(oscPitchSlider, "osc_pitch");
     att(pitchDecayAmtSlider, "osc_pdecay_amt"); att(pitchDecayTimeSlider, "osc_pdecay_time");
     att(driftSlider, "osc_drift"); att(uniCountSlider, "osc_uni"); att(detuneSlider, "osc_detune");
     att(widthSlider, "osc_width"); att(fmAmtSlider, "osc_fm");
+
     fmWaveAtt = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(apvts, "osc_fm_wave", fmWaveCombo);
     morphAAtt = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(apvts, "osc_morph_a_mode", morphAModeCombo);
     att(morphAAmtSlider, "osc_morph_a_amt"); att(morphAShiftSlider, "osc_morph_a_shift");
@@ -665,40 +699,55 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
 
     legatoAtt = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(apvts, "m_legato", legatoButton);
     att(distDriveSlider, "dist_drive"); att(shpAmtSlider, "shp_amt"); att(bitSlider, "shp_bit"); att(rateSlider, "shp_rate");
+
     fltATypeAtt = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(apvts, "flt_a_type", fltATypeCombo);
     fltBTypeAtt = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(apvts, "flt_b_type", fltBTypeCombo);
     fltRoutingAtt = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(apvts, "flt_routing", fltRoutingCombo);
-    att(fltACutoffSlider, "flt_a_cutoff"); att(fltAResSlider, "flt_a_res"); att(fltBCutoffSlider, "flt_b_cutoff"); att(fltBResSlider, "flt_b_res");
-    att(fltMixSlider, "flt_mix"); att(fltAEnvAmtSlider, "flt_a_env_amt"); att(fltBEnvAmtSlider, "flt_b_env_amt");
+
+    att(fltACutoffSlider, "flt_a_cutoff"); att(fltAResSlider, "flt_a_res");
+    att(fltBCutoffSlider, "flt_b_cutoff"); att(fltBResSlider, "flt_b_res");
+    att(fltMixSlider, "flt_mix");
+    att(fltAEnvAmtSlider, "flt_a_env_amt"); att(fltBEnvAmtSlider, "flt_b_env_amt");
+
     att(ampAtkSlider, "a_atk"); att(ampDecSlider, "a_dec"); att(ampSusSlider, "a_sus"); att(ampRelSlider, "a_rel");
     att(fltAAtkSlider, "f_a_atk"); att(fltADecSlider, "f_a_dec"); att(fltASusSlider, "f_a_sus"); att(fltARelSlider, "f_a_rel");
     att(fltBAtkSlider, "f_b_atk"); att(fltBDecSlider, "f_b_dec"); att(fltBSusSlider, "f_b_sus"); att(fltBRelSlider, "f_b_rel");
+
     att(glideSlider, "m_glide"); att(pitchSlider, "m_pb"); att(gainSlider, "m_gain");
 
+    // 5. タブ・コンポーネントの設定
     addAndMakeVisible(modTabs);
     modTabs.addTab("LFOs", juce::Colour::fromString("FF2A2A2A"), &lfoTab, false);
     modTabs.addTab("MSEGs", juce::Colour::fromString("FF2A2A2A"), &msegTab, false);
     modTabs.addTab("MOD ENVs", juce::Colour::fromString("FF2A2A2A"), &modEnvTab, false);
     modTabs.addTab("MATRIX", juce::Colour::fromString("FF2A2A2A"), &matrixTab, false);
 
-    addChildComponent(browser); browser.setVisible(false);
-    openBrowserButton.onClick = [this] { browser.setVisible(!browser.isVisible()); if (browser.isVisible()) browser.toFront(true); };
-    prevWaveButton.onClick = [this] { browser.selectPrev(); }; nextWaveButton.onClick = [this] { browser.selectNext(); };
-    rndWaveButton.onClick = [this] { browser.selectRandom(); };
+    // 6. ブラウザの設定と同期 (DAW再起動時の復元)
+    addChildComponent(browser);
+    browser.setVisible(false);
+    browser.onCloseRequested = [this] { browser.setVisible(false); };
+
+    browser.loadUserFolders(audioProcessor.getUserFolders());
+    browser.onUserFoldersChanged = [this](const juce::StringArray& folders) {
+        audioProcessor.setUserFolders(folders);
+        };
 
     browser.onCustomFileSelected = [this](const juce::File& f) { audioProcessor.loadCustomWavetable(f); };
     browser.onFactoryIndexSelected = [this](int idx) { audioProcessor.loadFactoryWavetable(idx); };
-    browser.onUserFoldersChanged = [this](const juce::StringArray& folders) { audioProcessor.setUserFolders(folders); };
-    browser.onFavoritesChanged = [this](const juce::StringArray& favs) { audioProcessor.setFavorites(favs); };
 
-    browser.setFavorites(audioProcessor.getFavorites());
-    browser.loadUserFolders(audioProcessor.getUserFolders());
-    browser.onCloseRequested = [this] { browser.setVisible(false); };
+    openBrowserButton.onClick = [this] {
+        browser.setVisible(!browser.isVisible());
+        if (browser.isVisible()) browser.toFront(true);
+        };
+    prevWaveButton.onClick = [this] { browser.selectPrev(); };
+    nextWaveButton.onClick = [this] { browser.selectNext(); };
+    rndWaveButton.onClick = [this] { browser.selectRandom(); };
 
+    // 7. 最終セットアップ
     updateFilterUI();
-    startTimerHz(20);
+    startTimerHz(60);
     setSize(1300, 700);
-}
+} // ← コンストラクタを閉じるカッコ
 
 LiquidDreamAudioProcessorEditor::~LiquidDreamAudioProcessorEditor() { setLookAndFeel(nullptr); }
 
