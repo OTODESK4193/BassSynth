@@ -5,7 +5,7 @@
 
 ![BassSynth UI](https://via.placeholder.com/800x450.png?text=BassSynth+UI+Screenshot) *(※ここにUIのスクショURLを貼ってください)*
 
-👉 **[Watch the Demo Video on X (動作デモ動画はこちら！)](https://x.com/kijyoumusic/**）
+👉 **[Watch the Demo Video on X (動作デモ動画はこちら！)]([https://x.com/kijyoumusic/**](https://x.com/kijyoumusic/status/2047948478392021324?s=20)）
 
 ## ✨ Key Features
 
