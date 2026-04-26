@@ -42,7 +42,7 @@
 1. Download the latest release from the [Releases](https://github.com/yourusername/BassSynth/releases) page. 
 2. Move the `BassSynth.vst3` (Windows)  to your DAW's plugin folder.
    - **Windows VST3**: `C:\Program Files\Common Files\VST3`
-
+![Downloads](https://img.shields.io/github/downloads/OTODESK4193/OTODESK-Rhythm-Matrix/total.svg)
 
 
 ---
