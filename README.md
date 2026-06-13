@@ -1,3 +1,5 @@
+![Downloads](https://img.shields.io/github/downloads/OTODESK4193/BassSynth/total.svg)
+
 # BassSynth
 
 **BassSynth** is a next-generation wavetable bass synthesizer plugin (VST3/AU) built with C++ and the JUCE framework. Designed for modern electronic music producers, it combines earth-shattering low-end with crystalline top-end textures, featuring an intuitive Ableton-style dark UI.
@@ -48,7 +50,6 @@ For detailed instructions on all parameters and advanced synthesis techniques, p
 2. Move the `BassSynth.vst3` (Windows) to your DAW's plugin folder.
    - **Windows VST3**: `C:\Program Files\Common Files\VST3`
 
-![Downloads](https://img.shields.io/github/downloads/OTODESK4193/BassSynth/total.svg)
 
 ---
 
@@ -59,14 +60,11 @@ For detailed instructions on all parameters and advanced synthesis techniques, p
 
 ---
 
-## 📝 License
+## License
 
-This project is licensed under the **GNU General Public License v3.0 (GPLv3)**. 
+This project is licensed under the GNU Affero General Public License v3.0 (AGPLv3) - see the [LICENSE](LICENSE) file for details.
+This software is built using the **JUCE 8** framework. In accordance with JUCE 8's open-source licensing terms, this entire project is distributed under the AGPLv3.
 
-Since this plugin is built using the [JUCE framework](https://juce.com/) under its Personal/Open-Source tier, it must be distributed as open-source under the GPLv3 license. 
-You are free to use, modify, and distribute this software, provided that any derivative works are also open-sourced under the same license. 
-
-For commercial distribution without open-sourcing, a commercial JUCE license is required.
 
 ---
 
