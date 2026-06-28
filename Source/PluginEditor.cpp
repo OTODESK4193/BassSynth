@@ -217,7 +217,7 @@ void MsegTab::resized() {
 // LfoTab Implementation
 // ==============================================================================
 LfoTab::LfoTab(juce::AudioProcessorValueTreeState& vts) : apvts(vts) {
-    juce::StringArray waves = { "Sine", "Saw", "Pulse", "Random" };
+    juce::StringArray waves = { "Sine", "Saw", "Pulse", "Random", "Triangle" };
     juce::StringArray beats = { "1/1", "1/2", "1/4", "1/8", "1/16", "1/32", "1/4T", "1/8T", "1/16T" };
     juce::StringArray trigs = { "Free", "Retrig", "OneShot" };
 

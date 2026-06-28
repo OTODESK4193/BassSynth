@@ -219,9 +219,10 @@ public:
             tp -= std::floor(tp);
 
             float syncA = 1.0f, syncB = 1.0f, syncC = 1.0f;
-            tp = applyPhaseWarp(tp, morphAMode, morphAAmount, morphAShift, syncA, originalPhase);
-            tp = applyPhaseWarp(tp, morphBMode, morphBAmount, morphBShift, syncB, originalPhase);
-            tp = applyPhaseWarp(tp, morphCMode, morphCAmount, morphCShift, syncC, originalPhase);
+            float fadeWidth = juce::jlimit(0.001f, 0.03f, baseFreq * 0.00001f);
+            tp = applyPhaseWarp(tp, morphAMode, warpA, syncA, originalPhase, fadeWidth);
+            tp = applyPhaseWarp(tp, morphBMode, warpB, syncB, originalPhase, fadeWidth);
+            tp = applyPhaseWarp(tp, morphCMode, warpC, syncC, originalPhase, fadeWidth);
 
             tp -= std::floor(tp);
             if (!std::isfinite(tp)) tp = 0.0f;
@@ -232,9 +233,9 @@ public:
             float val = (getHermiteSample(ptr, f0_base, set->frameSize, pos, frac) * (1.0f - frameFrac) +
                 getHermiteSample(ptr, f1_base, set->frameSize, pos, frac) * frameFrac);
             val *= (syncA * syncB * syncC);
-            val = applyAmpWarp(val, morphAMode, morphAAmount, morphAShift, originalPhase);
-            val = applyAmpWarp(val, morphBMode, morphBAmount, morphBShift, originalPhase);
-            val = applyAmpWarp(val, morphCMode, morphCAmount, morphCShift, originalPhase);
+            val = applyAmpWarp(val, morphAMode, warpA, originalPhase);
+            val = applyAmpWarp(val, morphBMode, warpB, originalPhase);
+            val = applyAmpWarp(val, morphCMode, warpC, originalPhase);
             displayBuffer[i] = val;
         }
     }
@@ -247,12 +248,18 @@ public:
     float getWavetablePosition() const { return wtPosition; }
     WavetableSet::Ptr getWavetableSet() const { return currentWavetableSet; }
     void setWavetableSet(WavetableSet::Ptr newSet) { currentWavetableSet = newSet; }
+    float getMorphAAmount() const { return morphAAmount; }
+    float getMorphAShift() const { return morphAShift; }
+    float getMorphBAmount() const { return morphBAmount; }
+    float getMorphBShift() const { return morphBShift; }
+    float getMorphCAmount() const { return morphCAmount; }
+    float getMorphCShift() const { return morphCShift; }
     void setFMAmount(float amt) { fmAmount = amt; }
     void setFMWaveform(int shape) { fmWaveform = juce::jlimit(0, 3, shape); }
     void setDriftAmount(float amt) { driftAmount = amt; }
-    void setMorphA(int mode, float amt, float shift) { morphAMode = mode; morphAAmount = amt; morphAShift = shift; }
-    void setMorphB(int mode, float amt, float shift) { morphBMode = mode; morphBAmount = amt; morphBShift = shift; }
-    void setMorphC(int mode, float amt, float shift) { morphCMode = mode; morphCAmount = amt; morphCShift = shift; }
+    void setMorphA(int mode, float amt, float shift) { morphAMode = mode; morphAAmount = amt; morphAShift = shift; precomputeMorphs(); }
+    void setMorphB(int mode, float amt, float shift) { morphBMode = mode; morphBAmount = amt; morphBShift = shift; precomputeMorphs(); }
+    void setMorphC(int mode, float amt, float shift) { morphCMode = mode; morphCAmount = amt; morphCShift = shift; precomputeMorphs(); }
     void setOscOn(bool on) { oscOn = on; }
     void setWavetableLevel(float level) { wtLevel = level; }
     void setWavetablePitchOffset(float semitones) { wtPitchOffset = semitones; }
@@ -300,6 +307,7 @@ public:
         SIMDFloat outL_simd(0.0f), outR_simd(0.0f);
         int numBlocks = (unisonCount + SimdWidth - 1) / SimdWidth;
 
+        float fadeWidth = juce::jlimit(0.001f, 0.03f, baseFreq * 0.00001f);
         bool hasMorph = (morphAMode != 0 || morphBMode != 0 || morphCMode != 0);
 
         for (int b = 0; b < numBlocks; ++b) {
@@ -343,9 +351,9 @@ public:
                     tp -= std::floor(tp);
 
                     float sA = 1.0f, sB = 1.0f, sC = 1.0f;
-                    tp = applyPhaseWarp(tp, morphAMode, morphAAmount, morphAShift, sA, originalPhase);
-                    tp = applyPhaseWarp(tp, morphBMode, morphBAmount, morphBShift, sB, originalPhase);
-                    tp = applyPhaseWarp(tp, morphCMode, morphCAmount, morphCShift, sC, originalPhase);
+                    tp = applyPhaseWarp(tp, morphAMode, warpA, sA, originalPhase, fadeWidth);
+                    tp = applyPhaseWarp(tp, morphBMode, warpB, sB, originalPhase, fadeWidth);
+                    tp = applyPhaseWarp(tp, morphCMode, warpC, sC, originalPhase, fadeWidth);
 
                     tp -= std::floor(tp);
                     if (!std::isfinite(tp)) tp = 0.0f;
@@ -356,9 +364,9 @@ public:
                     float v1 = getHermiteSample(p1, f0_base, set->frameSize, pos, frac) * (1.0f - frameFrac) + getHermiteSample(p1, f1_base, set->frameSize, pos, frac) * frameFrac;
                     float val = (v0 * (1.0f - lvlFrac) + v1 * lvlFrac) * (sA * sB * sC);
 
-                    val = applyAmpWarp(val, morphAMode, morphAAmount, morphAShift, originalPhase);
-                    val = applyAmpWarp(val, morphBMode, morphBAmount, morphBShift, originalPhase);
-                    val = applyAmpWarp(val, morphCMode, morphCAmount, morphCShift, originalPhase);
+                    val = applyAmpWarp(val, morphAMode, warpA, originalPhase);
+                    val = applyAmpWarp(val, morphBMode, warpB, originalPhase);
+                    val = applyAmpWarp(val, morphCMode, warpC, originalPhase);
 
                     vAmp.set(i, oscOn ? val * amp[b].get(i) : 0.0f);
                     float pNext = p.get(i) + step;
@@ -400,7 +408,19 @@ public:
             outL_simd += vAmp * panL[b]; outR_simd += vAmp * panR[b]; phases[b] = nextP;
         }
 
-        for (int i = 0; i < SimdWidth; ++i) { outL += outL_simd.get(i) * wtLevel; outR += outR_simd.get(i) * wtLevel; }
+        float finalL = 0.0f, finalR = 0.0f;
+        for (int i = 0; i < SimdWidth; ++i) { 
+            finalL += outL_simd.get(i) * wtLevel; 
+            finalR += outR_simd.get(i) * wtLevel; 
+        }
+        
+        float nextL = finalL - dcFilterL_x1 + 0.999f * dcFilterL_y1;
+        dcFilterL_x1 = finalL; dcFilterL_y1 = nextL;
+        
+        float nextR = finalR - dcFilterR_x1 + 0.999f * dcFilterR_y1;
+        dcFilterR_x1 = finalR; dcFilterR_y1 = nextR;
+        
+        outL = nextL; outR = nextR;
 
         if (subOn && subVolume > 0.001f) {
             subPhase += (baseFreq * std::pow(2.0f, subPitchOffset * 0.083333f)) / (float)sampleRate;
@@ -431,6 +451,42 @@ private:
     std::array<float, MaxVoices> driftPhase = { 0 }, driftRate = { 0 };
     std::array<float, MaxVoices> currentDrift = { 0 };
     int sampleCounter = 0;
+    struct WarpPrecomputed {
+        float bend_b = 1.0f;
+        float bend_sym = 0.5f;
+        float sync_c = 0.5f;
+        float sync_pw = 0.5f;
+        float sync_pw_recip = 2.0f;
+        float sync_pw_inv_recip = 2.0f;
+        float asym_pt = 0.5f;
+        float asym_m_mul1 = 1.0f;
+        float asym_m_mul2 = 1.0f;
+        float asym_abs_amt = 0.0f;
+        float asym_one_minus_amt = 1.0f;
+        bool asym_amt_neg = false;
+        
+        float fold_shift_d = 0.05f;
+        float fold_shift_sub_d = -0.05f;
+        float fold_d_mul = 10.0f;
+        float fold_d_div = -0.1f;
+        float fold_abs_amt = 0.0f;
+        float fold_one_minus_amt = 1.0f;
+        
+        float quant_st = 4.0f;
+        float quant_st_recip = 0.25f;
+        float quant_abs_amt = 0.0f;
+        float quant_one_minus_amt = 1.0f;
+        
+        float sat_dr_mul = 1.0f;
+        float sat_shift_half = 0.0f;
+        bool sat_amt_pos = true;
+    };
+    
+    WarpPrecomputed warpA, warpB, warpC;
+
+    float dcFilterL_x1 = 0.0f, dcFilterL_y1 = 0.0f;
+    float dcFilterR_x1 = 0.0f, dcFilterR_y1 = 0.0f;
+
     juce::AudioFormatManager formatManager;
 
     juce::ThreadPool backgroundPool{ 1 }; // ★ 修正: 共有プールから各インスタンス専用スレッドに変更
@@ -439,66 +495,114 @@ private:
     juce::ReferenceCountedObjectPtr<WavetableSet> currentWavetableSet;
     std::array<SIMDFloat, MaxBlocks> phases, increments, panL, panR, amp;
 
-    inline float applyPhaseWarp(float p, int mode, float amt, float shift, float& sOut, float originalPhase) const {
+    void precomputeWarp(WarpPrecomputed& w, int mode, float amt, float shift) {
+        if (mode == 0) return;
+        if (mode == 1) {
+            w.bend_sym = std::clamp(0.5f + shift * 0.49f, 0.01f, 0.99f);
+            w.bend_b = std::exp(-std::clamp(amt, -0.99f, 0.99f) * 2.0f);
+        }
+        else if (mode == 2) {
+            w.sync_c = std::clamp(0.5f + shift * 0.4f, 0.1f, 0.9f);
+            w.sync_pw = std::clamp(0.01f + (amt * 0.5f + 0.5f) * 0.98f, 0.01f, 0.99f);
+            w.sync_pw_recip = 0.5f / w.sync_pw;
+            w.sync_pw_inv_recip = 0.5f / (1.0f - w.sync_pw);
+        }
+        else if (mode == 3) {
+            w.quant_st = 1.0f + std::abs(amt) * 7.0f;
+        }
+        else if (mode == 4) {
+            w.asym_pt = std::clamp(0.5f + shift * 0.4f, 0.1f, 0.9f);
+            w.asym_m_mul1 = 0.5f / w.asym_pt;
+            w.asym_m_mul2 = 0.5f / (1.0f - w.asym_pt);
+            w.asym_abs_amt = std::abs(amt);
+            w.asym_one_minus_amt = 1.0f - w.asym_abs_amt;
+            w.asym_amt_neg = (amt < 0.0f);
+        }
+        else if (mode == 5) {
+            float d = 0.05f;
+            w.fold_shift_d = shift + d;
+            w.fold_shift_sub_d = shift - d;
+            w.fold_d_mul = 1.0f / (2.0f * d);
+            w.fold_d_div = -2.0f * d;
+            w.fold_abs_amt = std::abs(amt);
+            w.fold_one_minus_amt = 1.0f - w.fold_abs_amt;
+        }
+        else if (mode == 6) {
+            w.quant_st = std::pow(2.0f, 2.0f + (1.0f - std::abs(amt)) * 14.0f);
+            w.quant_st_recip = 1.0f / w.quant_st;
+            w.quant_abs_amt = std::abs(amt);
+            w.quant_one_minus_amt = 1.0f - w.quant_abs_amt;
+        }
+        else if (mode == 7) {
+            w.sat_dr_mul = 1.0f + std::abs(amt) * 4.0f;
+            w.sat_shift_half = shift * 0.5f;
+            w.sat_amt_pos = (amt >= 0.0f);
+        }
+    }
+
+    void precomputeMorphs() {
+        precomputeWarp(warpA, morphAMode, morphAAmount, morphAShift);
+        precomputeWarp(warpB, morphBMode, morphBAmount, morphBShift);
+        precomputeWarp(warpC, morphCMode, morphCAmount, morphCShift);
+    }
+
+    inline float applyPhaseWarp(float p, int mode, const WarpPrecomputed& w, float& sOut, float originalPhase, float fadeWidth) const {
         if (mode == 0) return p;
 
         float warped = p;
         if (mode == 1) {
-            float sym = std::clamp(0.5f + shift * 0.49f, 0.01f, 0.99f);
-            float b = std::exp(-std::clamp(amt, -0.99f, 0.99f) * 2.0f);
-            if (p < sym) warped = sym * std::pow(p / sym, b);
-            else warped = sym + (1.0f - sym) * (1.0f - std::pow((1.0f - p) / (1.0f - sym), b));
+            if (p < w.bend_sym) warped = w.bend_sym * std::pow(p / w.bend_sym, w.bend_b);
+            else warped = w.bend_sym + (1.0f - w.bend_sym) * (1.0f - std::pow((1.0f - p) / (1.0f - w.bend_sym), w.bend_b));
         }
         else if (mode == 2) {
-            float c = std::clamp(0.5f + shift * 0.4f, 0.1f, 0.9f);
-            float pw = std::clamp(0.01f + (amt * 0.5f + 0.5f) * 0.98f, 0.01f, 0.99f);
-            float ps = p + (0.5f - c); ps -= std::floor(ps);
-            float w = (ps < pw) ? (ps / pw * 0.5f) : (0.5f + (ps - pw) / (1.0f - pw) * 0.5f);
-            warped = w + (c - 0.5f); warped -= std::floor(warped);
+            float ps = p + (0.5f - w.sync_c);
+            if (ps >= 1.0f) ps -= 1.0f; else if (ps < 0.0f) ps += 1.0f;
+            float wVal = (ps < w.sync_pw) ? (ps * w.sync_pw_recip) : (0.5f + (ps - w.sync_pw) * w.sync_pw_inv_recip);
+            warped = wVal + (w.sync_c - 0.5f);
+            if (warped >= 1.0f) warped -= 1.0f; else if (warped < 0.0f) warped += 1.0f;
         }
         else if (mode == 3) {
-            float ratio = 1.0f + std::abs(amt) * 7.0f;
-            float res = (p + shift * 0.5f) * ratio; res -= std::floor(res);
+            float res = (p + w.sat_shift_half) * w.quant_st;
+            res -= std::floor(res);
             if (res > 0.985f) sOut *= (1.0f - res) / 0.015f; else if (res < 0.015f) sOut *= res / 0.015f;
-            warped = res - shift * 0.5f; warped -= std::floor(warped);
+            warped = res - w.sat_shift_half;
+            if (warped >= 1.0f) warped -= 1.0f; else if (warped < 0.0f) warped += 1.0f;
         }
         else if (mode == 4) {
-            float pt = std::clamp(0.5f + shift * 0.4f, 0.1f, 0.9f);
-            float m = (p < pt) ? p * (0.5f / pt) : 1.0f - (p - pt) * (0.5f / (1.0f - pt));
-            if (amt < 0.0f) m = (p > pt) ? (p - pt) * (0.5f / (1.0f - pt)) : 1.0f - p * (0.5f / pt);
-            warped = p * (1.0f - std::abs(amt)) + m * std::abs(amt);
+            float m = (p < w.asym_pt) ? p * w.asym_m_mul1 : 1.0f - (p - w.asym_pt) * w.asym_m_mul2;
+            if (w.asym_amt_neg) m = (p > w.asym_pt) ? (p - w.asym_pt) * w.asym_m_mul2 : 1.0f - p * w.asym_m_mul1;
+            warped = p * w.asym_one_minus_amt + m * w.asym_abs_amt;
         }
 
-        if (originalPhase < 0.005f) {
-            float mix = originalPhase / 0.005f;
+        if (originalPhase < fadeWidth) {
+            float mix = originalPhase / fadeWidth;
             return warped * mix + originalPhase * (1.0f - mix);
         }
-        else if (originalPhase > 0.995f) {
-            float mix = (1.0f - originalPhase) / 0.005f;
+        else if (originalPhase > 1.0f - fadeWidth) {
+            float mix = (1.0f - originalPhase) / fadeWidth;
             return warped * mix + originalPhase * (1.0f - mix);
         }
         return warped;
     }
 
-    inline float applyAmpWarp(float v, int mode, float amt, float shift, float originalPhase) const {
+    inline float applyAmpWarp(float v, int mode, const WarpPrecomputed& w, float originalPhase) const {
         if (mode < 5 || mode > 7) return v;
 
         float warped = v;
         if (mode == 5) {
-            float d = 0.05f, out = 0.0f;
-            if (v > shift + d) out = shift - (v - shift);
-            else if (v < shift - d) out = shift + (shift - v);
-            else { float t = (v - (shift - d)) / (2.0f * d); out = (shift + d) + (t * t * (3.0f - 2.0f * t)) * (-2.0f * d); }
-            warped = v * (1.0f - std::abs(amt)) + out * std::abs(amt);
+            float outVal = 0.0f;
+            if (v > w.fold_shift_d) outVal = w.fold_shift_sub_d - (v - w.fold_shift_d);
+            else if (v < w.fold_shift_sub_d) outVal = w.fold_shift_d + (w.fold_shift_sub_d - v);
+            else { float t = (v - w.fold_shift_sub_d) * w.fold_d_mul; outVal = w.fold_shift_d + (t * t * (3.0f - 2.0f * t)) * w.fold_d_div; }
+            warped = v * w.fold_one_minus_amt + outVal * w.fold_abs_amt;
         }
         else if (mode == 6) {
-            float st = std::pow(2.0f, 2.0f + (1.0f - std::abs(amt)) * 14.0f);
-            float sc = (v + shift) * st, bs = std::floor(sc), fr = sc - bs, ed = 0.1f, sm = (fr > 1.0f - ed) ? (fr - (1.0f - ed)) / ed : 0.0f;
-            warped = v * (1.0f - std::abs(amt)) + ((bs + (sm * sm * (3.0f - 2.0f * sm))) / st - shift) * std::abs(amt);
+            float sc = (v + w.sat_shift_half * 2.0f) * w.quant_st, bs = std::floor(sc), fr = sc - bs, ed = 0.1f, sm = (fr > 1.0f - ed) ? (fr - (1.0f - ed)) / ed : 0.0f;
+            warped = v * w.quant_one_minus_amt + ((bs + (sm * sm * (3.0f - 2.0f * sm))) * w.quant_st_recip - w.sat_shift_half * 2.0f) * w.quant_abs_amt;
         }
         else if (mode == 7) {
-            float dr = (v + shift * 0.5f) * (1.0f + std::abs(amt) * 4.0f);
-            warped = (amt >= 0.0f ? std::tanh(dr) : std::sin(dr * 1.570796f)) - (shift * 0.5f);
+            float dr = (v + w.sat_shift_half) * w.sat_dr_mul;
+            warped = (w.sat_amt_pos ? std::tanh(dr) : std::sin(dr * 1.570796f)) - w.sat_shift_half;
         }
 
         if (originalPhase < 0.005f) return warped * (originalPhase / 0.005f);

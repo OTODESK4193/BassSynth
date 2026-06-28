@@ -111,6 +111,10 @@ public:
 
     float getLastModPos() const { return voices[0].getLastModPos(); }
 
+    void getMorphValues(float& aA, float& sA, float& aB, float& sB, float& aC, float& sC) const {
+        voices[0].getMorphValues(aA, sA, aB, sB, aC, sC);
+    }
+
     Mseg& getMsegEngine(int index) {
         return voices[0].getMsegEngine(index);
     }

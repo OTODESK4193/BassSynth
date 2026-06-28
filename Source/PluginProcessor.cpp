@@ -247,7 +247,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout LiquidDreamAudioProcessor::c
         juce::String pfx = "lfo" + juce::String(i) + "_";
         juce::String nm = "LFO" + juce::String(i) + " ";
         params.push_back(std::make_unique<juce::AudioParameterBool>(pfx + "on", nm + "On", true));
-        params.push_back(std::make_unique<juce::AudioParameterInt>(pfx + "wave", nm + "Wave", 0, 3, 0));
+        params.push_back(std::make_unique<juce::AudioParameterInt>(pfx + "wave", nm + "Wave", 0, 4, 0));
         params.push_back(std::make_unique<juce::AudioParameterBool>(pfx + "sync", nm + "Sync", false));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(pfx + "rate", nm + "Rate", lfoHzRange, 1.0f));
         params.push_back(std::make_unique<juce::AudioParameterInt>(pfx + "beat", nm + "Beat", 0, 8, 2));

@@ -86,7 +86,7 @@ private:
     float phase = 0.0f, randomPhase = 0.0f;
     float lastRandomVal = 0.0f, nextRandomVal = 0.0f;
 
-    int waveform = 0;     // 0:Sine, 1:Saw, 2:Pulse, 3:Random
+    int waveform = 0;     // 0:Sine, 1:Saw, 2:Pulse, 3:Random, 4:Triangle
     bool isSync = false;
     float rateHz = 1.0f;
     int beatIdx = 2;      // 1/4
@@ -101,6 +101,7 @@ private:
         case 1: out = 1.0f - 2.0f * p; break;
         case 2: out = p < 0.5f ? 1.0f : -1.0f; break;
         case 3: out = lastRandomVal; break;
+        case 4: out = (p < 0.5f) ? (4.0f * p - 1.0f) : (3.0f - 4.0f * p); break;
         }
         return out;
     }

@@ -188,6 +188,15 @@ public:
     WavetableOscillator::WavetableSet::Ptr getWavetableSet() const { return oscillator.getWavetableSet(); }
     void setWavetableSet(WavetableOscillator::WavetableSet::Ptr newSet) { oscillator.setWavetableSet(newSet); }
 
+    void getMorphValues(float& aA, float& sA, float& aB, float& sB, float& aC, float& sC) const {
+        aA = oscillator.getMorphAAmount();
+        sA = oscillator.getMorphAShift();
+        aB = oscillator.getMorphBAmount();
+        sB = oscillator.getMorphBShift();
+        aC = oscillator.getMorphCAmount();
+        sC = oscillator.getMorphCShift();
+    }
+
     bool getIsActive() const { return isActive; }
     int getNoteNumber() const { return currentNoteNumber; }
     uint32_t getOnTime() const { return onTime; }

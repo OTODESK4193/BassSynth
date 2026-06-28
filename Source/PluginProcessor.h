@@ -47,14 +47,10 @@ public:
         voiceManager.setUIParams(voiceManager.getLastModPos(), pFm->load(std::memory_order_relaxed), (int)pFmWave->load(std::memory_order_relaxed));
         voiceManager.generateSingleCycle(buffer);
         int mA = (int)pMorphAMode->load(std::memory_order_relaxed);
-        float aA = pMorphAAmt->load(std::memory_order_relaxed);
-        float sA = pMorphAShift->load(std::memory_order_relaxed);
         int mB = (int)pMorphBMode->load(std::memory_order_relaxed);
-        float aB = pMorphBAmt->load(std::memory_order_relaxed);
-        float sB = pMorphBShift->load(std::memory_order_relaxed);
         int mC = (int)pMorphCMode->load(std::memory_order_relaxed);
-        float aC = pMorphCAmt->load(std::memory_order_relaxed);
-        float sC = pMorphCShift->load(std::memory_order_relaxed);
+        float aA, sA, aB, sB, aC, sC;
+        voiceManager.getMorphValues(aA, sA, aB, sB, aC, sC);
         displaySpectralMorph.processSingleCycleForDisplay(buffer, mA, aA, sA, mB, aB, sB, mC, aC, sC);
     }
 
