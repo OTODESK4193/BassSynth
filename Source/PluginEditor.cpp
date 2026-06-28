@@ -375,7 +375,7 @@ void MatrixTab::resized() {
 }
 
 // ==============================================================================
-// FxTab Implementation  ★④
+// FxTab Implementation  ★ カード方式(▲▼で順序入れ替え)
 // ==============================================================================
 FxTab::FxTab(juce::AudioProcessorValueTreeState& vts) : apvts(vts) {
     addAndMakeVisible(choOn);
@@ -386,7 +386,19 @@ FxTab::FxTab(juce::AudioProcessorValueTreeState& vts) : apvts(vts) {
     setupS(dlyMix, dlyMixL, "Mix", this); setupS(dlyDamp, dlyDampL, "Damp", this);
 
     addAndMakeVisible(revOn);
-    setupS(revMix, revMixL, "Mix", this); setupS(revSize, revSizeL, "Size", this); setupS(revWidth, revWidthL, "Width", this);
+    setupS(revMix, revMixL, "Mix", this); setupS(revSize, revSizeL, "Size", this);
+    setupS(revDecay, revDecayL, "Decay", this); setupS(revWidth, revWidthL, "Width", this);
+
+    cardOn[0] = &choOn; cardOn[1] = &dlyOn; cardOn[2] = &revOn;
+
+    for (int e = 0; e < 3; ++e) {
+        upBtn[e].setButtonText(juce::String::fromUTF8("\xe2\x96\xb2"));   // ▲
+        downBtn[e].setButtonText(juce::String::fromUTF8("\xe2\x96\xbc")); // ▼
+        addAndMakeVisible(upBtn[e]);
+        addAndMakeVisible(downBtn[e]);
+        upBtn[e].onClick = [this, e] { moveEffect(e, -1); };
+        downBtn[e].onClick = [this, e] { moveEffect(e, +1); };
+    }
 
     auto addS = [this](juce::Slider& s, const juce::String& id) {
         sliderAtts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, id, s));
@@ -398,35 +410,86 @@ FxTab::FxTab(juce::AudioProcessorValueTreeState& vts) : apvts(vts) {
     addB(choOn, "fx_cho_on"); addS(choMix, "fx_cho_mix"); addS(choDepth, "fx_cho_depth"); addS(choSpeed, "fx_cho_speed");
     addB(dlyOn, "fx_dly_on"); addB(dlyPing, "fx_dly_pingpong");
     addS(dlyTime, "fx_dly_time"); addS(dlyFb, "fx_dly_fb"); addS(dlyMix, "fx_dly_mix"); addS(dlyDamp, "fx_dly_damp");
-    addB(revOn, "fx_rev_on"); addS(revMix, "fx_rev_mix"); addS(revSize, "fx_rev_size"); addS(revWidth, "fx_rev_width");
+    addB(revOn, "fx_rev_on"); addS(revMix, "fx_rev_mix"); addS(revSize, "fx_rev_size"); addS(revDecay, "fx_rev_decay"); addS(revWidth, "fx_rev_width");
+
+    readOrder();
+    startTimerHz(8); // プリセット読込等での外部からの順序変更を反映
+}
+
+void FxTab::readOrder() {
+    for (int s = 0; s < 3; ++s)
+        curOrder[s] = juce::jlimit(0, 2, (int)apvts.getRawParameterValue("fx_ord_" + juce::String(s))->load());
+}
+
+int FxTab::slotOfEffect(int effectId) const {
+    for (int s = 0; s < 3; ++s) if (curOrder[s] == effectId) return s;
+    return 0;
+}
+
+void FxTab::moveEffect(int effectId, int dir) {
+    int pos = slotOfEffect(effectId);
+    int np = pos + dir;
+    if (np < 0 || np > 2) return;
+    int a = curOrder[pos], b = curOrder[np];
+    auto setOrd = [this](int slot, int val) {
+        if (auto* p = apvts.getParameter("fx_ord_" + juce::String(slot)))
+            p->setValueNotifyingHost(p->convertTo0to1((float)val));
+    };
+    setOrd(pos, b);
+    setOrd(np, a);
+    readOrder();
+    resized();
+    repaint();
+}
+
+void FxTab::timerCallback() {
+    int prev[3] = { curOrder[0], curOrder[1], curOrder[2] };
+    readOrder();
+    if (prev[0] != curOrder[0] || prev[1] != curOrder[1] || prev[2] != curOrder[2]) {
+        resized();
+        repaint();
+    }
+}
+
+void FxTab::layoutCard(int effectId, int y) {
+    int w = getWidth();
+    cardOn[effectId]->setBounds(95, y + 12, 50, 24);
+    upBtn[effectId].setBounds(w - 72, y + 10, 26, 22);
+    downBtn[effectId].setBounds(w - 42, y + 10, 26, 22);
+
+    int ky = y + 38;
+    if (effectId == 0) { // Chorus
+        placeKnob(140, ky, choMixL, choMix); placeKnob(215, ky, choDepthL, choDepth); placeKnob(290, ky, choSpeedL, choSpeed);
+    }
+    else if (effectId == 1) { // Delay
+        dlyPing.setBounds(150, y + 12, 60, 24); // ヘッダ行(ON右)に配置
+        placeKnob(140, ky, dlyTimeL, dlyTime); placeKnob(215, ky, dlyFbL, dlyFb); placeKnob(290, ky, dlyMixL, dlyMix); placeKnob(365, ky, dlyDampL, dlyDamp);
+    }
+    else { // Reverb
+        placeKnob(140, ky, revMixL, revMix); placeKnob(215, ky, revSizeL, revSize); placeKnob(290, ky, revDecayL, revDecay); placeKnob(365, ky, revWidthL, revWidth);
+    }
+}
+
+void FxTab::resized() {
+    for (int slot = 0; slot < 3; ++slot)
+        layoutCard(curOrder[slot], 10 + slot * cardH);
 }
 
 void FxTab::paint(juce::Graphics& g) {
     g.fillAll(juce::Colour::fromString("FF1A1A1A"));
     const char* names[3] = { "CHORUS", "DELAY", "REVERB" };
-    for (int i = 0; i < 3; ++i) {
+    for (int slot = 0; slot < 3; ++slot) {
+        int e = curOrder[slot];
+        int y = 10 + slot * cardH;
         g.setColour(juce::Colours::white.withAlpha(0.05f));
-        g.fillRoundedRectangle(10.0f, 10.0f + i * 130.0f, (float)getWidth() - 20.0f, 115.0f, 5.0f);
+        g.fillRoundedRectangle(10.0f, (float)y, (float)getWidth() - 20.0f, (float)cardH - 8.0f, 5.0f);
         g.setColour(juce::Colour::fromString("FFFF764D"));
         g.setFont(14.0f);
-        g.drawText(names[i], 20, 15 + i * 130, 90, 20, juce::Justification::centredLeft);
+        g.drawText(names[e], 18, y + 10, 72, 22, juce::Justification::centredLeft);
+        g.setColour(juce::Colours::white.withAlpha(0.35f));
+        g.setFont(10.0f);
+        g.drawText("SLOT " + juce::String(slot + 1), getWidth() - 150, y + 12, 70, 18, juce::Justification::centredRight);
     }
-}
-
-void FxTab::resized() {
-    int y0 = 30;            // Chorus
-    choOn.setBounds(15, y0 + 15, 55, 24);
-    placeKnob(85, y0, choMixL, choMix); placeKnob(160, y0, choDepthL, choDepth); placeKnob(235, y0, choSpeedL, choSpeed);
-
-    int y1 = 30 + 130;      // Delay
-    dlyOn.setBounds(15, y1 + 12, 55, 24);
-    dlyPing.setBounds(15, y1 + 42, 60, 24);
-    placeKnob(85, y1, dlyTimeL, dlyTime); placeKnob(160, y1, dlyFbL, dlyFb);
-    placeKnob(235, y1, dlyMixL, dlyMix); placeKnob(310, y1, dlyDampL, dlyDamp);
-
-    int y2 = 30 + 260;      // Reverb
-    revOn.setBounds(15, y2 + 15, 55, 24);
-    placeKnob(85, y2, revMixL, revMix); placeKnob(160, y2, revSizeL, revSize); placeKnob(235, y2, revWidthL, revWidth);
 }
 
 // ==============================================================================

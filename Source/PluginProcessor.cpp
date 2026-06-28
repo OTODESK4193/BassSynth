@@ -32,7 +32,8 @@ LiquidDreamAudioProcessor::LiquidDreamAudioProcessor()
     // ★④ FX パラメータ
     pChoOn = apvts.getRawParameterValue("fx_cho_on"); pChoMix = apvts.getRawParameterValue("fx_cho_mix"); pChoDepth = apvts.getRawParameterValue("fx_cho_depth"); pChoSpeed = apvts.getRawParameterValue("fx_cho_speed");
     pDlyOn = apvts.getRawParameterValue("fx_dly_on"); pDlyTime = apvts.getRawParameterValue("fx_dly_time"); pDlyFb = apvts.getRawParameterValue("fx_dly_fb"); pDlyMix = apvts.getRawParameterValue("fx_dly_mix"); pDlyDamp = apvts.getRawParameterValue("fx_dly_damp"); pDlyPing = apvts.getRawParameterValue("fx_dly_pingpong");
-    pRevOn = apvts.getRawParameterValue("fx_rev_on"); pRevMix = apvts.getRawParameterValue("fx_rev_mix"); pRevSize = apvts.getRawParameterValue("fx_rev_size"); pRevWidth = apvts.getRawParameterValue("fx_rev_width");
+    pRevOn = apvts.getRawParameterValue("fx_rev_on"); pRevMix = apvts.getRawParameterValue("fx_rev_mix"); pRevSize = apvts.getRawParameterValue("fx_rev_size"); pRevWidth = apvts.getRawParameterValue("fx_rev_width"); pRevDecay = apvts.getRawParameterValue("fx_rev_decay");
+    pFxOrd[0] = apvts.getRawParameterValue("fx_ord_0"); pFxOrd[1] = apvts.getRawParameterValue("fx_ord_1"); pFxOrd[2] = apvts.getRawParameterValue("fx_ord_2");
     pAAtk = apvts.getRawParameterValue("a_atk"); pADec = apvts.getRawParameterValue("a_dec"); pASus = apvts.getRawParameterValue("a_sus"); pARel = apvts.getRawParameterValue("a_rel");
     pFAtkA = apvts.getRawParameterValue("f_a_atk"); pFDecA = apvts.getRawParameterValue("f_a_dec"); pFSusA = apvts.getRawParameterValue("f_a_sus"); pFRelA = apvts.getRawParameterValue("f_a_rel");
     pFAtkB = apvts.getRawParameterValue("f_b_atk"); pFDecB = apvts.getRawParameterValue("f_b_dec"); pFSusB = apvts.getRawParameterValue("f_b_sus"); pFRelB = apvts.getRawParameterValue("f_b_rel");
@@ -216,6 +217,12 @@ juce::AudioProcessorValueTreeState::ParameterLayout LiquidDreamAudioProcessor::c
     params.push_back(std::make_unique<juce::AudioParameterFloat>("fx_rev_mix", "Reverb Mix", 0.0f, 1.0f, 0.0f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("fx_rev_size", "Reverb Size", 0.0f, 1.0f, 0.5f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("fx_rev_width", "Reverb Width", 0.0f, 1.0f, 0.5f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("fx_rev_decay", "Reverb Decay", 0.0f, 1.0f, 0.4f)); // ★ロング残響
+
+    // ★ FXチェーン順（0=Chorus,1=Delay,2=Reverb）。カードの▲▼で入れ替え、プリセットにも保存。
+    params.push_back(std::make_unique<juce::AudioParameterInt>("fx_ord_0", "FX Slot 1", 0, 2, 0));
+    params.push_back(std::make_unique<juce::AudioParameterInt>("fx_ord_1", "FX Slot 2", 0, 2, 1));
+    params.push_back(std::make_unique<juce::AudioParameterInt>("fx_ord_2", "FX Slot 3", 0, 2, 2));
 
     auto attRange = juce::NormalisableRange<float>(0.001f, 5.0f, 0.001f, 0.3f);
     params.push_back(std::make_unique<juce::AudioParameterFloat>("a_atk", "Amp Atk", attRange, 0.01f));
@@ -498,19 +505,24 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         colorEngine.processDynamics(buffer);
     }
 
-    // ★④ FX チェーン（Chorus → Delay → Reverb）。最終ミックスに対して1回処理。
-    if (pChoOn->load() > 0.5f) {
-        fxChorus.setParameters(pChoMix->load(), pChoDepth->load() * 0.01f, pChoSpeed->load());
-        fxChorus.processBlock(left, right, numSamples);
+    // ★ FX チェーン（カードの順序 fx_ord_* に従って処理）。最終ミックスに対して1回処理。
+    auto runFx = [&](int e) {
+        if (e == 0) {
+            if (pChoOn->load() > 0.5f) { fxChorus.setParameters(pChoMix->load(), pChoDepth->load() * 0.01f, pChoSpeed->load()); fxChorus.processBlock(left, right, numSamples); }
+        }
+        else if (e == 1) {
+            if (pDlyOn->load() > 0.5f) { fxDelay.setParameters(pDlyTime->load(), pDlyFb->load(), pDlyMix->load(), pDlyDamp->load(), pDlyPing->load() > 0.5f); fxDelay.processBlock(left, right, numSamples); }
+        }
+        else if (e == 2) {
+            if (pRevOn->load() > 0.5f) { fxReverb.setParameters(pRevMix->load(), pRevSize->load(), pRevWidth->load(), pRevDecay->load()); fxReverb.processBlock(left, right, numSamples); }
+        }
+    };
+    bool doneFx[3] = { false, false, false };
+    for (int s = 0; s < 3; ++s) {
+        int e = juce::jlimit(0, 2, (int)pFxOrd[s]->load(std::memory_order_relaxed));
+        if (!doneFx[e]) { runFx(e); doneFx[e] = true; }
     }
-    if (pDlyOn->load() > 0.5f) {
-        fxDelay.setParameters(pDlyTime->load(), pDlyFb->load(), pDlyMix->load(), pDlyDamp->load(), pDlyPing->load() > 0.5f);
-        fxDelay.processBlock(left, right, numSamples);
-    }
-    if (pRevOn->load() > 0.5f) {
-        fxReverb.setParameters(pRevMix->load(), pRevSize->load(), pRevWidth->load());
-        fxReverb.processBlock(left, right, numSamples);
-    }
+    for (int e = 0; e < 3; ++e) if (!doneFx[e]) runFx(e); // 重複時の漏れを最後に処理
 
     for (int i = 0; i < numSamples; ++i) {
         float cg = smoothedGain.getNextValue();

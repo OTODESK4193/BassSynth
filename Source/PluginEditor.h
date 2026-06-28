@@ -169,15 +169,17 @@ private:
     std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment>> comboAtts;
 };
 
-// ★④ FX タブ（Chorus / Delay / Reverb）
-class FxTab : public juce::Component {
+// ★ FX タブ（カード方式: Chorus / Delay / Reverb を▲▼で並べ替え可能）
+class FxTab : public juce::Component, public juce::Timer {
 public:
     FxTab(juce::AudioProcessorValueTreeState& vts);
     void paint(juce::Graphics& g) override;
     void resized() override;
+    void timerCallback() override;
 private:
     juce::AudioProcessorValueTreeState& apvts;
 
+    // 各エフェクトのコントロール
     juce::ToggleButton choOn{ "ON" };
     juce::Slider choMix, choDepth, choSpeed;
     juce::Label choMixL, choDepthL, choSpeedL;
@@ -187,8 +189,20 @@ private:
     juce::Label dlyTimeL, dlyFbL, dlyMixL, dlyDampL;
 
     juce::ToggleButton revOn{ "ON" };
-    juce::Slider revMix, revSize, revWidth;
-    juce::Label revMixL, revSizeL, revWidthL;
+    juce::Slider revMix, revSize, revDecay, revWidth;
+    juce::Label revMixL, revSizeL, revDecayL, revWidthL;
+
+    // カードのヘッダ（並べ替えボタン）。index = エフェクトID(0=Cho,1=Dly,2=Rev)
+    std::array<juce::ToggleButton*, 3> cardOn;
+    juce::TextButton upBtn[3], downBtn[3];
+
+    static constexpr int cardH = 115;
+    int curOrder[3] = { 0, 1, 2 }; // slot位置→エフェクトID
+
+    void readOrder();
+    int slotOfEffect(int effectId) const;
+    void moveEffect(int effectId, int dir);
+    void layoutCard(int effectId, int yTop);
 
     std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>> sliderAtts;
     std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment>> btnAtts;

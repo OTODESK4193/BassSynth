@@ -175,7 +175,8 @@ private:
     // ★④ FX パラメータ
     std::atomic<float>* pChoOn = nullptr; std::atomic<float>* pChoMix = nullptr; std::atomic<float>* pChoDepth = nullptr; std::atomic<float>* pChoSpeed = nullptr;
     std::atomic<float>* pDlyOn = nullptr; std::atomic<float>* pDlyTime = nullptr; std::atomic<float>* pDlyFb = nullptr; std::atomic<float>* pDlyMix = nullptr; std::atomic<float>* pDlyDamp = nullptr; std::atomic<float>* pDlyPing = nullptr;
-    std::atomic<float>* pRevOn = nullptr; std::atomic<float>* pRevMix = nullptr; std::atomic<float>* pRevSize = nullptr; std::atomic<float>* pRevWidth = nullptr;
+    std::atomic<float>* pRevOn = nullptr; std::atomic<float>* pRevMix = nullptr; std::atomic<float>* pRevSize = nullptr; std::atomic<float>* pRevWidth = nullptr; std::atomic<float>* pRevDecay = nullptr;
+    std::array<std::atomic<float>*, 3> pFxOrd = { nullptr, nullptr, nullptr }; // ★FXチェーン順
     std::atomic<float>* pMaxVoices = nullptr;
 
     std::array<std::atomic<float>*, 3> pModOn, pModAtk, pModDec, pModSus, pModRel, pModAmt;
