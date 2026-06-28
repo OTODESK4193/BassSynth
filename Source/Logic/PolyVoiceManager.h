@@ -50,11 +50,31 @@ public:
         }
     }
 
-    void noteOn(int noteNumber, float velocity) {
+    void noteOn(int noteNumber, float velocity, bool legatoEnabled) {
         // すでに同じノートが鳴っているボイスがあればリリースに移行させる（多重発音防止）
         for (auto& voice : voices) {
             if (voice.getIsActive() && voice.getNoteNumber() == noteNumber) {
                 voice.noteOff(false);
+            }
+        }
+
+        // --- レガート制御 ---
+        // レガート有効（または発音数制限が1のモノフォニック時）で、すでにアクティブなボイスがあれば
+        if ((legatoEnabled || maxVoices == 1) && hasActiveVoices()) {
+            int activeVoiceIdx = -1;
+            uint32_t latestTime = 0;
+            // 最も新しく発音されたアクティブなボイスを探す
+            for (int i = 0; i < maxVoices; ++i) {
+                if (voices[i].getIsActive() && voices[i].getOnTime() > latestTime) {
+                    latestTime = voices[i].getOnTime();
+                    activeVoiceIdx = i;
+                }
+            }
+
+            if (activeVoiceIdx != -1) {
+                // 既存のボイスを isLegato = true にして再トリガー（ピッチ・エンベロープ等の滑らかな接続）
+                voices[activeVoiceIdx].noteOn(noteNumber, velocity, true);
+                return;
             }
         }
 

@@ -471,7 +471,7 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
                     activeMidiNotes.push_back(msg.getNoteNumber());
                 }
             }
-            voiceManager.noteOn(msg.getNoteNumber(), msg.getVelocity() / 127.0f);
+            voiceManager.noteOn(msg.getNoteNumber(), msg.getVelocity() / 127.0f, pLegato->load(std::memory_order_relaxed) > 0.5f);
         }
         else if (msg.isNoteOff()) {
             {
