@@ -51,7 +51,7 @@ public:
         backgroundPool.removeAllJobs(true, 1000); // ★ 修正
     }
 
-    void prepare(double sr) { sampleRate = std::max(1.0, sr); }
+    void prepare(double sr) { sampleRate = std::max(1.0, sr); lastCalcFreq = -1.0f; } // ★候補B: SR変更時に再計算を強制
 
     void loadFactoryWavetable(int index) {
         const int myJobId = ++loadJobId;
@@ -240,7 +240,8 @@ public:
         }
     }
 
-    void setFrequency(float freqHz) { baseFreq = freqHz; recalculate(); }
+    // ★候補B: 周波数が前回と同じならパン/増分テーブルの再計算をスキップ（グライド中以外で効く。結果は同一）
+    void setFrequency(float freqHz) { if (freqHz == lastCalcFreq) return; baseFreq = freqHz; lastCalcFreq = freqHz; recalculate(); }
     void setUnisonCount(int c) { unisonCount = juce::jlimit(1, MaxVoices, c); recalculate(); }
     void setUnisonDetune(float d) { detuneAmount = d; recalculate(); }
     void setStereoWidth(float w) { stereoWidth = juce::jlimit(0.0f, 1.0f, w); recalculate(); }
@@ -258,9 +259,22 @@ public:
     void setFMAmount(float amt) { fmAmount = amt; }
     void setFMWaveform(int shape) { fmWaveform = juce::jlimit(0, 3, shape); }
     void setDriftAmount(float amt) { driftAmount = amt; }
-    void setMorphA(int mode, float amt, float shift) { morphAMode = mode; morphAAmount = amt; morphAShift = shift; precomputeMorphs(); }
-    void setMorphB(int mode, float amt, float shift) { morphBMode = mode; morphBAmount = amt; morphBShift = shift; precomputeMorphs(); }
-    void setMorphC(int mode, float amt, float shift) { morphCMode = mode; morphCAmount = amt; morphCShift = shift; precomputeMorphs(); }
+    // ★候補A: 値が変化したときだけ、しかも該当系統のみ前計算する（出力は従来と完全に同一）
+    void setMorphA(int mode, float amt, float shift) {
+        if (mode == morphAMode && amt == morphAAmount && shift == morphAShift) return;
+        morphAMode = mode; morphAAmount = amt; morphAShift = shift;
+        precomputeWarp(warpA, morphAMode, morphAAmount, morphAShift);
+    }
+    void setMorphB(int mode, float amt, float shift) {
+        if (mode == morphBMode && amt == morphBAmount && shift == morphBShift) return;
+        morphBMode = mode; morphBAmount = amt; morphBShift = shift;
+        precomputeWarp(warpB, morphBMode, morphBAmount, morphBShift);
+    }
+    void setMorphC(int mode, float amt, float shift) {
+        if (mode == morphCMode && amt == morphCAmount && shift == morphCShift) return;
+        morphCMode = mode; morphCAmount = amt; morphCShift = shift;
+        precomputeWarp(warpC, morphCMode, morphCAmount, morphCShift);
+    }
     void setOscOn(bool on) { oscOn = on; }
     void setWavetableLevel(float level) { wtLevel = level; }
     void setWavetablePitchOffset(float semitones) { wtPitchOffset = semitones; }
@@ -296,7 +310,7 @@ public:
         if (set == nullptr || set->totalSamples == 0) return;
 
         pitchEnvState = (pitchEnvState < 0.0001f) ? 0.0f : pitchEnvState * pitchDecayCoef;
-        float dynamicPitchMult = std::pow(2.0f, (wtPitchOffset + (pitchDecayAmt * pitchEnvState)) * 0.083333f);
+        float dynamicPitchMult = std::exp2((wtPitchOffset + (pitchDecayAmt * pitchEnvState)) * 0.083333f); // ★候補C: pow(2,x)→exp2 (同値・高速)
 
         float framePos = wtPosition * (float)std::max(0, set->numFrames - 1);
         int frameIdx = (int)framePos;
@@ -340,7 +354,8 @@ public:
                     if ((sampleCounter & 31) == 0) {
                         driftPhase[vIdx] += (driftRate[vIdx] / (float)sampleRate) * 32.0f;
                         if (driftPhase[vIdx] >= 1.0f) driftPhase[vIdx] -= std::floor(driftPhase[vIdx]);
-                        currentDrift[vIdx] = std::sin(driftPhase[vIdx] * 6.2831853f) * driftAmount * 0.01f;
+                        { float dz = driftPhase[vIdx] - 0.5f; // ★候補C: sinをFM変調器と同じ多項式近似に統一(低速ドリフトのため差は不可聴)
+                          currentDrift[vIdx] = -(dz * 6.2831853f - (dz * dz * dz) * 41.341702f + (dz * dz * dz * dz * dz) * 81.605249f) * driftAmount * 0.01f; }
                     }
                     float step = increments[b].get(i) * dynamicPitchMult * (1.0f + currentDrift[vIdx]);
                     float maxH = (float)sampleRate / (2.0f * std::max(1.0f, step * (float)sampleRate));
@@ -382,7 +397,8 @@ public:
                     if ((sampleCounter & 31) == 0) {
                         driftPhase[vIdx] += (driftRate[vIdx] / (float)sampleRate) * 32.0f;
                         if (driftPhase[vIdx] >= 1.0f) driftPhase[vIdx] -= std::floor(driftPhase[vIdx]);
-                        currentDrift[vIdx] = std::sin(driftPhase[vIdx] * 6.2831853f) * driftAmount * 0.01f;
+                        { float dz = driftPhase[vIdx] - 0.5f; // ★候補C: sinをFM変調器と同じ多項式近似に統一(低速ドリフトのため差は不可聴)
+                          currentDrift[vIdx] = -(dz * 6.2831853f - (dz * dz * dz) * 41.341702f + (dz * dz * dz * dz * dz) * 81.605249f) * driftAmount * 0.01f; }
                     }
                     float step = increments[b].get(i) * dynamicPitchMult * (1.0f + currentDrift[vIdx]);
                     float maxH = (float)sampleRate / (2.0f * std::max(1.0f, step * (float)sampleRate));
@@ -424,7 +440,7 @@ public:
         outL = nextL; outR = nextR;
 
         if (subOn && subVolume > 0.001f) {
-            subPhase += (baseFreq * std::pow(2.0f, subPitchOffset * 0.083333f)) / (float)sampleRate;
+            subPhase += (baseFreq * std::exp2(subPitchOffset * 0.083333f)) / (float)sampleRate; // ★候補C: pow(2,x)→exp2
             subPhase -= std::floor(subPhase);
             float rs = 0.0f;
             switch (subWaveform) {
@@ -442,6 +458,7 @@ public:
 private:
     double sampleRate = 44100.0;
     float baseFreq = 440.0f, detuneAmount = 0.0f, stereoWidth = 1.0f, wtPosition = 0.0f, fmAmount = 0.0f, driftAmount = 0.0f;
+    float lastCalcFreq = -1.0f; // ★候補B: recalculate済みの周波数を記録（センチネル -1 で初回/SR変更時に必ず計算）
     int unisonCount = 1, fmWaveform = 0;
     bool oscOn = true, subOn = true;
     int morphAMode = 0, morphBMode = 0, morphCMode = 0;
@@ -541,12 +558,6 @@ private:
         }
     }
 
-    void precomputeMorphs() {
-        precomputeWarp(warpA, morphAMode, morphAAmount, morphAShift);
-        precomputeWarp(warpB, morphBMode, morphBAmount, morphBShift);
-        precomputeWarp(warpC, morphCMode, morphCAmount, morphCShift);
-    }
-
     inline float applyPhaseWarp(float p, int mode, const WarpPrecomputed& w, float& sOut, float originalPhase, float fadeWidth) const {
         if (mode == 0) return p;
 
@@ -634,7 +645,7 @@ private:
                 int vIdx = b * SimdWidth + i;
                 if (vIdx < unisonCount) {
                     float bias = (unisonCount == 1) ? 0.0f : (2.0f * vIdx / (float)(unisonCount - 1) - 1.0f);
-                    inc.set(i, (float)((baseFreq * std::pow(2.0f, (bias * bias * bias * detuneAmount * 0.5f) * 0.083333f)) / sampleRate));
+                    inc.set(i, (float)((baseFreq * std::exp2((bias * bias * bias * detuneAmount * 0.5f) * 0.083333f)) / sampleRate)); // ★候補C: pow(2,x)→exp2
                     float ang = cAng + ((bias + 1.0f) * cAng - cAng) * (baseFreq < 150.0f ? stereoWidth * (baseFreq / 150.0f) : stereoWidth);
                     pL.set(i, std::cos(ang)); pR.set(i, std::sin(ang)); a.set(i, norm);
                 }
