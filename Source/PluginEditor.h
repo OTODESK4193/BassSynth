@@ -200,6 +200,9 @@ private:
     juce::Slider masterGainSlider;
     juce::Label masterGainLabel;
 
+    juce::Slider maxVoicesSlider;
+    juce::Label maxVoicesLabel;
+
     std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>> atts;
     std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment>> comboAtts;
 };

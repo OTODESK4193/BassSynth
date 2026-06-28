@@ -58,7 +58,8 @@ target_sources(BassSynth PRIVATE
     Source/UI/DualScopeComponent.h
 
     # Logic Group
-    Source/Logic/MonoVoiceManager.h
+    Source/Logic/BassSynthVoice.h
+    Source/Logic/PolyVoiceManager.h
     Source/Logic/AdsrEnvelope.h
  "Source/DSP/SpectralMorphProcessor.h" "Source/DSP/DualFilterEngine.h" "Source/DSP/MsegEngine.h" "Source/Logic/Mseg.h" "Source/DSP/ZeroLatencyLimiter.h")
 

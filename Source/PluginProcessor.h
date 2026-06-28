@@ -12,10 +12,7 @@
 #include "DSP/SineShaper.h"
 #include "DSP/ColorIREngine.h"
 #include "DSP/ZeroLatencyLimiter.h"
-#include "Logic/MonoVoiceManager.h"
-#include "Logic/AdsrEnvelope.h"
-#include "Logic/Lfo.h"
-#include "Logic/Mseg.h"
+#include "Logic/PolyVoiceManager.h"
 
 class LiquidDreamAudioProcessor : public juce::AudioProcessor
 {
@@ -47,7 +44,7 @@ public:
     float* getOutputScopePtr() { return outputScopeData.data(); }
 
     void getStaticWaveform(std::array<float, 512>& buffer) {
-        oscillator.generateSingleCycle(buffer);
+        voiceManager.generateSingleCycle(buffer);
         int mA = (int)pMorphAMode->load(std::memory_order_relaxed);
         float aA = pMorphAAmt->load(std::memory_order_relaxed);
         float sA = pMorphAShift->load(std::memory_order_relaxed);
@@ -57,7 +54,7 @@ public:
         int mC = (int)pMorphCMode->load(std::memory_order_relaxed);
         float aC = pMorphCAmt->load(std::memory_order_relaxed);
         float sC = pMorphCShift->load(std::memory_order_relaxed);
-        spectralMorph.processSingleCycleForDisplay(buffer, mA, aA, sA, mB, aB, sB, mC, aC, sC);
+        displaySpectralMorph.processSingleCycleForDisplay(buffer, mA, aA, sA, mB, aB, sB, mC, aC, sC);
     }
 
     ColorIREngine& getColorEngine() { return colorEngine; }
@@ -77,7 +74,7 @@ public:
     juce::StringArray getFavorites() const { return favoriteWavetables; }
 
     MsegState msegStates[2];
-    Mseg& getMsegEngine(int index) { return msegs[index]; }
+    Mseg& getMsegEngine(int index) { return voiceManager.getMsegEngine(index); }
 
     std::atomic<bool> presetLoadedFlag{ false };
     std::atomic<bool> forceScopeUpdate{ false };
@@ -92,26 +89,14 @@ private:
     juce::AudioProcessorValueTreeState apvts;
     juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
-    WavetableOscillator oscillator;
-    SpectralMorphProcessor spectralMorph;
-    DualFilterEngine dualFilter;
-    SineShaper shaper;
     ColorIREngine colorEngine;
-    MonoVoiceManager voiceManager;
+    PolyVoiceManager voiceManager;
     ZeroLatencyLimiter masterLimiter;
-
-    AdsrEnvelope ampEnv, filterEnvA, filterEnvB;
-    std::array<AdsrEnvelope, 3> modEnvs;
-    std::array<Lfo, 3> lfos;
-    std::array<Mseg, 2> msegs;
+    SpectralMorphProcessor displaySpectralMorph;
 
     std::array<float, 512> outputScopeData;
     std::array<float, 512> tempScopeBuffer;
     int scopeWriteIndex = 0;
-
-    juce::AudioBuffer<float> tempEnvBuffer;
-    juce::AudioBuffer<float> tempSubBuffer;
-    juce::AudioBuffer<float> tempWavetableBuffer;
 
     std::vector<int> activeMidiNotes;
     std::mutex midiNotesMutex;
@@ -158,6 +143,7 @@ private:
 
     std::atomic<float>* pLimitOn = nullptr;
     std::atomic<float>* pLimitCeil = nullptr;
+    std::atomic<float>* pMaxVoices = nullptr;
 
     std::array<std::atomic<float>*, 3> pModOn, pModAtk, pModDec, pModSus, pModRel, pModAmt;
     std::array<std::atomic<float>*, 3> pModBipolar;
@@ -170,15 +156,8 @@ private:
     std::array<std::atomic<float>*, 10> pMatrixDest;
     std::array<std::atomic<float>*, 10> pMatrixAmt;
 
-    juce::SmoothedValue<float> smoothedWtLevel, smoothedWtPitch, smoothedPDecayAmt, smoothedPDecayTime;
-    juce::SmoothedValue<float> smoothedFltACutoff, smoothedFltAReso, smoothedFltBCutoff, smoothedFltBReso, smoothedFltMix;
-    juce::SmoothedValue<float> smoothedDrive, smoothedShpAmt, smoothedShpRate, smoothedShpBit, smoothedGain;
-    juce::SmoothedValue<float> smoothedWtPos, smoothedFm, smoothedDrift, smoothedSubVol, smoothedSubPitch, smoothedWidth;
-    juce::SmoothedValue<float> smoothedMorphAAmt, smoothedMorphAShift, smoothedMorphBAmt, smoothedMorphBShift, smoothedMorphCAmt, smoothedMorphCShift;
-    juce::SmoothedValue<float> smoothedColorMix;
-    std::array<juce::SmoothedValue<float>, 3> smoothedLfoRates;
-
-    std::array<float, 9> modSourceStates = { 0.0f };
+    juce::SmoothedValue<float> smoothedGain;
+    juce::SmoothedValue<float> smoothedSubPitch, smoothedWidth;
 
     float lastOscFreq = -1.0f;
     int lastModeA = -1, lastModeB = -1, lastModeC = -1;

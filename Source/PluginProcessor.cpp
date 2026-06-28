@@ -73,14 +73,50 @@ LiquidDreamAudioProcessor::LiquidDreamAudioProcessor()
         pMsegUnipolar[i] = apvts.getRawParameterValue(msegId + "unipolar");
     }
 
+    pMaxVoices = apvts.getRawParameterValue("max_voices");
+
     for (int i = 0; i < 10; ++i) {
         pMatrixSrc[i] = apvts.getRawParameterValue("matrix_src_" + juce::String(i));
         pMatrixDest[i] = apvts.getRawParameterValue("matrix_dest_" + juce::String(i));
         pMatrixAmt[i] = apvts.getRawParameterValue("matrix_amt_" + juce::String(i));
     }
 
-    msegs[0].pushNewState(msegStates[0]);
-    msegs[1].pushNewState(msegStates[1]);
+    VoiceParams vp;
+    vp.pOscOn = pOscOn; vp.pWave = pWave; vp.pPos = pPos; vp.pOscLevel = pOscLevel; vp.pOscPitch = pOscPitch;
+    vp.pPDecayAmt = pPDecayAmt; vp.pPDecayTime = pPDecayTime; vp.pFm = pFm; vp.pFmWave = pFmWave;
+    vp.pMorphAMode = pMorphAMode; vp.pMorphAAmt = pMorphAAmt; vp.pMorphAShift = pMorphAShift;
+    vp.pMorphBMode = pMorphBMode; vp.pMorphBAmt = pMorphBAmt; vp.pMorphBShift = pMorphBShift;
+    vp.pMorphCMode = pMorphCMode; vp.pMorphCAmt = pMorphCAmt; vp.pMorphCShift = pMorphCShift;
+    vp.pUni = pUni; vp.pDetune = pDetune; vp.pWidth = pWidth; vp.pDrift = pDrift;
+    vp.pSubOn = pSubOn; vp.pSubWave = pSubWave; vp.pSubVol = pSubVol; vp.pSubPitch = pSubPitch;
+    vp.pFltAType = pFltAType; vp.pFltACutoff = pFltACutoff; vp.pFltAReso = pFltAReso;
+    vp.pFltBType = pFltBType; vp.pFltBCutoff = pFltBCutoff; vp.pFltBReso = pFltBReso;
+    vp.pFltRouting = pFltRouting; vp.pFltMix = pFltMix; vp.pFltAEnvAmt = pFltAEnvAmt; vp.pFltBEnvAmt = pFltBEnvAmt;
+    vp.pAAtk = pAAtk; vp.pADec = pADec; vp.pASus = pASus; vp.pARel = pARel;
+    vp.pFAtkA = pFAtkA; vp.pFDecA = pFDecA; vp.pFSusA = pFSusA; vp.pFRelA = pFRelA;
+    vp.pFAtkB = pFAtkB; vp.pFDecB = pFDecB; vp.pFSusB = pFSusB; vp.pFRelB = pFRelB;
+    vp.pDrive = pDrive; vp.pShpAmt = pShpAmt; vp.pShpRate = pShpRate; vp.pShpBit = pShpBit;
+    vp.pColorMix = pColorMix; vp.pGlide = pGlide;
+    
+    for (int i = 0; i < 3; ++i) {
+        vp.pModOn[i] = pModOn[i]; vp.pModAtk[i] = pModAtk[i]; vp.pModDec[i] = pModDec[i];
+        vp.pModSus[i] = pModSus[i]; vp.pModRel[i] = pModRel[i]; vp.pModAmt[i] = pModAmt[i];
+        vp.pModBipolar[i] = pModBipolar[i];
+        vp.pLfoOn[i] = pLfoOn[i]; vp.pLfoWave[i] = pLfoWave[i]; vp.pLfoSync[i] = pLfoSync[i];
+        vp.pLfoRate[i] = pLfoRate[i]; vp.pLfoBeat[i] = pLfoBeat[i]; vp.pLfoAmt[i] = pLfoAmt[i];
+        vp.pLfoTrig[i] = pLfoTrig[i]; vp.pLfoUnipolar[i] = pLfoUnipolar[i];
+    }
+    for (int i = 0; i < 2; ++i) {
+        vp.pMsegOn[i] = pMsegOn[i]; vp.pMsegSync[i] = pMsegSync[i]; vp.pMsegRate[i] = pMsegRate[i];
+        vp.pMsegBeat[i] = pMsegBeat[i]; vp.pMsegAmt[i] = pMsegAmt[i]; vp.pMsegTrig[i] = pMsegTrig[i];
+        vp.pMsegUnipolar[i] = pMsegUnipolar[i];
+    }
+    for (int i = 0; i < 10; ++i) {
+        vp.pMatrixSrc[i] = pMatrixSrc[i]; vp.pMatrixDest[i] = pMatrixDest[i]; vp.pMatrixAmt[i] = pMatrixAmt[i];
+    }
+
+    voiceManager.init(vp);
+    voiceManager.updateMsegStates(msegStates[0], msegStates[1]);
 
     // グローバル設定からのフォルダ復元
     juce::PropertiesFile::Options options;
@@ -88,14 +124,13 @@ LiquidDreamAudioProcessor::LiquidDreamAudioProcessor()
     options.filenameSuffix = ".settings";
     options.osxLibrarySubFolder = "Application Support";
     options.folderName = "LiquidDreamAudio";
-
+ 
     juce::PropertiesFile propertiesFile(options);
     juce::String foldersStr = propertiesFile.getValue("UserFolders", "");
     if (foldersStr.isNotEmpty()) {
         userWavetableFolders.clear();
         userWavetableFolders.addTokens(foldersStr, "|", "");
     }
-
 }
 
 LiquidDreamAudioProcessor::~LiquidDreamAudioProcessor() {}
@@ -240,6 +275,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout LiquidDreamAudioProcessor::c
         params.push_back(std::make_unique<juce::AudioParameterFloat>("matrix_amt_" + sIdx, "Amt", -1.0f, 1.0f, 0.0f));
     }
 
+    params.push_back(std::make_unique<juce::AudioParameterInt>("max_voices", "Max Voices", 1, 24, 12));
+
     return { params.begin(), params.end() };
 }
 
@@ -276,13 +313,12 @@ void LiquidDreamAudioProcessor::setStateInformation(const void* data, int sizeIn
         juce::String ms0 = xmlState->getStringAttribute("mseg0_data", "");
         if (ms0.isNotEmpty()) {
             msegStates[0] = deserializeMsegState(ms0);
-            msegs[0].pushNewState(msegStates[0]);
         }
         juce::String ms1 = xmlState->getStringAttribute("mseg1_data", "");
         if (ms1.isNotEmpty()) {
             msegStates[1] = deserializeMsegState(ms1);
-            msegs[1].pushNewState(msegStates[1]);
         }
+        voiceManager.updateMsegStates(msegStates[0], msegStates[1]);
 
         juce::String chordStr = xmlState->getStringAttribute("ColorChord", "");
         if (chordStr.isNotEmpty()) {
@@ -310,15 +346,15 @@ void LiquidDreamAudioProcessor::setStateInformation(const void* data, int sizeIn
 void LiquidDreamAudioProcessor::loadCustomWavetable(const juce::File& file) {
     currentCustomWavetablePath = file.getFullPathName();
     customWavetableLoaded.store(true);
-    oscillator.loadCustomWavetableFile(file);
+    voiceManager.loadCustomWavetable(file);
     forceScopeUpdate.store(true);
 }
 
 void LiquidDreamAudioProcessor::loadFactoryWavetable(int index) {
     currentCustomWavetablePath = "";
     customWavetableLoaded.store(false);
-    if (index >= 0 && index < 10) oscillator.loadFactoryWavetable(index);
-    else oscillator.loadFactoryWavetable(0);
+    if (index >= 0 && index < 10) voiceManager.loadFactoryWavetable(index);
+    else voiceManager.loadFactoryWavetable(0);
     forceScopeUpdate.store(true);
 }
 
@@ -338,48 +374,15 @@ void LiquidDreamAudioProcessor::setUserFolders(const juce::StringArray& folders)
 
 void LiquidDreamAudioProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
-    oscillator.prepare(sampleRate);
-    spectralMorph.prepare(sampleRate, samplesPerBlock);
-    dualFilter.prepare(sampleRate, samplesPerBlock);
-    shaper.prepare(sampleRate);
-    voiceManager.setSampleRate(sampleRate);
+    voiceManager.prepare(sampleRate, samplesPerBlock);
+    displaySpectralMorph.prepare(sampleRate, samplesPerBlock);
     colorEngine.prepare(sampleRate, samplesPerBlock);
     masterLimiter.prepare(sampleRate);
 
-    ampEnv.setSampleRate(sampleRate);
-    filterEnvA.setSampleRate(sampleRate); filterEnvB.setSampleRate(sampleRate);
-    for (auto& env : modEnvs) env.setSampleRate(sampleRate);
-    for (auto& lfo : lfos) lfo.setSampleRate(sampleRate);
-    for (auto& ms : msegs) ms.setSampleRate(sampleRate);
-
-    tempEnvBuffer.setSize(24, samplesPerBlock);
-    tempSubBuffer.setSize(2, samplesPerBlock);
-    tempWavetableBuffer.setSize(2, samplesPerBlock);
-
     double st = 0.02;
-    smoothedWtLevel.reset(sampleRate, st); smoothedWtPitch.reset(sampleRate, st);
-    smoothedPDecayAmt.reset(sampleRate, st); smoothedPDecayTime.reset(sampleRate, st);
-    smoothedFltACutoff.reset(sampleRate, st); smoothedFltAReso.reset(sampleRate, st);
-    smoothedFltBCutoff.reset(sampleRate, st); smoothedFltBReso.reset(sampleRate, st);
-    smoothedFltMix.reset(sampleRate, st);
-    smoothedDrive.reset(sampleRate, st); smoothedShpAmt.reset(sampleRate, st);
-    smoothedShpRate.reset(sampleRate, st); smoothedShpBit.reset(sampleRate, st); smoothedGain.reset(sampleRate, st);
-    smoothedWtPos.reset(sampleRate, st); smoothedFm.reset(sampleRate, st); smoothedDrift.reset(sampleRate, st);
-    smoothedSubVol.reset(sampleRate, st); smoothedSubPitch.reset(sampleRate, st); smoothedWidth.reset(sampleRate, st);
-    smoothedMorphAAmt.reset(sampleRate, st); smoothedMorphAShift.reset(sampleRate, st);
-    smoothedMorphBAmt.reset(sampleRate, st); smoothedMorphBShift.reset(sampleRate, st);
-    smoothedMorphCAmt.reset(sampleRate, st); smoothedMorphCShift.reset(sampleRate, st);
-
-    smoothedColorMix.reset(sampleRate, st);
-    for (int i = 0; i < 3; ++i) smoothedLfoRates[i].reset(sampleRate, st);
-
-    smoothedWtLevel.setCurrentAndTargetValue(pOscLevel->load(std::memory_order_relaxed));
-    smoothedWtPitch.setCurrentAndTargetValue(pOscPitch->load(std::memory_order_relaxed));
-    smoothedPDecayAmt.setCurrentAndTargetValue(pPDecayAmt->load(std::memory_order_relaxed));
-    smoothedPDecayTime.setCurrentAndTargetValue(pPDecayTime->load(std::memory_order_relaxed));
-    smoothedDrift.setCurrentAndTargetValue(pDrift->load(std::memory_order_relaxed));
-
-    modSourceStates.fill(0.0f);
+    smoothedGain.reset(sampleRate, st);
+    smoothedSubPitch.reset(sampleRate, st);
+    smoothedWidth.reset(sampleRate, st);
 
     lastOscFreq = -1.0f;
     lastModeA = -1; lastModeB = -1; lastModeC = -1;
@@ -397,40 +400,13 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
         }
     }
 
-    auto updateSmoothTime = [this](std::atomic<float>* pMode, int& lastMode, juce::SmoothedValue<float>& sAmt, juce::SmoothedValue<float>& sShift) {
-        int currentMode = (int)pMode->load(std::memory_order_relaxed);
-        if (currentMode != lastMode) {
-            double time = (currentMode >= 8) ? 0.025 : 0.005;
-            sAmt.reset(getSampleRate(), time);
-            sShift.reset(getSampleRate(), time);
-            lastMode = currentMode;
-        }
-        return currentMode;
-        };
 
-    int currentModeA = updateSmoothTime(pMorphAMode, lastModeA, smoothedMorphAAmt, smoothedMorphAShift);
-    int currentModeB = updateSmoothTime(pMorphBMode, lastModeB, smoothedMorphBAmt, smoothedMorphBShift);
-    int currentModeC = updateSmoothTime(pMorphCMode, lastModeC, smoothedMorphCAmt, smoothedMorphCShift);
 
-    smoothedWtPos.setTargetValue(pPos->load(std::memory_order_relaxed)); smoothedFm.setTargetValue(pFm->load(std::memory_order_relaxed));
-    smoothedWtPitch.setTargetValue(pOscPitch->load(std::memory_order_relaxed));
-    smoothedPDecayAmt.setTargetValue(pPDecayAmt->load(std::memory_order_relaxed));
-    smoothedPDecayTime.setTargetValue(pPDecayTime->load(std::memory_order_relaxed));
-    smoothedDrift.setTargetValue(pDrift->load(std::memory_order_relaxed));
-    smoothedFltACutoff.setTargetValue(pFltACutoff->load(std::memory_order_relaxed));
-    smoothedFltAReso.setTargetValue(pFltAReso->load(std::memory_order_relaxed));
-    smoothedFltBCutoff.setTargetValue(pFltBCutoff->load(std::memory_order_relaxed));
-    smoothedFltBReso.setTargetValue(pFltBReso->load(std::memory_order_relaxed));
-    smoothedFltMix.setTargetValue(pFltMix->load(std::memory_order_relaxed));
     smoothedGain.setTargetValue(pGain->load(std::memory_order_relaxed));
-    smoothedMorphAAmt.setTargetValue(pMorphAAmt->load(std::memory_order_relaxed)); smoothedMorphAShift.setTargetValue(pMorphAShift->load(std::memory_order_relaxed));
-    smoothedMorphBAmt.setTargetValue(pMorphBAmt->load(std::memory_order_relaxed)); smoothedMorphBShift.setTargetValue(pMorphBShift->load(std::memory_order_relaxed));
-    smoothedMorphCAmt.setTargetValue(pMorphCAmt->load(std::memory_order_relaxed)); smoothedMorphCShift.setTargetValue(pMorphCShift->load(std::memory_order_relaxed));
-    smoothedWtLevel.setTargetValue(pOscLevel->load(std::memory_order_relaxed));
-    smoothedDrive.setTargetValue(pDrive->load(std::memory_order_relaxed)); smoothedShpAmt.setTargetValue(pShpAmt->load(std::memory_order_relaxed));
-    smoothedShpRate.setTargetValue(pShpRate->load(std::memory_order_relaxed)); smoothedShpBit.setTargetValue(pShpBit->load(std::memory_order_relaxed));
-    smoothedSubVol.setTargetValue(pSubVol->load(std::memory_order_relaxed));
-    smoothedColorMix.setTargetValue(pColorMix->load(std::memory_order_relaxed));
+
+    // 最大発音数とMSEG状態の更新
+    voiceManager.setMaxVoices((int)pMaxVoices->load(std::memory_order_relaxed));
+    voiceManager.updateMsegStates(msegStates[0], msegStates[1]);
 
     int waveIdx = (int)pWave->load(std::memory_order_relaxed);
     if (waveIdx != lastWaveIdxProcessor) {
@@ -441,211 +417,49 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
             lastWaveIdxProcessor = waveIdx;
             customWavetableLoaded.store(false);
             currentCustomWavetablePath = "";
-            if (waveIdx >= 0 && waveIdx < 10) oscillator.loadFactoryWavetable(waveIdx);
-            else if (waveIdx == -1) oscillator.loadFactoryWavetable(0);
+            if (waveIdx >= 0 && waveIdx < 10) voiceManager.loadFactoryWavetable(waveIdx);
+            else if (waveIdx == -1) voiceManager.loadFactoryWavetable(0);
         }
     }
-
-    voiceManager.setLegatoMode(pLegato->load(std::memory_order_relaxed) > 0.5f);
 
     for (const auto metadata : midiMessages) {
         auto msg = metadata.getMessage();
         if (msg.isNoteOn()) {
             if (colorEngine.getLearnState() == ColorIREngine::LearnState::Learning) colorEngine.addNote(msg.getNoteNumber());
-            if (std::find(activeMidiNotes.begin(), activeMidiNotes.end(), msg.getNoteNumber()) == activeMidiNotes.end()) activeMidiNotes.push_back(msg.getNoteNumber());
-            if (voiceManager.noteOn(msg.getNoteNumber(), msg.getVelocity())) {
-                bool isLegato = voiceManager.isLegatoTransition();
-                ampEnv.noteOn(isLegato); filterEnvA.noteOn(isLegato); filterEnvB.noteOn(isLegato);
-                for (auto& env : modEnvs) env.noteOn(isLegato);
-                for (auto& lfo : lfos) lfo.noteOn(isLegato);
-                for (auto& ms : msegs) ms.noteOn(isLegato);
+            {
+                std::lock_guard<std::mutex> lock(midiNotesMutex);
+                if (std::find(activeMidiNotes.begin(), activeMidiNotes.end(), msg.getNoteNumber()) == activeMidiNotes.end()) {
+                    activeMidiNotes.push_back(msg.getNoteNumber());
+                }
             }
+            voiceManager.noteOn(msg.getNoteNumber(), msg.getVelocity() / 127.0f);
         }
         else if (msg.isNoteOff()) {
-            activeMidiNotes.erase(std::remove(activeMidiNotes.begin(), activeMidiNotes.end(), msg.getNoteNumber()), activeMidiNotes.end());
-            if (voiceManager.noteOff(msg.getNoteNumber())) {
-                ampEnv.noteOff(); filterEnvA.noteOff(); filterEnvB.noteOff();
-                for (auto& env : modEnvs) env.noteOff();
+            {
+                std::lock_guard<std::mutex> lock(midiNotesMutex);
+                activeMidiNotes.erase(std::remove(activeMidiNotes.begin(), activeMidiNotes.end(), msg.getNoteNumber()), activeMidiNotes.end());
             }
+            voiceManager.noteOff(msg.getNoteNumber());
         }
     }
 
-    oscillator.setOscOn(pOscOn->load(std::memory_order_relaxed) > 0.5f);
-    oscillator.setSubOn(pSubOn->load(std::memory_order_relaxed) > 0.5f);
-    oscillator.setSubWaveform((int)pSubWave->load(std::memory_order_relaxed));
-    oscillator.setSubPitchOffset(pSubPitch->load(std::memory_order_relaxed));
-    oscillator.setUnisonCount((int)pUni->load(std::memory_order_relaxed));
-    oscillator.setUnisonDetune(pDetune->load(std::memory_order_relaxed));
-    oscillator.setFMWaveform((int)pFmWave->load(std::memory_order_relaxed));
-
-    voiceManager.setGlideTime(pGlide->load(std::memory_order_relaxed));
-    ampEnv.setParameters(pAAtk->load(std::memory_order_relaxed), pADec->load(std::memory_order_relaxed), pASus->load(std::memory_order_relaxed), pARel->load(std::memory_order_relaxed));
-    filterEnvA.setParameters(pFAtkA->load(std::memory_order_relaxed), pFDecA->load(std::memory_order_relaxed), pFSusA->load(std::memory_order_relaxed), pFRelA->load(std::memory_order_relaxed));
-    filterEnvB.setParameters(pFAtkB->load(std::memory_order_relaxed), pFDecB->load(std::memory_order_relaxed), pFSusB->load(std::memory_order_relaxed), pFRelB->load(std::memory_order_relaxed));
-
-    for (int i = 0; i < 3; ++i) {
-        modEnvs[i].setParameters(pModAtk[i]->load(), pModDec[i]->load(), pModSus[i]->load(), pModRel[i]->load());
-        smoothedLfoRates[i].setTargetValue(pLfoRate[i]->load());
-    }
-
-    for (int i = 0; i < 2; ++i) {
-        msegs[i].setParameters(pMsegSync[i]->load() > 0.5f, pMsegRate[i]->load(), (int)pMsegBeat[i]->load(), pMsegAmt[i]->load(), (int)pMsegTrig[i]->load());
-    }
+    // 全ボイスのレンダリングと加算ミックス
+    voiceManager.renderNextBlock(buffer, currentBpm);
 
     int numSamples = buffer.getNumSamples();
-    if (tempEnvBuffer.getNumSamples() < numSamples) {
-        tempEnvBuffer.setSize(24, numSamples, true, true, true);
-        tempSubBuffer.setSize(2, numSamples, true, true, true);
-        tempWavetableBuffer.setSize(2, numSamples, true, true, true);
-    }
-
     auto* left = buffer.getWritePointer(0); auto* right = buffer.getWritePointer(1);
-    auto* wtL = tempWavetableBuffer.getWritePointer(0); auto* wtR = tempWavetableBuffer.getWritePointer(1);
-    float stft_aA = 0.0f, stft_sA = 0.0f, stft_aB = 0.0f, stft_sB = 0.0f, stft_aC = 0.0f, stft_sC = 0.0f;
 
-    float modAlpha = std::exp(-1.0f / static_cast<float>(getSampleRate() * 0.003));
-    float destMods[23] = { 0.0f };
-
-    for (int i = 0; i < numSamples; ++i) {
-
-        for (int m = 0; m < 3; ++m) {
-            float r = juce::jlimit(0.01f, 50.0f, smoothedLfoRates[m].getNextValue() + destMods[20 + m] * 25.0f);
-            lfos[m].setParameters((int)pLfoWave[m]->load(), pLfoSync[m]->load() > 0.5f, r, (int)pLfoBeat[m]->load(), pLfoAmt[m]->load(), (int)pLfoTrig[m]->load());
-        }
-
-        float rawSources[9] = {
-            0.0f,
-            (pModOn[0]->load(std::memory_order_relaxed) > 0.5f ? (pModBipolar[0]->load(std::memory_order_relaxed) > 0.5f ? modEnvs[0].getNextSample() * 2.0f - 1.0f : modEnvs[0].getNextSample()) : 0.0f),
-            (pModOn[1]->load(std::memory_order_relaxed) > 0.5f ? (pModBipolar[1]->load(std::memory_order_relaxed) > 0.5f ? modEnvs[1].getNextSample() * 2.0f - 1.0f : modEnvs[1].getNextSample()) : 0.0f),
-            (pModOn[2]->load(std::memory_order_relaxed) > 0.5f ? (pModBipolar[2]->load(std::memory_order_relaxed) > 0.5f ? modEnvs[2].getNextSample() * 2.0f - 1.0f : modEnvs[2].getNextSample()) : 0.0f),
-            (pLfoOn[0]->load(std::memory_order_relaxed) > 0.5f ? (pLfoUnipolar[0]->load(std::memory_order_relaxed) > 0.5f ? (lfos[0].getNextSample(currentBpm) + 1.0f) * 0.5f : lfos[0].getNextSample(currentBpm)) : 0.0f),
-            (pLfoOn[1]->load(std::memory_order_relaxed) > 0.5f ? (pLfoUnipolar[1]->load(std::memory_order_relaxed) > 0.5f ? (lfos[1].getNextSample(currentBpm) + 1.0f) * 0.5f : lfos[1].getNextSample(currentBpm)) : 0.0f),
-            (pLfoOn[2]->load(std::memory_order_relaxed) > 0.5f ? (pLfoUnipolar[2]->load(std::memory_order_relaxed) > 0.5f ? (lfos[2].getNextSample(currentBpm) + 1.0f) * 0.5f : lfos[2].getNextSample(currentBpm)) : 0.0f),
-            (pMsegOn[0]->load(std::memory_order_relaxed) > 0.5f ? (pMsegUnipolar[0]->load(std::memory_order_relaxed) > 0.5f ? (msegs[0].getNextSample(currentBpm) + 1.0f) * 0.5f : msegs[0].getNextSample(currentBpm)) : 0.0f),
-            (pMsegOn[1]->load(std::memory_order_relaxed) > 0.5f ? (pMsegUnipolar[1]->load(std::memory_order_relaxed) > 0.5f ? (msegs[1].getNextSample(currentBpm) + 1.0f) * 0.5f : msegs[1].getNextSample(currentBpm)) : 0.0f)
-        };
-
-        for (int s = 1; s < 9; ++s) {
-            modSourceStates[s] = modAlpha * modSourceStates[s] + (1.0f - modAlpha) * rawSources[s];
-        }
-
-        std::fill(std::begin(destMods), std::end(destMods), 0.0f);
-        for (int slot = 0; slot < 10; ++slot) {
-            int srcIdx = (int)pMatrixSrc[slot]->load(std::memory_order_relaxed);
-            int destIdx = (int)pMatrixDest[slot]->load(std::memory_order_relaxed);
-            float amt = pMatrixAmt[slot]->load(std::memory_order_relaxed);
-
-            if (srcIdx > 0 && srcIdx < 9 && destIdx > 0 && destIdx < 23) {
-                destMods[destIdx] += modSourceStates[srcIdx] * amt;
-            }
-        }
-
-        float modPos = juce::jlimit(0.0f, 1.0f, smoothedWtPos.getNextValue() + destMods[1]);
-        float modFm = juce::jlimit(0.0f, 3.0f, smoothedFm.getNextValue() + destMods[2] * 3.0f);
-        float aA = juce::jlimit(-1.0f, 1.0f, smoothedMorphAAmt.getNextValue() + destMods[3]);
-        float sA = juce::jlimit(-1.0f, 1.0f, smoothedMorphAShift.getNextValue() + destMods[4]);
-        float aB = juce::jlimit(-1.0f, 1.0f, smoothedMorphBAmt.getNextValue() + destMods[5]);
-        float sB = juce::jlimit(-1.0f, 1.0f, smoothedMorphBShift.getNextValue() + destMods[6]);
-        float aC = juce::jlimit(-1.0f, 1.0f, smoothedMorphCAmt.getNextValue() + destMods[7]);
-        float sC = juce::jlimit(-1.0f, 1.0f, smoothedMorphCShift.getNextValue() + destMods[8]);
-
-        float modWtPitch = smoothedWtPitch.getNextValue() + destMods[14] * 24.0f;
-        float modDrive = juce::jlimit(1.0f, 10.0f, smoothedDrive.getNextValue() + destMods[15] * 9.0f);
-        float modShpAmt = juce::jlimit(0.0f, 1.0f, smoothedShpAmt.getNextValue() + destMods[16]);
-        float modRate = juce::jlimit(1.0f, 20.0f, smoothedShpRate.getNextValue() + destMods[17] * 19.0f);
-        float modBits = juce::jlimit(1.0f, 24.0f, smoothedShpBit.getNextValue() + destMods[18] * 23.0f);
-        float modColorMix = juce::jlimit(0.0f, 1.0f, smoothedColorMix.getNextValue() + destMods[19]);
-
-        if (i == 0) { stft_aA = aA; stft_sA = sA; stft_aB = aB; stft_sB = sB; stft_aC = aC; stft_sC = sC; }
-
-        oscillator.setWavetablePosition(modPos);
-        oscillator.setFMAmount(modFm);
-        oscillator.setWavetablePitchOffset(modWtPitch);
-        oscillator.setPitchDecay(smoothedPDecayAmt.getNextValue(), smoothedPDecayTime.getNextValue());
-        oscillator.setDriftAmount(smoothedDrift.getNextValue());
-        oscillator.setMorphA(currentModeA, aA, sA);
-        oscillator.setMorphB(currentModeB, aB, sB);
-        oscillator.setMorphC(currentModeC, aC, sC);
-        oscillator.setWavetableLevel(smoothedWtLevel.getNextValue());
-        oscillator.setSubVolume(smoothedSubVol.getNextValue());
-
-        float cf = voiceManager.getCurrentFrequency();
-        if (cf < 1.0f) cf = 1.0f;
-        if (std::abs(cf - lastOscFreq) > 0.01f) { oscillator.setFrequency(cf); lastOscFreq = cf; }
-
-        float aVal = ampEnv.getNextSample();
-        float fValA = filterEnvA.getNextSample();
-        float fValB = filterEnvB.getNextSample();
-
-        if (ampEnv.popJustReset()) oscillator.resetPhase();
-
-        tempEnvBuffer.setSample(0, i, aVal);
-        tempEnvBuffer.setSample(1, i, fValA);
-        tempEnvBuffer.setSample(2, i, fValB);
-        tempEnvBuffer.setSample(3, i, destMods[9]);
-        tempEnvBuffer.setSample(4, i, destMods[10]);
-        tempEnvBuffer.setSample(5, i, destMods[11]);
-        tempEnvBuffer.setSample(6, i, destMods[12]);
-        tempEnvBuffer.setSample(7, i, destMods[13]);
-
-        tempEnvBuffer.setSample(8, i, modDrive);
-        tempEnvBuffer.setSample(9, i, modShpAmt);
-        tempEnvBuffer.setSample(10, i, modRate);
-        tempEnvBuffer.setSample(11, i, modBits);
-        tempEnvBuffer.setSample(12, i, modColorMix);
-
-        float oL = 0.0f, oR = 0.0f, subL = 0.0f, subR = 0.0f;
-        oscillator.getSampleStereo(oL, oR, subL, subR);
-        wtL[i] = oL; wtR[i] = oR;
-        tempSubBuffer.setSample(0, i, subL); tempSubBuffer.setSample(1, i, subR);
-    }
-
-    spectralMorph.process(tempWavetableBuffer, currentModeA, stft_aA, stft_sA, currentModeB, stft_aB, stft_sB, currentModeC, stft_aC, stft_sC);
-
-    for (int i = 0; i < numSamples; ++i) {
-        float cd = tempEnvBuffer.getSample(8, i);
-        float csa = tempEnvBuffer.getSample(9, i);
-        float csr = tempEnvBuffer.getSample(10, i);
-        float csb = tempEnvBuffer.getSample(11, i);
-        float sL = wtL[i]; float sR = wtR[i];
-        shaper.processStereo(sL, sR, cd, csa, csr, csb, sL, sR);
-        wtL[i] = sL; wtR[i] = sR;
-    }
-
-    for (int i = 0; i < numSamples; ++i) {
-        float ccA = smoothedFltACutoff.getNextValue(), crA = smoothedFltAReso.getNextValue();
-        float ccB = smoothedFltBCutoff.getNextValue(), crB = smoothedFltBReso.getNextValue();
-
-        float aVal = tempEnvBuffer.getSample(0, i);
-        float fValA = tempEnvBuffer.getSample(1, i);
-        float fValB = tempEnvBuffer.getSample(2, i);
-        float cutModA = tempEnvBuffer.getSample(3, i);
-        float resModA = tempEnvBuffer.getSample(4, i);
-        float cutModB = tempEnvBuffer.getSample(5, i);
-        float resModB = tempEnvBuffer.getSample(6, i);
-
-        float sL = wtL[i] + tempSubBuffer.getSample(0, i);
-        float sR = wtR[i] + tempSubBuffer.getSample(1, i);
-
-        float mcA = ccA * std::exp2(cutModA * 8.0f); mcA += (fValA * pFltAEnvAmt->load() * 10000.0f);
-        float mcB = ccB * std::exp2(cutModB * 8.0f); mcB += (fValB * pFltBEnvAmt->load() * 10000.0f);
-
-        dualFilter.setFilterA((int)pFltAType->load(), mcA, crA + resModA);
-        dualFilter.setFilterB((int)pFltBType->load(), mcB, crB + resModB);
-        dualFilter.setRouting((int)pFltRouting->load(), smoothedFltMix.getNextValue());
-
-        dualFilter.processStereo(sL, sR);
-        left[i] = sL * aVal; right[i] = sR * aVal;
-    }
-
+    // グローバルエフェクト
     if (pColorOn->load() > 0.5f) {
-        colorEngine.setParameters(pColorPreHp->load(), pColorPostHp->load(), tempEnvBuffer.getSample(12, numSamples - 1), pColorIrVol->load());
+        colorEngine.setParameters(pColorPreHp->load(), pColorPostHp->load(), pColorMix->load(), pColorIrVol->load());
         colorEngine.processIR(buffer);
 
         colorEngine.setArpParameters((int)pArpWave->load(), (int)pArpMode->load(), pArpSpeed->load(), (int)pArpPitch->load(), pArpLevel->load());
         std::vector<int> currentNotes;
         { std::lock_guard<std::mutex> lock(midiNotesMutex); currentNotes = activeMidiNotes; }
-        colorEngine.processArp(buffer, currentNotes, tempEnvBuffer.getReadPointer(0));
+        
+        std::vector<float> dummyEnv(numSamples, 1.0f);
+        colorEngine.processArp(buffer, currentNotes, dummyEnv.data());
 
         colorEngine.setOttParameters(pOttDepth->load(), pOttTime->load(), pOttUp->load(), pOttDown->load(), pOttGain->load());
         colorEngine.setSootheParameters(pOttDepth->load(), pOttTime->load(), pSootheSelectivity->load(), pSootheSharpness->load(), pSootheFocus->load());
@@ -654,9 +468,7 @@ void LiquidDreamAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, j
 
     for (int i = 0; i < numSamples; ++i) {
         float cg = smoothedGain.getNextValue();
-        float gainMod = tempEnvBuffer.getSample(7, i);
-        float finalGain = juce::jlimit(0.0f, 1.0f, cg + gainMod);
-        left[i] *= finalGain; right[i] *= finalGain;
+        left[i] *= cg; right[i] *= cg;
     }
 
     if (pLimitOn->load() > 0.5f) {

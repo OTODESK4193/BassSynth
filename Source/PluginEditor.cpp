@@ -439,6 +439,9 @@ ColorIrPanel::ColorIrPanel(LiquidDreamAudioProcessor& p) : processor(p), apvts(p
     setupS(masterGainSlider, masterGainLabel, "Master Vol", this);
     atts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, "m_gain", masterGainSlider));
 
+    setupS(maxVoicesSlider, maxVoicesLabel, "Max Voices", this);
+    atts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, "max_voices", maxVoicesSlider));
+
     comboAtts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(apvts, "arp_wave", arpWaveCombo));
     comboAtts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(apvts, "arp_mode", arpModeCombo));
     comboAtts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(apvts, "arp_pitch", arpPitchCombo));
@@ -503,8 +506,9 @@ void ColorIrPanel::resized() {
     arpModeLabel.setBounds(120, b3y, 90, 20); arpModeCombo.setBounds(120, b3y + 20, 90, 24);
     arpPitchLabel.setBounds(220, b3y, 90, 20); arpPitchCombo.setBounds(220, b3y + 20, 90, 24);
 
-    placeKnob(20, b3y + 60, arpSpeedLabel, arpSpeedSlider);
-    placeKnob(110, b3y + 60, arpLevelLabel, arpLevelSlider);
+    placeKnob(15, b3y + 60, arpSpeedLabel, arpSpeedSlider);
+    placeKnob(90, b3y + 60, arpLevelLabel, arpLevelSlider);
+    placeKnob(165, b3y + 60, maxVoicesLabel, maxVoicesSlider);
     placeKnob(240, b3y + 60, masterGainLabel, masterGainSlider);
 }
 
