@@ -89,10 +89,16 @@ public:
         // 出力バッファをクリア（各ボイスがここへ加算描画します）
         outputBuffer.clear();
 
+        int activeCount = 0;
         for (int i = 0; i < maxVoices; ++i) {
             if (voices[i].getIsActive()) {
                 voices[i].renderNextBlock(outputBuffer, bpm);
+                activeCount++;
             }
+        }
+
+        if (activeCount > 0) {
+            outputBuffer.applyGain(0.4f);
         }
     }
 

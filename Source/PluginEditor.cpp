@@ -439,8 +439,7 @@ ColorIrPanel::ColorIrPanel(LiquidDreamAudioProcessor& p) : processor(p), apvts(p
     setupS(masterGainSlider, masterGainLabel, "Master Vol", this);
     atts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, "m_gain", masterGainSlider));
 
-    setupS(maxVoicesSlider, maxVoicesLabel, "Max Voices", this);
-    atts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, "max_voices", maxVoicesSlider));
+
 
     comboAtts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(apvts, "arp_wave", arpWaveCombo));
     comboAtts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(apvts, "arp_mode", arpModeCombo));
@@ -506,9 +505,8 @@ void ColorIrPanel::resized() {
     arpModeLabel.setBounds(120, b3y, 90, 20); arpModeCombo.setBounds(120, b3y + 20, 90, 24);
     arpPitchLabel.setBounds(220, b3y, 90, 20); arpPitchCombo.setBounds(220, b3y + 20, 90, 24);
 
-    placeKnob(15, b3y + 60, arpSpeedLabel, arpSpeedSlider);
-    placeKnob(90, b3y + 60, arpLevelLabel, arpLevelSlider);
-    placeKnob(165, b3y + 60, maxVoicesLabel, maxVoicesSlider);
+    placeKnob(20, b3y + 60, arpSpeedLabel, arpSpeedSlider);
+    placeKnob(110, b3y + 60, arpLevelLabel, arpLevelSlider);
     placeKnob(240, b3y + 60, masterGainLabel, masterGainSlider);
 }
 
@@ -634,6 +632,7 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     setupS(fltBAtkSlider, fltBAtkLabel, "A", this); setupS(fltBDecSlider, fltBDecLabel, "D", this); setupS(fltBSusSlider, fltBSusLabel, "S", this); setupS(fltBRelSlider, fltBRelLabel, "R", this);
 
     setupS(glideSlider, glideLabel, "Glide", this); setupS(pitchSlider, pitchLabel, "Pitch", this); setupS(gainSlider, gainLabel, "Gain", this);
+    setupS(maxVoicesSlider, maxVoicesLabel, "Poly", this);
     addAndMakeVisible(legatoButton);
 
     // ★ ここからプリセット部分 ★
@@ -759,6 +758,7 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     att(fltBAtkSlider, "f_b_atk"); att(fltBDecSlider, "f_b_dec"); att(fltBSusSlider, "f_b_sus"); att(fltBRelSlider, "f_b_rel");
 
     att(glideSlider, "m_glide"); att(pitchSlider, "m_pb"); att(gainSlider, "m_gain");
+    attachments.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, "max_voices", maxVoicesSlider));
 
     // タブ・コンポーネントの設定
     addAndMakeVisible(modTabs);
@@ -1013,6 +1013,7 @@ void LiquidDreamAudioProcessorEditor::resized()
     glideSlider.setVisible(!isColorPanelVisible); glideLabel.setVisible(!isColorPanelVisible);
     pitchSlider.setVisible(!isColorPanelVisible); pitchLabel.setVisible(!isColorPanelVisible);
     gainSlider.setVisible(!isColorPanelVisible); gainLabel.setVisible(!isColorPanelVisible);
+    maxVoicesSlider.setVisible(!isColorPanelVisible); maxVoicesLabel.setVisible(!isColorPanelVisible);
 
     subOnButton.setVisible(!isColorPanelVisible);
     subWaveCombo.setVisible(!isColorPanelVisible);
@@ -1048,6 +1049,7 @@ void LiquidDreamAudioProcessorEditor::resized()
         placeKnob(cX + 240, r2Y, subPitchLabel, subPitchSlider);
 
         limitOnButton.setBounds(cX, r3Y + 20, 65, 24);
+        placeKnob(cX + 80, r3Y, maxVoicesLabel, maxVoicesSlider);
         placeKnob(cX + 240, r3Y, limitCeilLabel, limitCeilSlider);
     }
 

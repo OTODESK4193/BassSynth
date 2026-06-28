@@ -92,6 +92,8 @@ public:
         return currentValue;
     }
 
+    bool isActive() const { return state != State::Idle; }
+
 private:
     double sampleRate = 44100.0;
     State state = State::Idle;

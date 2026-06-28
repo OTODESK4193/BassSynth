@@ -414,7 +414,7 @@ public:
         }
 
         // エンベロープが完全にリリースし切ったら非アクティブ化
-        if (ampEnv.getNextSample() <= 0.0001f && ampEnv.popJustReset() == false) {
+        if (!ampEnv.isActive()) {
             isActive = false;
         }
     }

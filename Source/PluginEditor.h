@@ -200,9 +200,6 @@ private:
     juce::Slider masterGainSlider;
     juce::Label masterGainLabel;
 
-    juce::Slider maxVoicesSlider;
-    juce::Label maxVoicesLabel;
-
     std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>> atts;
     std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment>> comboAtts;
 };
@@ -286,6 +283,9 @@ private:
     juce::ToggleButton legatoButton{ "LEGATO" };
     juce::Slider glideSlider, pitchSlider, gainSlider;
     juce::Label  glideLabel, pitchLabel, gainLabel;
+
+    juce::Slider maxVoicesSlider;
+    juce::Label maxVoicesLabel;
 
     juce::ComboBox presetCombo;
     juce::TextButton savePresetBtn{ "Save" };
