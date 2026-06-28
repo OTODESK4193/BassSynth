@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WaveTable Generator</title>
+<style>
+    /* Design: Light Theme (Same as previous) */
+    :root { 
+        --bg: #f4f6f8; --panel: #ffffff; --text: #2c3e50; --border: #dae1e7; 
+        --accent: #3498db; --accent-hover: #2980b9; 
+        --warn: #e74c3c; --limit: #f39c12; --ok: #27ae60;
+        --slot-bg: #fdfdfd; --active-slot: #ebf5fb;
+    }
+    body { font-family: 'Helvetica Neue', Arial, sans-serif; background: var(--bg); color: var(--text); padding: 20px; max-width: 1000px; margin: 0 auto; line-height: 1.5; }
+    
+    .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--accent); padding-bottom: 15px; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }
+    h1 { margin: 0; font-size: 1.6rem; color: var(--text); display: flex; align-items: center; gap: 10px; }
+    .tag { font-size: 0.8rem; background: var(--ok); color: #fff; padding: 4px 8px; border-radius: 4px; font-weight: normal; }
+    .subtitle { font-size: 0.9rem; color: #666; font-weight: normal; margin-left: 10px; }
+
+    .toolbar { display: flex; gap: 10px; }
+    .tool-btn { background: #fff; border: 1px solid #ccc; color: #555; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 0.9rem; transition: 0.2s; display: flex; align-items: center; gap: 5px; }
+    .tool-btn:hover { background: #f0f0f0; border-color: #bbb; transform: translateY(-1px); }
+    .tool-btn.reset { color: #c0392b; border-color: #c0392b; }
+
+    .grid { display: grid; grid-template-columns: 1fr 1.3fr; gap: 20px; }
+    .panel { background: var(--panel); padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 20px; border: 1px solid var(--border); position: relative; }
+    
+    label { font-weight: bold; font-size: 0.85rem; display: block; margin-bottom: 6px; color: #555; text-transform: uppercase; letter-spacing: 0.5px; }
+    select, textarea { width: 100%; background: #fff; color: var(--text); border: 1px solid #ccc; padding: 10px; border-radius: 4px; font-family: 'Consolas', monospace; font-size: 14px; box-sizing: border-box; transition: 0.2s; }
+    select:focus, textarea:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1); }
+    
+    .info-box { background: #eef6fc; border-left: 4px solid var(--accent); padding: 10px; font-size: 0.85rem; color: #555; margin-top: 8px; border-radius: 0 4px 4px 0; }
+
+    .mod-slot { background: var(--slot-bg); padding: 15px; margin-bottom: 12px; border: 1px solid var(--border); border-radius: 6px; transition: 0.2s; }
+    .mod-slot.active { background: var(--active-slot); border-color: #aed6f1; border-left: 4px solid var(--accent); box-shadow: 0 2px 4px rgba(52, 152, 219, 0.1); }
+    
+    .slot-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+    .slot-select { flex-grow: 1; }
+    .link-check { display: flex; align-items: center; font-size: 0.8rem; cursor: pointer; color: #888; user-select: none; }
+    .link-check input { margin-right: 5px; accent-color: var(--accent); }
+    
+    input[type=range] { width: 100%; height: 6px; background: #e0e0e0; border-radius: 3px; outline: none; -webkit-appearance: none; cursor: pointer; }
+    input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; background: var(--accent); border-radius: 50%; transition: 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+    input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.15); background: var(--accent-hover); }
+
+    .char-counter { font-family: monospace; font-weight: bold; font-size: 0.9rem; text-align: right; margin-bottom: 5px; }
+    .char-counter.ok { color: var(--ok); }
+    .char-counter.limit { color: var(--limit); }
+    .char-counter.over { color: var(--warn); }
+
+    .action-btn { background: var(--accent); color: #fff; border: none; padding: 12px; width: 100%; font-weight: bold; border-radius: 6px; cursor: pointer; font-size: 1rem; transition: 0.2s; margin-top: 5px; box-shadow: 0 4px 6px rgba(52, 152, 219, 0.2); }
+    .action-btn:hover { background: var(--accent-hover); transform: translateY(-2px); box-shadow: 0 6px 8px rgba(52, 152, 219, 0.3); }
+    .action-btn:disabled { background: #ccc; cursor: not-allowed; transform: none; box-shadow: none; }
+
+    .preview-btn { background: #2c3e50; margin-top: 15px; }
+    .preview-btn:hover { background: #1a252f; }
+    .preview-btn.playing { background: #e74c3c; animation: pulse 1s infinite; }
+
+    @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.8; } 100% { opacity: 1; } }
+
+    canvas { width: 100%; height: 120px; background: #222; border-radius: 4px; margin-top: 15px; border: 1px solid #444; }
+    .msg-area { min-height: 1.5em; font-size: 0.85rem; color: var(--warn); margin-top: 5px; text-align: center; font-weight: bold; }
+
+    .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; color: #777; font-size: 0.8rem; text-align: center; line-height: 1.6; }
+    .footer strong { color: #555; }
+
+    @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } .header { flex-direction: column; align-items: flex-start; } .toolbar { width: 100%; justify-content: space-between; } }
+</style>
+</head>
+<body>
+
+<div class="header">
+    <h1>
+        WaveTable Generator 
+        <span class="tag">Fixed Complete</span>
+        <span class="subtitle">for DUNE 3</span>
+    </h1>
+    <div class="toolbar">
+        <button class="tool-btn" onclick="setPreset('growl')">🦖 Growl</button>
+        <button class="tool-btn" onclick="setPreset('pad')">🎹 Pad</button>
+        <button class="tool-btn" onclick="randomize()">🎲 Random</button>
+        <button class="tool-btn reset" onclick="resetAll()">🛑 Reset</button>
+    </div>
+</div>
+
+<div class="grid">
+    <!-- Left Column -->
+    <div>
+        <div class="panel">
+            <label>1. Base Waveform</label>
+            <select id="catSelect" onchange="updateWaveList()" style="margin-bottom:10px; font-weight:bold; background:#f9f9f9;"></select>
+            <select id="waveSelect" onchange="updateWaveDesc(); generate();"></select>
+            <div id="waveDesc" class="info-box">波形の説明</div>
+        </div>
+
+        <div class="panel">
+            <div style="display:flex; justify-content:space-between; align-items:end; margin-bottom:5px;">
+                <label style="margin-bottom:0">3. Output & Preview</label>
+                <div id="charCount" class="char-counter ok">0 / 250</div>
+            </div>
+            
+            <textarea id="output" rows="5" readonly onclick="this.select()"></textarea>
+            
+            <canvas id="scope" width="400" height="120"></canvas>
+            
+            <!-- Vol Slider -->
+            <div style="margin-top:10px; display:flex; justify-content:space-between; align-items:center;">
+                <label style="margin:0; font-size:0.8rem; color:#555;">Preview Vol:</label>
+                <input type="range" id="volSlider" min="0" max="100" value="70" style="width:70%;">
+            </div>
+            
+            <button id="previewBtn" class="action-btn preview-btn" onclick="playAudio()">🔊 Preview Sound (Auto-Wobble)</button>
+            <div id="msgArea" class="msg-area"></div>
+            <button id="copyBtn" class="action-btn" onclick="copyFormula()">COPY FORMULA</button>
+        </div>
+    </div>
+
+    <!-- Right Column -->
+    <div class="panel">
+        <label style="margin-bottom:10px;">2. FX Rack (Max 3 Slots)</label>
+        <div id="modContainer"></div>
+    </div>
+</div>
+
+<div class="footer">
+    <p><strong>Unofficial Tool</strong></p>
+    <p>
+        本ツールは Synapse Audio Software 社とは一切関係のない、非公式のファンメイドツールです。<br>
+        "DUNE 3" は Synapse Audio Software の登録商標です。
+    </p>
+    <p>
+        【免責事項】<br>
+        本ツールの使用によって生じた不具合、損害、または意図しない音の出力等について、製作者は一切の責任を負いません。<br>
+        生成された数式はご自身の責任においてご使用ください。
+    </p>
+    <p>License: MIT (Free to use, modify, and distribute)</p>
+</div>
+
+<script>
+// ==========================================
+// 1. DATA DEFINITIONS (Full 40 Waveforms)
+// ==========================================
+const WAVE_DB = {
+    "Analog / Basic": [
+        { name: "Pure Sine", formula: "sin({t})", desc: "純粋なサイン波。サブベースやFMの土台。" },
+        { name: "Linear Saw", formula: "1-2*{x}", desc: "理想的なノコギリ波。倍音が豊かで明るい音。" },
+        { name: "Soft Saw", formula: "sin({t})-.5*sin(2*{t})", desc: "Moog風の温かいソー波。" },
+        { name: "Triangle", formula: "abs(2*{x}-1)*2-1", desc: "三角波。フルートやリード音。" },
+        { name: "Pulse (Narrow)", formula: "sgn(sin({t})-.5)", desc: "パルス波。Acid Bassやチップチューン。" },
+        { name: "Square", formula: "sgn(sin({t}))", desc: "矩形波。中空でクラリネットのような響き。" }
+    ],
+    "Saturation": [
+        { name: "Hard Clip", formula: "max(min(sin({t})*3,1),-1)", desc: "上下を切り取った太い波形。" },
+        { name: "Tube Sat", formula: "tanh(sin({t})*5)", desc: "真空管風の温かい歪み。" },
+        { name: "Donk Fold", formula: "sin(sin({t})*3)", desc: "FM的で金属的なDonkベース。" },
+        { name: "Asymmetric", formula: "sin({t})+.5*pow(sin({t}),2)", desc: "非対称歪み。偶数倍音。" },
+        { name: "Rectified", formula: "max(sin({t}),0)", desc: "半波整流。オクターブ上の響き。" }
+    ],
+    "FM / Metal": [
+        { name: "Simple FM", formula: "sin({t}+sin({t}))", desc: "基本のFM。太いベース。" },
+        { name: "Octave FM", formula: "sin({t}+sin(2*{t}))", desc: "鋭いオクターブFM。" },
+        { name: "Power FM", formula: "sin(2*{t}+sin(3*{t}))", desc: "完全5度のパワーコードFM。" },
+        { name: "Bell FM", formula: "sin({t}+sin(5.4*{t}))", desc: "鐘のような非整数倍音。" },
+        { name: "Feedback", formula: "sin({t}+sin({t})*3)", desc: "ノイジーな激しいFM。" }
+    ],
+    "Organ / Additive": [
+        { name: "Drawbar", formula: "sin({t})+.5*sin(2*{t})+.3*sin(3*{t})", desc: "伝統的なオルガン。" },
+        { name: "Hollow", formula: "sin({t})+sin(3*{t})/3+sin(5*{t})/5", desc: "中身が空洞の木管系。" },
+        { name: "Octave Stack", formula: "sin({t})+.5*sin(2*{t})+.25*sin(4*{t})", desc: "壮大なパッド用スタック。" },
+        { name: "Liquid Saw", formula: "sin({t})+sin(2*{t})/2+sin(3*{t})/3", desc: "滑らかな液体的ソー波。" },
+        { name: "Chord", formula: "sin({t})+sin(1.5*{t})+sin(2*{t})", desc: "1音でメジャーコード。" }
+    ],
+    "Vowel / Formant": [
+        { name: "Formant 'Ah'", formula: "exp(-2*{x})*sin(8*{t})", desc: "「アー」という母音。" },
+        { name: "Formant 'Ee'", formula: "exp(-{x})*(sin(3*{t})+sin(20*{t}))", desc: "「イー」という母音。" },
+        { name: "Windowed Sync", formula: "sin(10*{t})*(1-cos({t}))/2", desc: "窓付きシンク。声素材。" },
+        { name: "Nasal", formula: "sin({t})*cos(4*{t})", desc: "鼻にかかったこもった音。" },
+        { name: "Vocal Fry", formula: "sin({t})*(1+.5*rnd({x}))", desc: "ザラザラした声帯振動。" }
+    ],
+    "Math / Exotic": [
+        { name: "Sinc", formula: "sin(5*{t})/(1+5*{t})", desc: "硬いデジタル音（Sinc関数）。" },
+        { name: "Parabolic", formula: "4*{x}*(1-{x})", desc: "放物線。計算が軽い。" },
+        { name: "Hyperbolic", formula: "1/(1+{x}*10)", desc: "スパイク状の波形。" },
+        { name: "AM Noise", formula: "sin(20*{t})*sin(22*{t})", desc: "SFチックなリング変調ノイズ。" },
+        { name: "Abs Sine", formula: "abs(sin({t}))", desc: "全波整流（周波数2倍）。" }
+    ],
+    "Granular / FX": [
+        { name: "Ring Mod", formula: "sin({t})*sin(6*{t})", desc: "鐘のような金属音。" },
+        { name: "Gated Burst", formula: "sin(15*{t})*max(sin({t}),0)", desc: "グリッチ/バーストノイズ。" },
+        { name: "Tremolo", formula: "sin(10*{t})*(.5+.5*sin({t}))", desc: "音量が激しく揺れる波形。" },
+        { name: "Gaussian Grain", formula: "sin(10*{t})*exp(-50*pow({x}-.5,2))", desc: "粒立ちの良いグラニュラー。" },
+        { name: "Tri Grain", formula: "sin(10*{t})*(1-abs(2*{x}-1))", desc: "鋭いデジタル粒子。" }
+    ],
+    "Digi / Phase": [
+        { name: "Chirp Sweep", formula: "sin({t}*{x}*10)", desc: "周波数が上がるチャープ信号。" },
+        { name: "Bitcrush", formula: "sin({t})-mod(sin({t}),.2)", desc: "階段状のLo-Fiサウンド。" },
+        { name: "XOR Sim", formula: "sgn(sin(2*{t})*sin(2.5*{t}))", desc: "擬似XORノイズ。" },
+        { name: "Kink Phase", formula: "sin(pow({x},2.5)*6.28)", desc: "CZ風の位相歪み。" },
+        { name: "Foldback", formula: "sin(sin({t})*10)", desc: "激しい折り返し歪み。" }
+    ]
+};
+
+const MOD_DB = [
+    { name: "-- None --", type: "none", desc: "なし" },
+    { name: "Disperser", type: "phase_add", code: "sin({t})*{amt}*20", max: 2, desc: "オールパス位相ズレ(Laser)" },
+    { name: "FM (Metal)", type: "phase_add", code: "sin({t})*{amt}*8", max: 5, desc: "基本FM(Growl)" },
+    { name: "Self FM", type: "phase_add", code: "sin({t})*{amt}*5", max: 3, desc: "ノイジーな自己変調" },
+    { name: "Reverb", type: "mix", code: "{v}+.6*sin({t}+{amt}*20)", max: 1, desc: "金属的コムフィルタ" },
+    { name: "Diffusion", type: "mix", code: "{v}+{amt}*.3*sin({x}*251)*exp(-{x}*5)", max: 1, desc: "高周波ノイズ粒子" },
+    { name: "Hard Sync", type: "time_scale", code: "(1+{amt})", max: 10, desc: "ピッチ上昇" },
+    { name: "Win Sync", type: "time_scale", code: "(1+{amt})", max: 10, window:true, desc: "窓付きSync(Formant)" },
+    { name: "PWM", type: "x_shift", code: "{amt}*.5", max: 1, desc: "パルス幅" },
+    { name: "Bend", type: "x_warp", code: "pow({x},1/(1+{amt}))", max: 3, desc: "左右伸縮(Warp)" },
+    { name: "Tremolo", type: "amp", code: "{v}*(1-{amt}*.5+{amt}*.5*sin({t}))", max: 1, desc: "音量揺れ" },
+    { name: "Ring Mod", type: "amp", code: "{v}*sin({t}*(1+{amt}*10))", max: 5, desc: "不協和音" },
+    { name: "Gater", type: "amp", code: "{v}*max(sgn(sin({t}*{amt}*10)),0)", max: 5, desc: "リズムゲート" },
+    { name: "Bitcrush", type: "bitcrush", max: 1, desc: "Lo-Fi階段波形" }, 
+    { name: "Fold Dist", type: "shape", code: "sin({v}*(1+{amt}*4))", max: 3, desc: "折り返し歪み" },
+    { name: "Saturator", type: "shape", code: "tanh({v}*(1+{amt}*10))", max: 2, desc: "太い歪み" },
+    { name: "Rectify", type: "shape", code: "max({v},-{v}*(1-{amt}))", max: 1, desc: "半波整流/反転" },
+    { name: "Asym Push", type: "shape", code: "{v}+{amt}*.5*pow({v},2)", max: 1, desc: "非対称歪み" },
+    { name: "Gate Dist", type: "shape", code: "{v}*max(sgn(abs({v})-{amt}*.5),0)", max: 1, desc: "小音量カット" },
+    { name: "Invert", type: "shape", code: "{v}*(1-2*{amt})", max: 1, desc: "位相反転" }
+];
+
+const SLOT_COUNT = 3;
+let currentFormulaRaw = ""; 
+
+window.onload = function() {
+    const catSelect = document.getElementById('catSelect');
+    Object.keys(WAVE_DB).forEach(cat => {
+        let opt = document.createElement('option');
+        opt.value = cat; opt.innerText = cat; catSelect.appendChild(opt);
+    });
+
+    const modContainer = document.getElementById('modContainer');
+    for (let i = 0; i < SLOT_COUNT; i++) {
+        let div = document.createElement('div');
+        div.className = 'mod-slot';
+        div.innerHTML = `
+            <div class="slot-header">
+                <select id="type_${i}" class="slot-select" onchange="onModSelect(${i})">
+                    ${MOD_DB.map((m, idx) => `<option value="${idx}">${m.name}</option>`).join('')}
+                </select>
+                <label class="link-check">
+                    <input type="checkbox" id="link_${i}" checked onchange="generate()">
+                    <span>LINK Y</span>
+                </label>
+            </div>
+            <div id="modDesc_${i}" class="info-box" style="margin-bottom:10px; background:#fff; border-left-color:#ccc; display:none;"></div>
+            <input type="range" id="amt_${i}" min="0" max="100" value="0" oninput="generate()">
+        `;
+        modContainer.appendChild(div);
+    }
+    updateWaveList();
+    animateScope();
+};
+
+function updateWaveList() {
+    const cat = document.getElementById('catSelect').value;
+    const waveSelect = document.getElementById('waveSelect');
+    waveSelect.innerHTML = "";
+    WAVE_DB[cat].forEach((wave, index) => {
+        let opt = document.createElement('option');
+        opt.value = index; opt.innerText = wave.name; waveSelect.appendChild(opt);
+    });
+    updateWaveDesc();
+    generate();
+}
+function updateWaveDesc() {
+    const cat = document.getElementById('catSelect').value;
+    const idx = document.getElementById('waveSelect').value;
+    document.getElementById('waveDesc').innerText = WAVE_DB[cat][idx].desc;
+}
+function onModSelect(i) {
+    let idx = document.getElementById(`type_${i}`).value;
+    let slotDiv = document.getElementsByClassName('mod-slot')[i];
+    let descDiv = document.getElementById(`modDesc_${i}`);
+    let amtSlider = document.getElementById(`amt_${i}`);
+    
+    descDiv.innerText = MOD_DB[idx].desc;
+    descDiv.style.display = "block";
+    
+    if (MOD_DB[idx].type !== 'none') {
+        slotDiv.classList.add('active');
+        descDiv.style.borderLeftColor = "var(--accent)";
+        descDiv.style.background = "#eef6fc";
+        if (amtSlider.value == 0) amtSlider.value = 40; 
+    } else {
+        slotDiv.classList.remove('active');
+        descDiv.style.display = "none";
+        amtSlider.value = 0;
+    }
+    generate();
+}
+
+function resetAll() {
+    document.getElementById('catSelect').selectedIndex = 0;
+    updateWaveList();
+    for(let i=0; i<SLOT_COUNT; i++) {
+        document.getElementById(`type_${i}`).value = 0;
+        document.getElementById(`amt_${i}`).value = 0;
+        onModSelect(i);
+    }
+    generate();
+}
+
+function setPreset(style) {
+    resetAll();
+    const setSlot = (idx, modName, amt) => {
+        let modIdx = MOD_DB.findIndex(m => m.name.includes(modName));
+        if(modIdx === -1) return;
+        document.getElementById(`type_${idx}`).value = modIdx;
+        document.getElementById(`amt_${idx}`).value = amt;
+        onModSelect(idx);
+    };
+    if (style === 'growl') {
+        document.getElementById('catSelect').value = "FM / Metal";
+        updateWaveList();
+        document.getElementById('waveSelect').value = 0; 
+        setSlot(0, "FM", 50);
+        setSlot(1, "Bitcrush", 30);
+        setSlot(2, "Reverb", 40);
+    } else if (style === 'pad') {
+        document.getElementById('catSelect').value = "Organ / Additive";
+        updateWaveList();
+        document.getElementById('waveSelect').value = 2; 
+        setSlot(0, "Tremolo", 30);
+        setSlot(1, "Diffusion", 20);
+    }
+    generate();
+}
+
+function randomize() {
+    resetAll();
+    const cats = Object.keys(WAVE_DB);
+    document.getElementById('catSelect').value = cats[Math.floor(Math.random() * cats.length)];
+    updateWaveList();
+    const waveOpts = document.getElementById('waveSelect').options;
+    document.getElementById('waveSelect').selectedIndex = Math.floor(Math.random() * waveOpts.length);
+    const numMods = Math.floor(Math.random() * 2) + 1; 
+    for(let i=0; i<numMods; i++) {
+        const randModIdx = Math.floor(Math.random() * (MOD_DB.length - 1)) + 1;
+        const randAmt = Math.floor(Math.random() * 60) + 20;
+        document.getElementById(`type_${i}`).value = randModIdx;
+        document.getElementById(`amt_${i}`).value = randAmt;
+        onModSelect(i);
+    }
+    generate();
+}
+
+// ==========================================
+// GENERATOR ENGINE (Fixed: FM supports {x})
+// ==========================================
+function generate() {
+    const cat = document.getElementById('catSelect').value;
+    const idx = document.getElementById('waveSelect').value;
+    let baseFormula = WAVE_DB[cat][idx].formula;
+    const PI2 = "6.28"; 
+
+    let t_scale = ""; let t_add = ""; let x_shift = ""; let x_warp_code = "{x}"; 
+    let post_ops = []; 
+
+    for (let i = 0; i < SLOT_COUNT; i++) {
+        let typeIdx = document.getElementById(`type_${i}`).value;
+        let mod = MOD_DB[typeIdx];
+        if (mod.type === 'none') continue;
+        let rawVal = document.getElementById(`amt_${i}`).value / 100;
+        let isLink = document.getElementById(`link_${i}`).checked;
+        let maxVal = mod.max || 1;
+        let val = rawVal * maxVal;
+        if(val === 0) continue; 
+        let valStr = val.toFixed(2).replace(/\.?0+$/, "").replace(/^0\./, ".");
+        let amtStr = isLink ? `(${valStr}*y)` : valStr;
+
+        if (mod.type === 'time_scale') t_scale += `*(1+${amtStr})`;
+        else if (mod.type === 'x_shift') x_shift += `+${amtStr}`;
+        else if (mod.type === 'x_warp') x_warp_code = mod.code.replace(/{x}/g, x_warp_code).replace(/{amt}/g, amtStr);
+        else if (mod.type === 'phase_add') {
+            let internal_t = `(x*${PI2})`; 
+            let code = mod.code.replace(/{t}/g, internal_t).replace(/{x}/g, "x").replace(/{amt}/g, amtStr);
+            t_add += `+${code}`;
+        }
+        else if (mod.type === 'bitcrush') {
+            let q_link = `(30-${(val*28).toFixed(1).replace(/\.0$/,"")}*y)`;
+            let q_static = 30 - (val * 28);
+            let step = isLink ? `1/${q_link}` : (1/q_static).toFixed(3).replace(/^0\./,".");
+            post_ops.push({ type:'bc', step: step });
+        }
+        else if (['amp', 'shape', 'mix'].includes(mod.type)) {
+            post_ops.push({ code: mod.code, amt: amtStr });
+        }
+    }
+
+    // Assembly Logic Check
+    let x_fin_raw = x_warp_code === "{x}" ? "x" : x_warp_code.replace(/{x}/g, "x");
+    if(x_shift !== "") x_fin_raw = `(${x_fin_raw}${x_shift})`;
+
+    // Phase construction
+    let t_fin = `${x_fin_raw}*${PI2}${t_scale}`;
+    if(t_add !== "") t_fin = `(${t_fin}${t_add})`;
+
+    // ★CRITICAL FIX: Ensure {x} based waves respond to Phase modulation (FM)
+    // If we have phase modulation (t_add), we must wrap x so it "wobbles".
+    // x = t_fin / 2PI. If wave is linear (Saw/Tri), wrapping (mod) creates the FM effect.
+    // However, DUNE expects formula in string.
+    // Solution: If base formula uses {x}, use a phase-derived x: `mod(t_fin/6.28,1)`
+    
+    // Check if Base uses {x} and we have modulation
+    let x_fin_str = x_fin_raw;
+    if (baseFormula.includes("{x}")) {
+        // Use mod wrapping to support FM on Linear Saw etc.
+        // x = mod(t / 2pi, 1) ensures FM works.
+        x_fin_str = `mod(${t_fin}/${PI2},1)`; 
+    }
+
+    let result = baseFormula.replace(/{t}/g, t_fin).replace(/{x}/g, x_fin_str);
+
+    post_ops.forEach(op => {
+        if(op.type === 'bc') {
+            let v = `(${result})`;
+            let s = op.step;
+            result = `${v}-mod(${v},${s})`;
+        } else {
+            result = op.code.replace(/{v}/g, `(${result})`).replace(/{t}/g, t_fin).replace(/{x}/g, x_fin_str).replace(/{amt}/g, op.amt);
+        }
+    });
+
+    result = result.replace(/\s+/g, '').replace(/\+0\)/g, ')').replace(/\*\.1\*/g, '/10*');
+    currentFormulaRaw = result; 
+
+    let len = result.length;
+    let countEl = document.getElementById('charCount');
+    let msgEl = document.getElementById('msgArea');
+    let btn = document.getElementById('copyBtn');
+    let prevBtn = document.getElementById('previewBtn');
+
+    document.getElementById('output').value = result;
+    countEl.innerText = `${len} / 250`;
+
+    if(len > 250) {
+        countEl.className = "char-counter over";
+        msgEl.innerText = "文字数オーバーです！モジュレーションを減らしてください";
+        btn.disabled = true;
+        prevBtn.disabled = true;
+    } else {
+        countEl.className = "char-counter " + (len > 220 ? "limit" : "ok");
+        msgEl.innerText = "";
+        btn.disabled = false;
+        prevBtn.disabled = false;
+    }
+}
+
+function copyFormula() {
+    const el = document.getElementById("output");
+    el.select();
+    navigator.clipboard.writeText(el.value);
+    const btn = document.getElementById("copyBtn");
+    const originalText = btn.innerText;
+    btn.innerText = "コピーしました！";
+    btn.style.background = "var(--ok)";
+    setTimeout(() => { btn.innerText = originalText; btn.style.background = "var(--accent)"; }, 1500);
+}
+
+// Audio Engine
+let audioCtx = null;
+let isPlaying = false;
+const sin=Math.sin, cos=Math.cos, tan=Math.tan, tanh=Math.tanh, abs=Math.abs;
+const pow=Math.pow, exp=Math.exp, min=Math.min, max=Math.max, sgn=Math.sign;
+const rnd=Math.random, mod=(a,b)=>((a%b)+b)%b;
+
+function playAudio() {
+    if (isPlaying) return;
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const btn = document.getElementById('previewBtn');
+    btn.classList.add('playing');
+    btn.innerText = "🔊 Playing...";
+    isPlaying = true;
+    const masterVol = document.getElementById('volSlider').value / 100;
+
+    try {
+        let jsFormula = currentFormulaRaw;
+        const evalFunc = new Function('x', 'y', 'sin', 'cos', 'tan', 'tanh', 'abs', 'pow', 'exp', 'min', 'max', 'sgn', 'mod', 'rnd', 'return ' + jsFormula);
+        const duration = 2.0; 
+        const sr = audioCtx.sampleRate;
+        const length = sr * duration;
+        const buffer = audioCtx.createBuffer(1, length, sr);
+        const data = buffer.getChannelData(0);
+        const samplesPerCycle = sr / 55.0;
+
+        for (let i = 0; i < length; i++) {
+            const t_global = i / length; 
+            let y = (t_global < 0.5) ? t_global * 2 : 2 - t_global * 2;
+            let x = (i % samplesPerCycle) / samplesPerCycle;
+            let val = 0;
+            try { val = evalFunc(x, y, sin, cos, tan, tanh, abs, pow, exp, min, max, sgn, mod, rnd); } catch(e) { val = 0; }
+            if (val > 1) val = 1; if (val < -1) val = -1; if (isNaN(val)) val = 0;
+            data[i] = val * 0.5 * masterVol; 
+        }
+        const src = audioCtx.createBufferSource();
+        src.buffer = buffer;
+        src.connect(audioCtx.destination);
+        src.start();
+        src.onended = () => { btn.classList.remove('playing'); btn.innerText = "🔊 Preview Sound (Auto-Wobble)"; isPlaying = false; };
+    } catch (e) {
+        alert("Error: " + e.message);
+        btn.classList.remove('playing');
+        isPlaying = false;
+    }
+}
+
+function animateScope() {
+    const canvas = document.getElementById('scope');
+    const ctx = canvas.getContext('2d');
+    const w = canvas.width;
+    const h = canvas.height;
+    const time = Date.now() / 1000;
+    const y = (Math.sin(time * 2) + 1) / 2; 
+
+    ctx.fillStyle = '#222';
+    ctx.fillRect(0, 0, w, h);
+    ctx.strokeStyle = '#333';
+    ctx.beginPath(); ctx.moveTo(0, h/2); ctx.lineTo(w, h/2); ctx.stroke();
+
+    if (!currentFormulaRaw) { requestAnimationFrame(animateScope); return; }
+
+    try {
+        const evalFunc = new Function('x', 'y', 'sin', 'cos', 'tan', 'tanh', 'abs', 'pow', 'exp', 'min', 'max', 'sgn', 'mod', 'rnd', 'return ' + currentFormulaRaw);
+        ctx.strokeStyle = '#00e5ff';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        for (let i = 0; i < w; i++) {
+            let x = i / w;
+            let val = evalFunc(x, y, sin, cos, tan, tanh, abs, pow, exp, min, max, sgn, mod, rnd);
+            if (val > 1) val = 1; if (val < -1) val = -1;
+            let drawY = h/2 - (val * h/2 * 0.9);
+            if (i === 0) ctx.moveTo(i, drawY); else ctx.lineTo(i, drawY);
+        }
+        ctx.stroke();
+        ctx.fillStyle = '#fff';
+        ctx.font = '10px monospace';
+        ctx.fillText(`Y(Pos): ${y.toFixed(2)}`, 5, 12);
+    } catch(e) {}
+    requestAnimationFrame(animateScope);
+}
+</script>
+</body>
+</html>

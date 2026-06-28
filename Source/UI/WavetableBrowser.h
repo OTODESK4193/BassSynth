@@ -1,8 +1,199 @@
-// ==============================================================================
-// Source/UI/WavetableBrowser.h
-// ==============================================================================
 #pragma once
 #include <JuceHeader.h>
+#include "../Logic/FormulaParser.h"
+
+class FormulaPanel : public juce::Component
+{
+public:
+    std::function<void(const juce::File&)> onFileGenerated;
+
+    FormulaPanel()
+    {
+        addAndMakeVisible(formulaEditor);
+        formulaEditor.setMultiLine(true);
+        formulaEditor.setReturnKeyStartsNewLine(true);
+        formulaEditor.setTabKeyUsedAsCharacter(false);
+        formulaEditor.setColour(juce::TextEditor::backgroundColourId, juce::Colour::fromString("FF1A1A1A"));
+        formulaEditor.setColour(juce::TextEditor::textColourId, juce::Colours::white);
+        formulaEditor.setColour(juce::TextEditor::outlineColourId, juce::Colour::fromString("FF444444"));
+        formulaEditor.setColour(juce::TextEditor::focusedOutlineColourId, juce::Colour::fromString("FF00FFCC"));
+        formulaEditor.setTextToShowWhenEmpty("Paste DUNE 3 Formula here...\ne.g. sin(x * pi * 2) * (1 - y)", juce::Colours::grey);
+
+        // デフォルトでユーザーが提示したGrowlベースの数式を設定
+        formulaEditor.setText("((sin((x*6.28+sin((x*6.28))*(2*y)*8)))*sin((x*6.28+sin((x*6.28))*(2*y)*8)*(1+(2*y)*10)))*max(sgn(abs(((sin((x*6.28+sin((x*6.28))*(2*y)*8)))*sin((x*6.28+sin((x*6.28))*(2*y)*8)*(1+(2*y)*10))))-(.34*y)*.5),0)");
+
+        addAndMakeVisible(generateBtn);
+        generateBtn.setColour(juce::TextButton::buttonColourId, juce::Colour::fromString("FF008080"));
+        generateBtn.onClick = [this] { generateWavetable(); };
+
+        addAndMakeVisible(saveBtn);
+        saveBtn.setColour(juce::TextButton::buttonColourId, juce::Colour::fromString("FF2A2A2A"));
+        saveBtn.onClick = [this] { saveWavetable(); };
+        saveBtn.setEnabled(false);
+
+        addAndMakeVisible(statusLabel);
+        statusLabel.setColour(juce::Label::textColourId, juce::Colours::grey);
+        statusLabel.setFont(14.0f);
+        statusLabel.setText("Enter a formula and click Generate", juce::dontSendNotification);
+    }
+
+    void resized() override
+    {
+        auto area = getLocalBounds().reduced(10);
+        formulaEditor.setBounds(area.removeFromTop(area.getHeight() - 110));
+        
+        area.removeFromTop(10);
+        statusLabel.setBounds(area.removeFromTop(24));
+        
+        area.removeFromTop(10);
+        int btnW = (area.getWidth() - 10) / 2;
+        generateBtn.setBounds(area.removeFromLeft(btnW));
+        area.removeFromLeft(10);
+        saveBtn.setBounds(area);
+    }
+
+    void generateWavetable()
+    {
+        juce::String formulaText = formulaEditor.getText().trim();
+        if (formulaText.isEmpty())
+        {
+            statusLabel.setColour(juce::Label::textColourId, juce::Colours::red);
+            statusLabel.setText("Formula is empty!", juce::dontSendNotification);
+            return;
+        }
+
+        FormulaParser parser;
+        if (!parser.setFormula(formulaText.toStdString()))
+        {
+            statusLabel.setColour(juce::Label::textColourId, juce::Colours::red);
+            statusLabel.setText("Invalid formula string!", juce::dontSendNotification);
+            return;
+        }
+
+        std::string errMsg;
+        if (!parser.validate(errMsg))
+        {
+            statusLabel.setColour(juce::Label::textColourId, juce::Colours::red);
+            statusLabel.setText("Parser Error: " + juce::String(errMsg), juce::dontSendNotification);
+            return;
+        }
+
+        const int numFrames = 64;
+        const int frameSize = 2048;
+        const int totalSamples = numFrames * frameSize;
+
+        juce::AudioBuffer<float> buffer(1, totalSamples);
+        auto* writePtr = buffer.getWritePointer(0);
+
+        bool hasError = false;
+        try {
+            for (int f = 0; f < numFrames; ++f)
+            {
+                double yVal = (numFrames == 1) ? 0.0 : (double)f / (double)(numFrames - 1);
+                for (int i = 0; i < frameSize; ++i)
+                {
+                    double xVal = (double)i / (double)frameSize;
+                    double val = parser.evaluate(xVal, yVal);
+                    writePtr[f * frameSize + i] = (float)val;
+                }
+            }
+
+            float maxVal = 0.0f;
+            for (int i = 0; i < totalSamples; ++i) {
+                maxVal = std::max(maxVal, std::abs(writePtr[i]));
+            }
+            if (maxVal > 0.0001f) {
+                buffer.applyGain(0.95f / maxVal);
+            }
+        }
+        catch (const std::exception& e) {
+            statusLabel.setColour(juce::Label::textColourId, juce::Colours::red);
+            statusLabel.setText(juce::String("Error: ") + e.what(), juce::dontSendNotification);
+            hasError = true;
+        }
+        catch (...) {
+            statusLabel.setColour(juce::Label::textColourId, juce::Colours::red);
+            statusLabel.setText("An unknown parsing error occurred.", juce::dontSendNotification);
+            hasError = true;
+        }
+
+        if (hasError)
+        {
+            saveBtn.setEnabled(false);
+            return;
+        }
+
+        tempFile = juce::File::createTempFile("bs_formula");
+        if (tempFile.deleteFile())
+        {
+            std::unique_ptr<juce::FileOutputStream> outStream(tempFile.createOutputStream());
+            if (outStream != nullptr)
+            {
+                juce::WavAudioFormat wavFormat;
+                std::unique_ptr<juce::AudioFormatWriter> writer(wavFormat.createWriterFor(outStream.get(), 44100.0, 1, 24, {}, 0));
+                if (writer != nullptr)
+                {
+                    outStream.release();
+                    writer->writeFromAudioSampleBuffer(buffer, 0, totalSamples);
+                    writer.reset();
+
+                    statusLabel.setColour(juce::Label::textColourId, juce::Colour::fromString("FF00FFCC"));
+                    statusLabel.setText("Wavetable generated successfully!", juce::dontSendNotification);
+                    
+                    saveBtn.setEnabled(true);
+                    
+                    if (onFileGenerated)
+                        onFileGenerated(tempFile);
+                    return;
+                }
+            }
+        }
+
+        statusLabel.setColour(juce::Label::textColourId, juce::Colours::red);
+        statusLabel.setText("Failed to write temporary WAV file.", juce::dontSendNotification);
+        saveBtn.setEnabled(false);
+    }
+
+    void saveWavetable()
+    {
+        if (!tempFile.existsAsFile()) return;
+
+        chooser = std::make_unique<juce::FileChooser>(
+            "Save Wavetable", 
+            juce::File::getSpecialLocation(juce::File::userMusicDirectory), 
+            "*.wav"
+        );
+        
+        auto flags = juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::warnAboutOverwriting;
+        chooser->launchAsync(flags, [this](const juce::FileChooser& fc) {
+            juce::File targetFile = fc.getResult();
+            if (targetFile.existsAsFile() || targetFile.getParentDirectory().exists())
+            {
+                if (targetFile.getFileExtension().toLowerCase() != ".wav")
+                    targetFile = targetFile.withFileExtension(".wav");
+
+                if (tempFile.copyFileTo(targetFile))
+                {
+                    statusLabel.setColour(juce::Label::textColourId, juce::Colours::green);
+                    statusLabel.setText("Saved to: " + targetFile.getFileName(), juce::dontSendNotification);
+                }
+                else
+                {
+                    statusLabel.setColour(juce::Label::textColourId, juce::Colours::red);
+                    statusLabel.setText("Save failed!", juce::dontSendNotification);
+                }
+            }
+        });
+    }
+
+private:
+    juce::TextEditor formulaEditor;
+    juce::TextButton generateBtn{ "Generate & Preview" };
+    juce::TextButton saveBtn{ "Save as WAV..." };
+    juce::Label statusLabel;
+    juce::File tempFile;
+    std::unique_ptr<juce::FileChooser> chooser;
+};
 
 class WavetableBrowser : public juce::Component
 {
@@ -23,6 +214,7 @@ public:
         categories.add("Factory");
         categories.add("Favorite");
         categories.add("User");
+        categories.add("Formula"); // ★ 追加
 
         catList.setModel(&catModel);
         subCatList.setModel(&subCatModel);
@@ -53,8 +245,16 @@ public:
         searchBox.setTextToShowWhenEmpty("Search...", juce::Colours::grey);
         searchBox.onTextChange = [this] { updateFiles(); }; // 文字入力のたびにリストを更新
 
+        // ★ 追加: FormulaPanelの初期化
+        addChildComponent(formulaPanel);
+        formulaPanel.onFileGenerated = [this](const juce::File& f) {
+            if (onCustomFileSelected)
+                onCustomFileSelected(f);
+        };
+
         currentFactoryIndex = (int)apvts.getRawParameterValue("osc_wave")->load();
         updateSubCategories();
+        updatePanelVisibility(); // ★ 追加: 初期表示状態の同期
     }
 
     void setFavorites(const juce::StringArray& favs) {
@@ -203,21 +403,39 @@ public:
         g.drawRect(getLocalBounds(), 2);
     }
 
+    void updatePanelVisibility()
+    {
+        bool isFormula = (categories[selectedCategoryIdx] == "Formula");
+        
+        subCatList.setVisible(!isFormula);
+        fileList.setVisible(!isFormula);
+        searchBox.setVisible(!isFormula);
+        addFolderBtn.setVisible(!isFormula && (categories[selectedCategoryIdx] == "User" || categories[selectedCategoryIdx] == "All"));
+        formulaPanel.setVisible(isFormula);
+        
+        resized();
+    }
+
     void resized() override {
         auto area = getLocalBounds().reduced(2);
         int w = area.getWidth() / 3;
 
         auto catArea = area.removeFromLeft(w);
-        auto subArea = area.removeFromLeft(w);
-
-        addFolderBtn.setBounds(subArea.removeFromBottom(30).reduced(2));
-
         catList.setBounds(catArea);
-        subCatList.setBounds(subArea);
 
-        // ★ 追加: 第3カラムのトップに検索ボックスの領域を確保
-        searchBox.setBounds(area.removeFromTop(36).reduced(4, 4));
-        fileList.setBounds(area);
+        if (categories[selectedCategoryIdx] == "Formula")
+        {
+            formulaPanel.setBounds(area);
+        }
+        else
+        {
+            auto subArea = area.removeFromLeft(w);
+            addFolderBtn.setBounds(subArea.removeFromBottom(30).reduced(2));
+            subCatList.setBounds(subArea);
+
+            searchBox.setBounds(area.removeFromTop(36).reduced(4, 4));
+            fileList.setBounds(area);
+        }
     }
 
 private:
@@ -225,6 +443,7 @@ private:
     juce::ListBox catList{ "Cat", nullptr }, subCatList{ "Sub", nullptr }, fileList{ "File", nullptr };
     juce::TextButton addFolderBtn{ "+ Add User Folder" };
     juce::TextEditor searchBox; // ★ 追加: 検索入力コンポーネント
+    FormulaPanel formulaPanel;  // ★ 追加
     std::unique_ptr<juce::FileChooser> chooser;
 
     juce::StringArray categories, subCategories;
@@ -316,6 +535,7 @@ private:
             if (!owner) return;
             owner->selectedCategoryIdx = row;
             owner->updateSubCategories();
+            owner->updatePanelVisibility();
         }
     } catModel;
 

@@ -61,6 +61,7 @@ target_sources(BassSynth PRIVATE
     Source/Logic/BassSynthVoice.h
     Source/Logic/PolyVoiceManager.h
     Source/Logic/AdsrEnvelope.h
+    Source/Logic/FormulaParser.h
  "Source/DSP/SpectralMorphProcessor.h" "Source/DSP/DualFilterEngine.h" "Source/DSP/MsegEngine.h" "Source/Logic/Mseg.h" "Source/DSP/ZeroLatencyLimiter.h")
 
 # 6. インクルードパス
