@@ -169,6 +169,31 @@ private:
     std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment>> comboAtts;
 };
 
+// ★④ FX タブ（Chorus / Delay / Reverb）
+class FxTab : public juce::Component {
+public:
+    FxTab(juce::AudioProcessorValueTreeState& vts);
+    void paint(juce::Graphics& g) override;
+    void resized() override;
+private:
+    juce::AudioProcessorValueTreeState& apvts;
+
+    juce::ToggleButton choOn{ "ON" };
+    juce::Slider choMix, choDepth, choSpeed;
+    juce::Label choMixL, choDepthL, choSpeedL;
+
+    juce::ToggleButton dlyOn{ "ON" }, dlyPing{ "PING" };
+    juce::Slider dlyTime, dlyFb, dlyMix, dlyDamp;
+    juce::Label dlyTimeL, dlyFbL, dlyMixL, dlyDampL;
+
+    juce::ToggleButton revOn{ "ON" };
+    juce::Slider revMix, revSize, revWidth;
+    juce::Label revMixL, revSizeL, revWidthL;
+
+    std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>> sliderAtts;
+    std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment>> btnAtts;
+};
+
 class ColorIrPanel : public juce::Component {
 public:
     ColorIrPanel(LiquidDreamAudioProcessor& p);
@@ -295,6 +320,7 @@ private:
     MsegTab msegTab;
     ModEnvTab modEnvTab;
     MatrixTab matrixTab;
+    FxTab fxTab; // ★④FX
 
     std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>> attachments;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> oscOnAtt, subOnAtt, limitOnAtt, legatoAtt, colorOnAtt;

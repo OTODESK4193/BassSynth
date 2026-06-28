@@ -35,6 +35,7 @@ struct VoiceParams {
     std::atomic<float>* pSubWave = nullptr;
     std::atomic<float>* pSubVol = nullptr;
     std::atomic<float>* pSubPitch = nullptr;
+    std::atomic<float>* pMasterPitch = nullptr; // ★①マスターピッチ(半音)
 
     std::atomic<float>* pFltAType = nullptr;
     std::atomic<float>* pFltACutoff = nullptr;
@@ -257,6 +258,7 @@ public:
         oscillator.setSubPitchOffset(p.pSubPitch->load(std::memory_order_relaxed));
         oscillator.setUnisonCount((int)p.pUni->load(std::memory_order_relaxed));
         oscillator.setUnisonDetune(p.pDetune->load(std::memory_order_relaxed));
+        oscillator.setStereoWidth(p.pWidth->load(std::memory_order_relaxed)); // ★②修正: WIDTHを配線(従来は未接続でstereoWidth=1.0固定だった)
         oscillator.setFMWaveform((int)p.pFmWave->load(std::memory_order_relaxed));
 
         ampEnv.setParameters(p.pAAtk->load(std::memory_order_relaxed), p.pADec->load(std::memory_order_relaxed), p.pASus->load(std::memory_order_relaxed), p.pARel->load(std::memory_order_relaxed));
@@ -317,6 +319,7 @@ public:
         int   fltAType_   = (int)p.pFltAType->load(std::memory_order_relaxed);
         int   fltBType_   = (int)p.pFltBType->load(std::memory_order_relaxed);
         int   fltRouting_ = (int)p.pFltRouting->load(std::memory_order_relaxed);
+        float masterPitchMult_ = std::exp2(p.pMasterPitch->load(std::memory_order_relaxed) * 0.0833333f); // ★①マスターピッチ(半音→周波数倍率)
 
         // サンプル処理ループ
         for (int i = 0; i < numSamples; ++i) {
@@ -398,7 +401,7 @@ public:
             else {
                 currentFrequency = targetFrequency;
             }
-            float cf = currentFrequency;
+            float cf = currentFrequency * masterPitchMult_; // ★①マスターピッチを適用
             if (cf < 1.0f) cf = 1.0f;
             oscillator.setFrequency(cf);
 

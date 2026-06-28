@@ -28,6 +28,10 @@ public:
         fftWorkspaceL.fill(0.0f); fftWorkspaceR.fill(0.0f);
         fifoWritePos = 0;
         hopCounter = 0;
+
+        // ★③ sine窓を生成: w(n) = sin(pi*(n+0.5)/N)
+        for (size_t i = 0; i < fftSize; ++i)
+            sineWindow[i] = std::sin(juce::MathConstants<float>::pi * ((float)i + 0.5f) / (float)fftSize);
     }
 
     void process(juce::AudioBuffer<float>& buffer, int mA, float aA, float sA, int mB, float aB, float sB, int mC, float aC, float sC)
@@ -94,11 +98,19 @@ public:
 private:
     static constexpr int fftOrder = 11;
     static constexpr size_t fftSize = 2048;
-    static constexpr int hopSize = 512; // 4倍オーバーラップ（超高音質）
+    static constexpr int hopSize = 1024; // ★③ 2倍オーバーラップ（CPU約半減）。sine窓で波打ち(振幅変調)を防止。
     static constexpr int fifoSize = 4096;
 
+    // ★③ sine窓: 分析・合成の両方に掛けると積が sin^2(=Hann) となり、
+    //    50%オーバーラップで総和が一定(COLA)になるため、4→2倍にしても振幅の波打ちが出ない。
+    // 旧設定(Hann窓×2, 4倍overlap, 補正0.5; 窓積総和Σ≈1.5)と同じ音量を保つための補正:
+    //   新Σ(sin^2, 2倍overlap)=1.0 なので 0.5 × (1.5/1.0) = 0.75。
+    //   ※もしSpecC/SpecCut系が以前より大きい/小さい場合はこの値を増減して調整可能。
+    static constexpr float gainCorrection = 0.75f;
+
     juce::dsp::FFT forwardFFT, inverseFFT;
-    juce::dsp::WindowingFunction<float> window;
+    juce::dsp::WindowingFunction<float> window; // (未使用: 旧Hann窓。互換のため残置)
+    std::array<float, fftSize> sineWindow{};
     std::array<float, fifoSize> inputFifoL, inputFifoR, outputFifoL, outputFifoR;
     std::array<float, fftSize * 2> fftWorkspaceL, fftWorkspaceR;
     std::array<float, fftSize / 2> magL, magR, phaseL, phaseR, tempMag;
@@ -114,8 +126,7 @@ private:
             size_t idx = (size_t)((readPos + i) % fifoSize);
             fftWorkspaceL[i] = inputFifoL[idx]; fftWorkspaceR[i] = inputFifoR[idx];
         }
-        window.multiplyWithWindowingTable(fftWorkspaceL.data(), fftSize);
-        window.multiplyWithWindowingTable(fftWorkspaceR.data(), fftSize);
+        for (size_t i = 0; i < fftSize; ++i) { fftWorkspaceL[i] *= sineWindow[i]; fftWorkspaceR[i] *= sineWindow[i]; } // ★③ 分析sine窓
         for (size_t i = fftSize; i < fftSize * 2; ++i) { fftWorkspaceL[i] = 0; fftWorkspaceR[i] = 0; }
 
         forwardFFT.performRealOnlyForwardTransform(fftWorkspaceL.data());
@@ -142,10 +153,8 @@ private:
 
         inverseFFT.performRealOnlyInverseTransform(fftWorkspaceL.data());
         inverseFFT.performRealOnlyInverseTransform(fftWorkspaceR.data());
-        window.multiplyWithWindowingTable(fftWorkspaceL.data(), fftSize);
-        window.multiplyWithWindowingTable(fftWorkspaceR.data(), fftSize);
+        for (size_t i = 0; i < fftSize; ++i) { fftWorkspaceL[i] *= sineWindow[i]; fftWorkspaceR[i] *= sineWindow[i]; } // ★③ 合成sine窓
 
-        float gainCorrection = 1.0f / 2.0f; // 4x overlap correction
         for (size_t i = 0; i < fftSize; ++i) {
             size_t wIdx = (size_t)((readPos + i) % fifoSize);
             outputFifoL[wIdx] += fftWorkspaceL[i] * gainCorrection;

@@ -375,6 +375,61 @@ void MatrixTab::resized() {
 }
 
 // ==============================================================================
+// FxTab Implementation  ★④
+// ==============================================================================
+FxTab::FxTab(juce::AudioProcessorValueTreeState& vts) : apvts(vts) {
+    addAndMakeVisible(choOn);
+    setupS(choMix, choMixL, "Mix", this); setupS(choDepth, choDepthL, "Depth", this); setupS(choSpeed, choSpeedL, "Speed", this);
+
+    addAndMakeVisible(dlyOn); addAndMakeVisible(dlyPing);
+    setupS(dlyTime, dlyTimeL, "Time", this); setupS(dlyFb, dlyFbL, "FBack", this);
+    setupS(dlyMix, dlyMixL, "Mix", this); setupS(dlyDamp, dlyDampL, "Damp", this);
+
+    addAndMakeVisible(revOn);
+    setupS(revMix, revMixL, "Mix", this); setupS(revSize, revSizeL, "Size", this); setupS(revWidth, revWidthL, "Width", this);
+
+    auto addS = [this](juce::Slider& s, const juce::String& id) {
+        sliderAtts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, id, s));
+    };
+    auto addB = [this](juce::ToggleButton& b, const juce::String& id) {
+        btnAtts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(apvts, id, b));
+    };
+
+    addB(choOn, "fx_cho_on"); addS(choMix, "fx_cho_mix"); addS(choDepth, "fx_cho_depth"); addS(choSpeed, "fx_cho_speed");
+    addB(dlyOn, "fx_dly_on"); addB(dlyPing, "fx_dly_pingpong");
+    addS(dlyTime, "fx_dly_time"); addS(dlyFb, "fx_dly_fb"); addS(dlyMix, "fx_dly_mix"); addS(dlyDamp, "fx_dly_damp");
+    addB(revOn, "fx_rev_on"); addS(revMix, "fx_rev_mix"); addS(revSize, "fx_rev_size"); addS(revWidth, "fx_rev_width");
+}
+
+void FxTab::paint(juce::Graphics& g) {
+    g.fillAll(juce::Colour::fromString("FF1A1A1A"));
+    const char* names[3] = { "CHORUS", "DELAY", "REVERB" };
+    for (int i = 0; i < 3; ++i) {
+        g.setColour(juce::Colours::white.withAlpha(0.05f));
+        g.fillRoundedRectangle(10.0f, 10.0f + i * 130.0f, (float)getWidth() - 20.0f, 115.0f, 5.0f);
+        g.setColour(juce::Colour::fromString("FFFF764D"));
+        g.setFont(14.0f);
+        g.drawText(names[i], 20, 15 + i * 130, 90, 20, juce::Justification::centredLeft);
+    }
+}
+
+void FxTab::resized() {
+    int y0 = 30;            // Chorus
+    choOn.setBounds(15, y0 + 15, 55, 24);
+    placeKnob(85, y0, choMixL, choMix); placeKnob(160, y0, choDepthL, choDepth); placeKnob(235, y0, choSpeedL, choSpeed);
+
+    int y1 = 30 + 130;      // Delay
+    dlyOn.setBounds(15, y1 + 12, 55, 24);
+    dlyPing.setBounds(15, y1 + 42, 60, 24);
+    placeKnob(85, y1, dlyTimeL, dlyTime); placeKnob(160, y1, dlyFbL, dlyFb);
+    placeKnob(235, y1, dlyMixL, dlyMix); placeKnob(310, y1, dlyDampL, dlyDamp);
+
+    int y2 = 30 + 260;      // Reverb
+    revOn.setBounds(15, y2 + 15, 55, 24);
+    placeKnob(85, y2, revMixL, revMix); placeKnob(160, y2, revSizeL, revSize); placeKnob(235, y2, revWidthL, revWidth);
+}
+
+// ==============================================================================
 // ColorIrPanel Implementation
 // ==============================================================================
 ColorIrPanel::ColorIrPanel(LiquidDreamAudioProcessor& p) : processor(p), apvts(p.getAPVTS()) {
@@ -536,7 +591,7 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     dualScope(p.getOutputScopePtr()), browser(p.getAPVTS()),
     presetBrowser(juce::File::getSpecialLocation(juce::File::userDocumentsDirectory).getChildFile("BassSynthPresets")),
     colorPanel(p), modTabs(juce::TabbedButtonBar::TabsAtTop),
-    lfoTab(p.getAPVTS()), msegTab(p, p.getAPVTS()), modEnvTab(p.getAPVTS()), matrixTab(p.getAPVTS())
+    lfoTab(p.getAPVTS()), msegTab(p, p.getAPVTS()), modEnvTab(p.getAPVTS()), matrixTab(p.getAPVTS()), fxTab(p.getAPVTS())
 {
     setLookAndFeel(&abletonLnF);
 
@@ -786,7 +841,7 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     att(fltAAtkSlider, "f_a_atk"); att(fltADecSlider, "f_a_dec"); att(fltASusSlider, "f_a_sus"); att(fltARelSlider, "f_a_rel");
     att(fltBAtkSlider, "f_b_atk"); att(fltBDecSlider, "f_b_dec"); att(fltBSusSlider, "f_b_sus"); att(fltBRelSlider, "f_b_rel");
 
-    att(glideSlider, "m_glide"); att(pitchSlider, "m_pb"); att(gainSlider, "m_gain");
+    att(glideSlider, "m_glide"); att(pitchSlider, "m_pitch"); att(gainSlider, "m_gain"); // ★①PitchをマスターピッチへリアタッチTask
     attachments.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, "max_voices", maxVoicesSlider));
 
     // タブ・コンポーネントの設定
@@ -795,6 +850,7 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     modTabs.addTab("MSEGs", juce::Colour::fromString("FF2A2A2A"), &msegTab, false);
     modTabs.addTab("MOD ENVs", juce::Colour::fromString("FF2A2A2A"), &modEnvTab, false);
     modTabs.addTab("MATRIX", juce::Colour::fromString("FF2A2A2A"), &matrixTab, false);
+    modTabs.addTab("FX", juce::Colour::fromString("FF2A2A2A"), &fxTab, false); // ★④Matrixの次にFXタブ
 
     // ブラウザの設定と同期
     addChildComponent(browser);
