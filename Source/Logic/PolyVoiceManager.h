@@ -89,17 +89,18 @@ public:
         // 出力バッファをクリア（各ボイスがここへ加算描画します）
         outputBuffer.clear();
 
-        int activeCount = 0;
         for (int i = 0; i < maxVoices; ++i) {
             if (voices[i].getIsActive()) {
                 voices[i].renderNextBlock(outputBuffer, bpm);
-                activeCount++;
             }
         }
 
-        if (activeCount > 0) {
-            outputBuffer.applyGain(0.4f);
-        }
+        // 固定ヘッドルームゲインの適用（ブロック境界のゲイン不連続クリックノイズを100%防止）
+        outputBuffer.applyGain(0.25f);
+    }
+
+    void setUIParams(float pos, float fmAmt, int fmWave) {
+        voices[0].setUIParams(pos, fmAmt, fmWave);
     }
 
     Mseg& getMsegEngine(int index) {

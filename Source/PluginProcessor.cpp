@@ -183,7 +183,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout LiquidDreamAudioProcessor::c
 
     params.push_back(std::make_unique<juce::AudioParameterFloat>("m_gain", "Gain", 0.0f, 1.0f, 0.5f));
     params.push_back(std::make_unique<juce::AudioParameterBool>("limit_on", "Limiter On", true));
-    params.push_back(std::make_unique<juce::AudioParameterFloat>("limit_ceil", "Ceiling", -24.0f, 0.0f, 0.0f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("limit_ceil", "Ceiling", -24.0f, 0.0f, -1.0f));
 
     auto glideRange = juce::NormalisableRange<float>(0.0f, 1000.0f, 1.0f, 0.3f);
     params.push_back(std::make_unique<juce::AudioParameterFloat>("m_glide", "Glide", glideRange, 0.0f));

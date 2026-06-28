@@ -202,7 +202,8 @@ private:
                     float target = curF[j] * scale;
                     float width = target * 0.15f + 4.0f * scale;
                     float dist = std::abs((float)k - target);
-                    env += std::exp(-(dist * dist) / (width * width));
+                    float x2 = (dist * dist) / (width * width);
+                    env += 1.0f / (1.0f + x2 + 0.5f * x2 * x2);
                 }
                 mag[k] = mag[k] * (1.0f - std::abs(amt)) + (mag[k] * env * 4.0f) * std::abs(amt);
             }

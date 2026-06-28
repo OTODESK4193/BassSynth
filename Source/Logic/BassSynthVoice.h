@@ -143,6 +143,7 @@ public:
     }
 
     void noteOn(int noteNumber, float velocity, bool isLegato) {
+        bool wasActive = isActive;
         currentNoteNumber = noteNumber;
         currentVelocity = velocity;
         isActive = true;
@@ -150,8 +151,10 @@ public:
 
         targetFrequency = (float)juce::MidiMessage::getMidiNoteInHertz(noteNumber);
         if (!isLegato) {
-            currentFrequency = targetFrequency;
-            oscillator.resetPhase();
+            if (!wasActive) {
+                currentFrequency = targetFrequency;
+                oscillator.resetPhase();
+            }
         }
 
         ampEnv.noteOn(isLegato);
@@ -173,6 +176,12 @@ public:
     void updateMsegStates(const MsegState& state0, const MsegState& state1) {
         msegs[0].pushNewState(state0);
         msegs[1].pushNewState(state1);
+    }
+
+    void setUIParams(float pos, float fmAmt, int fmWave) {
+        oscillator.setWavetablePosition(pos);
+        oscillator.setFMAmount(fmAmt);
+        oscillator.setFMWaveform(fmWave);
     }
 
     bool getIsActive() const { return isActive; }
@@ -256,6 +265,11 @@ public:
 
         // サンプル処理ループ
         for (int i = 0; i < numSamples; ++i) {
+            if (ampEnv.popJustReset()) {
+                oscillator.resetPhase();
+                currentFrequency = targetFrequency;
+            }
+
             for (int m = 0; m < 3; ++m) {
                 float r = juce::jlimit(0.01f, 50.0f, smoothedLfoRates[m].getNextValue() + destMods[20 + m] * 25.0f);
                 lfos[m].setParameters((int)p.pLfoWave[m]->load(), p.pLfoSync[m]->load() > 0.5f, r, (int)p.pLfoBeat[m]->load(), p.pLfoAmt[m]->load(), (int)p.pLfoTrig[m]->load());
@@ -337,8 +351,6 @@ public:
             float aVal = ampEnv.getNextSample();
             float fValA = filterEnvA.getNextSample();
             float fValB = filterEnvB.getNextSample();
-
-            if (ampEnv.popJustReset()) oscillator.resetPhase();
 
             tempEnvBuffer.setSample(0, i, aVal);
             tempEnvBuffer.setSample(1, i, fValA);

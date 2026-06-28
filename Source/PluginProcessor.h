@@ -44,6 +44,7 @@ public:
     float* getOutputScopePtr() { return outputScopeData.data(); }
 
     void getStaticWaveform(std::array<float, 512>& buffer) {
+        voiceManager.setUIParams(pPos->load(std::memory_order_relaxed), pFm->load(std::memory_order_relaxed), (int)pFmWave->load(std::memory_order_relaxed));
         voiceManager.generateSingleCycle(buffer);
         int mA = (int)pMorphAMode->load(std::memory_order_relaxed);
         float aA = pMorphAAmt->load(std::memory_order_relaxed);

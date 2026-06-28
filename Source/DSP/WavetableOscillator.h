@@ -262,7 +262,17 @@ public:
     void resetPhase() {
         auto& random = juce::Random::getSystemRandom();
         for (int b = 0; b < MaxBlocks; ++b) {
-            for (int i = 0; i < SimdWidth; ++i) phases[b].set(i, random.nextFloat());
+            for (int i = 0; i < SimdWidth; ++i) {
+                int vIdx = b * SimdWidth + i;
+                if (vIdx == 0) {
+                    // センターボイスは常に位相0.0から開始し、安定した強力な打撃感（アタック）を確保
+                    phases[b].set(i, 0.0f);
+                }
+                else {
+                    // ステレオ広がり用のデチューンボイスのみ初期位相をランダム化し、コーラス感と広がりを確保
+                    phases[b].set(i, random.nextFloat());
+                }
+            }
         }
         subPhase = 0.0f; pitchEnvState = 1.0f;
         for (int i = 0; i < MaxVoices; ++i) driftPhase[i] = random.nextFloat();
