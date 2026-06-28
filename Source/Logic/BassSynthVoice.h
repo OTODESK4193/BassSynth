@@ -283,6 +283,41 @@ public:
         float modAlpha = std::exp(-1.0f / static_cast<float>(sampleRate * 0.003));
         float destMods[23] = { 0.0f };
 
+        // ★候補H: ブロック内で不変のパラメータはここで1回だけ読み込む（毎サンプルのatomic読み込みを排除。出力は完全一致）
+        int   lfoWave_[3], lfoBeat_[3], lfoTrig_[3];
+        bool  lfoSync_[3];
+        float lfoAmt_[3];
+        bool  modOn_[3], modBip_[3], lfoOn_[3], lfoUni_[3];
+        for (int m = 0; m < 3; ++m) {
+            lfoWave_[m] = (int)p.pLfoWave[m]->load(std::memory_order_relaxed);
+            lfoSync_[m] = p.pLfoSync[m]->load(std::memory_order_relaxed) > 0.5f;
+            lfoBeat_[m] = (int)p.pLfoBeat[m]->load(std::memory_order_relaxed);
+            lfoAmt_[m]  = p.pLfoAmt[m]->load(std::memory_order_relaxed);
+            lfoTrig_[m] = (int)p.pLfoTrig[m]->load(std::memory_order_relaxed);
+            modOn_[m]   = p.pModOn[m]->load(std::memory_order_relaxed) > 0.5f;
+            modBip_[m]  = p.pModBipolar[m]->load(std::memory_order_relaxed) > 0.5f;
+            lfoOn_[m]   = p.pLfoOn[m]->load(std::memory_order_relaxed) > 0.5f;
+            lfoUni_[m]  = p.pLfoUnipolar[m]->load(std::memory_order_relaxed) > 0.5f;
+        }
+        bool msegOn_[2], msegUni_[2];
+        for (int k = 0; k < 2; ++k) {
+            msegOn_[k]  = p.pMsegOn[k]->load(std::memory_order_relaxed) > 0.5f;
+            msegUni_[k] = p.pMsegUnipolar[k]->load(std::memory_order_relaxed) > 0.5f;
+        }
+        int   matSrc_[10], matDest_[10];
+        float matAmt_[10];
+        for (int s = 0; s < 10; ++s) {
+            matSrc_[s]  = (int)p.pMatrixSrc[s]->load(std::memory_order_relaxed);
+            matDest_[s] = (int)p.pMatrixDest[s]->load(std::memory_order_relaxed);
+            matAmt_[s]  = p.pMatrixAmt[s]->load(std::memory_order_relaxed);
+        }
+        float colorMix_   = p.pColorMix->load(std::memory_order_relaxed);
+        float fltAEnvAmt_ = p.pFltAEnvAmt->load(std::memory_order_relaxed);
+        float fltBEnvAmt_ = p.pFltBEnvAmt->load(std::memory_order_relaxed);
+        int   fltAType_   = (int)p.pFltAType->load(std::memory_order_relaxed);
+        int   fltBType_   = (int)p.pFltBType->load(std::memory_order_relaxed);
+        int   fltRouting_ = (int)p.pFltRouting->load(std::memory_order_relaxed);
+
         // サンプル処理ループ
         for (int i = 0; i < numSamples; ++i) {
             if (ampEnv.popJustReset()) {
@@ -292,20 +327,20 @@ public:
 
             for (int m = 0; m < 3; ++m) {
                 float r = juce::jlimit(0.01f, 50.0f, smoothedLfoRates[m].getNextValue() + destMods[20 + m] * 25.0f);
-                lfos[m].setParameters((int)p.pLfoWave[m]->load(), p.pLfoSync[m]->load() > 0.5f, r, (int)p.pLfoBeat[m]->load(), p.pLfoAmt[m]->load(), (int)p.pLfoTrig[m]->load());
+                lfos[m].setParameters(lfoWave_[m], lfoSync_[m], r, lfoBeat_[m], lfoAmt_[m], lfoTrig_[m]);
             }
 
             // モジュレーション極性の適用
             float rawSources[9] = {
                 0.0f,
-                (p.pModOn[0]->load(std::memory_order_relaxed) > 0.5f ? (p.pModBipolar[0]->load(std::memory_order_relaxed) > 0.5f ? modEnvs[0].getNextSample() * 2.0f - 1.0f : modEnvs[0].getNextSample()) : 0.0f),
-                (p.pModOn[1]->load(std::memory_order_relaxed) > 0.5f ? (p.pModBipolar[1]->load(std::memory_order_relaxed) > 0.5f ? modEnvs[1].getNextSample() * 2.0f - 1.0f : modEnvs[1].getNextSample()) : 0.0f),
-                (p.pModOn[2]->load(std::memory_order_relaxed) > 0.5f ? (p.pModBipolar[2]->load(std::memory_order_relaxed) > 0.5f ? modEnvs[2].getNextSample() * 2.0f - 1.0f : modEnvs[2].getNextSample()) : 0.0f),
-                (p.pLfoOn[0]->load(std::memory_order_relaxed) > 0.5f ? (p.pLfoUnipolar[0]->load(std::memory_order_relaxed) > 0.5f ? (lfos[0].getNextSample(bpm) + 1.0f) * 0.5f : lfos[0].getNextSample(bpm)) : 0.0f),
-                (p.pLfoOn[1]->load(std::memory_order_relaxed) > 0.5f ? (p.pLfoUnipolar[1]->load(std::memory_order_relaxed) > 0.5f ? (lfos[1].getNextSample(bpm) + 1.0f) * 0.5f : lfos[1].getNextSample(bpm)) : 0.0f),
-                (p.pLfoOn[2]->load(std::memory_order_relaxed) > 0.5f ? (p.pLfoUnipolar[2]->load(std::memory_order_relaxed) > 0.5f ? (lfos[2].getNextSample(bpm) + 1.0f) * 0.5f : lfos[2].getNextSample(bpm)) : 0.0f),
-                (p.pMsegOn[0]->load(std::memory_order_relaxed) > 0.5f ? (p.pMsegUnipolar[0]->load(std::memory_order_relaxed) > 0.5f ? (msegs[0].getNextSample(bpm) + 1.0f) * 0.5f : msegs[0].getNextSample(bpm)) : 0.0f),
-                (p.pMsegOn[1]->load(std::memory_order_relaxed) > 0.5f ? (p.pMsegUnipolar[1]->load(std::memory_order_relaxed) > 0.5f ? (msegs[1].getNextSample(bpm) + 1.0f) * 0.5f : msegs[1].getNextSample(bpm)) : 0.0f)
+                (modOn_[0] ? (modBip_[0] ? modEnvs[0].getNextSample() * 2.0f - 1.0f : modEnvs[0].getNextSample()) : 0.0f),
+                (modOn_[1] ? (modBip_[1] ? modEnvs[1].getNextSample() * 2.0f - 1.0f : modEnvs[1].getNextSample()) : 0.0f),
+                (modOn_[2] ? (modBip_[2] ? modEnvs[2].getNextSample() * 2.0f - 1.0f : modEnvs[2].getNextSample()) : 0.0f),
+                (lfoOn_[0] ? (lfoUni_[0] ? (lfos[0].getNextSample(bpm) + 1.0f) * 0.5f : lfos[0].getNextSample(bpm)) : 0.0f),
+                (lfoOn_[1] ? (lfoUni_[1] ? (lfos[1].getNextSample(bpm) + 1.0f) * 0.5f : lfos[1].getNextSample(bpm)) : 0.0f),
+                (lfoOn_[2] ? (lfoUni_[2] ? (lfos[2].getNextSample(bpm) + 1.0f) * 0.5f : lfos[2].getNextSample(bpm)) : 0.0f),
+                (msegOn_[0] ? (msegUni_[0] ? (msegs[0].getNextSample(bpm) + 1.0f) * 0.5f : msegs[0].getNextSample(bpm)) : 0.0f),
+                (msegOn_[1] ? (msegUni_[1] ? (msegs[1].getNextSample(bpm) + 1.0f) * 0.5f : msegs[1].getNextSample(bpm)) : 0.0f)
             };
 
             for (int s = 1; s < 9; ++s) {
@@ -314,12 +349,11 @@ public:
 
             std::fill(std::begin(destMods), std::end(destMods), 0.0f);
             for (int slot = 0; slot < 10; ++slot) {
-                int srcIdx = (int)p.pMatrixSrc[slot]->load(std::memory_order_relaxed);
-                int destIdx = (int)p.pMatrixDest[slot]->load(std::memory_order_relaxed);
-                float amt = p.pMatrixAmt[slot]->load(std::memory_order_relaxed);
+                int srcIdx = matSrc_[slot];
+                int destIdx = matDest_[slot];
 
                 if (srcIdx > 0 && srcIdx < 9 && destIdx > 0 && destIdx < 23) {
-                    destMods[destIdx] += modSourceStates[srcIdx] * amt;
+                    destMods[destIdx] += modSourceStates[srcIdx] * matAmt_[slot];
                 }
             }
 
@@ -337,7 +371,7 @@ public:
             float modShpAmt = juce::jlimit(0.0f, 1.0f, smoothedShpAmt.getNextValue() + destMods[16]);
             float modRate = juce::jlimit(1.0f, 20.0f, smoothedShpRate.getNextValue() + destMods[17] * 19.0f);
             float modBits = juce::jlimit(1.0f, 24.0f, smoothedShpBit.getNextValue() + destMods[18] * 23.0f);
-            float modColorMix = juce::jlimit(0.0f, 1.0f, p.pColorMix->load() + destMods[19]);
+            float modColorMix = juce::jlimit(0.0f, 1.0f, colorMix_ + destMods[19]);
 
             if (i == 0) { 
                 stft_aA = aA; stft_sA = sA; stft_aB = aB; stft_sB = sB; stft_aC = aC; stft_sC = sC; 
@@ -431,12 +465,12 @@ public:
             float sL = wtL[i] + tempSubBuffer.getSample(0, i);
             float sR = wtR[i] + tempSubBuffer.getSample(1, i);
 
-            float mcA = ccA * std::exp2(cutModA * 8.0f); mcA += (fValA * p.pFltAEnvAmt->load() * 10000.0f);
-            float mcB = ccB * std::exp2(cutModB * 8.0f); mcB += (fValB * p.pFltBEnvAmt->load() * 10000.0f);
+            float mcA = ccA * std::exp2(cutModA * 8.0f); mcA += (fValA * fltAEnvAmt_ * 10000.0f);
+            float mcB = ccB * std::exp2(cutModB * 8.0f); mcB += (fValB * fltBEnvAmt_ * 10000.0f);
 
-            dualFilter.setFilterA((int)p.pFltAType->load(), mcA, crA + resModA);
-            dualFilter.setFilterB((int)p.pFltBType->load(), mcB, crB + resModB);
-            dualFilter.setRouting((int)p.pFltRouting->load(), smoothedFltMix.getNextValue());
+            dualFilter.setFilterA(fltAType_, mcA, crA + resModA);
+            dualFilter.setFilterB(fltBType_, mcB, crB + resModB);
+            dualFilter.setRouting(fltRouting_, smoothedFltMix.getNextValue());
 
             dualFilter.processStereo(sL, sR);
 
