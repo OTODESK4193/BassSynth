@@ -158,11 +158,14 @@ public:
     ConfigTab(juce::AudioProcessorValueTreeState& vts);
     void paint(juce::Graphics& g) override;
     void resized() override;
+    void applyModRing(float minDepth, float maxDepth); // ★FM RatioノブのArc表示
 private:
     juce::AudioProcessorValueTreeState& apvts;
     juce::Slider velSmooth, velGateN, velGateSmooth, trigRanSmooth, fmRatio;
     juce::Label  velSmoothL, velGateNL, velGateSmoothL, trigRanSmoothL, fmRatioL;
+    juce::ToggleButton velBip{ "BIP" }, velGateBip{ "BIP" }, trigRanBip{ "BIP" }; // ★Uni/Bip
     std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>> sliderAtts;
+    std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment>> btnAtts;
 };
 
 class MatrixTab : public juce::Component {

@@ -42,6 +42,9 @@ struct VoiceParams {
     std::atomic<float>* pVelGateN = nullptr;     // ★Vel>n 閾値(1..127)
     std::atomic<float>* pVelGateSmooth = nullptr;// ★Vel>n スムーズ
     std::atomic<float>* pTrigRanSmooth = nullptr;// ★Trig.Ran スムーズ
+    std::atomic<float>* pVelBip = nullptr;       // ★Vel Uni/Bip
+    std::atomic<float>* pVelGateBip = nullptr;   // ★Vel>n Uni/Bip
+    std::atomic<float>* pTrigRanBip = nullptr;   // ★Trig.Ran Uni/Bip
 
     std::atomic<float>* pFltAType = nullptr;
     std::atomic<float>* pFltACutoff = nullptr;
@@ -296,7 +299,6 @@ public:
         oscillator.setUnisonDetune(p.pDetune->load(std::memory_order_relaxed));
         oscillator.setStereoWidth(p.pWidth->load(std::memory_order_relaxed)); // ★②修正: WIDTHを配線(従来は未接続でstereoWidth=1.0固定だった)
         oscillator.setFMWaveform((int)p.pFmWave->load(std::memory_order_relaxed));
-        oscillator.setFMRatio(p.pFmRatio->load(std::memory_order_relaxed)); // ★FM比率
 
         ampEnv.setParameters(p.pAAtk->load(std::memory_order_relaxed), p.pADec->load(std::memory_order_relaxed), p.pASus->load(std::memory_order_relaxed), p.pARel->load(std::memory_order_relaxed));
         filterEnvA.setParameters(p.pFAtkA->load(std::memory_order_relaxed), p.pFDecA->load(std::memory_order_relaxed), p.pFSusA->load(std::memory_order_relaxed), p.pFRelA->load(std::memory_order_relaxed));
@@ -320,7 +322,7 @@ public:
         float stft_aA = 0.0f, stft_sA = 0.0f, stft_aB = 0.0f, stft_sB = 0.0f, stft_aC = 0.0f, stft_sC = 0.0f;
 
         float modAlpha = std::exp(-1.0f / static_cast<float>(sampleRate * 0.003));
-        float destMods[26] = { 0.0f }; // ★+M.Pitch(23)/P.Decay(24)/P.Time(25)
+        float destMods[27] = { 0.0f }; // ★+M.Pitch(23)/P.Decay(24)/P.Time(25)/FM Ratio(26)
 
         // ★候補H: ブロック内で不変のパラメータはここで1回だけ読み込む（毎サンプルのatomic読み込みを排除。出力は完全一致）
         int   lfoWave_[3], lfoBeat_[3], lfoTrig_[3];
@@ -369,10 +371,16 @@ public:
         float velGateAlpha_ = smoothToAlpha(p.pVelGateSmooth->load(std::memory_order_relaxed));
         float trigRanAlpha_ = smoothToAlpha(p.pTrigRanSmooth->load(std::memory_order_relaxed));
         float velGateThr_   = juce::jlimit(0.0f, 1.0f, p.pVelGateN->load(std::memory_order_relaxed) / 127.0f);
+        float fmRatioBase_  = p.pFmRatio->load(std::memory_order_relaxed); // ★FM比率(ベース)。destMods[26]で変調
         // Velソース(生Velocity), Vel>n(閾値以上をランプ), Trig.Ran(ノート毎乱数) は値が一定なので事前計算
-        float srcVelocity_ = currentVelocity;
-        float srcVelGate_  = (currentVelocity >= velGateThr_) ? (currentVelocity - velGateThr_) / std::max(1.0e-4f, 1.0f - velGateThr_) : 0.0f;
-        float srcTrigRan_  = trigRandomValue;
+        bool velBip_     = p.pVelBip->load(std::memory_order_relaxed) > 0.5f;
+        bool velGateBip_ = p.pVelGateBip->load(std::memory_order_relaxed) > 0.5f;
+        bool trigRanBip_ = p.pTrigRanBip->load(std::memory_order_relaxed) > 0.5f;
+        float srcVelocity_ = velBip_ ? (currentVelocity * 2.0f - 1.0f) : currentVelocity;
+        float velGateRamp_ = (currentVelocity >= velGateThr_) ? (currentVelocity - velGateThr_) / std::max(1.0e-4f, 1.0f - velGateThr_) : 0.0f;
+        // Vel>nは「閾値未満は0(無効)」を維持。Bipolar時は発動後のランプを-1..1に拡張。
+        float srcVelGate_  = (velGateRamp_ <= 0.0f) ? 0.0f : (velGateBip_ ? (velGateRamp_ * 2.0f - 1.0f) : velGateRamp_);
+        float srcTrigRan_  = trigRanBip_ ? (trigRandomValue * 2.0f - 1.0f) : trigRandomValue;
 
         // サンプル処理ループ
         for (int i = 0; i < numSamples; ++i) {
@@ -415,7 +423,7 @@ public:
                 int srcIdx = matSrc_[slot];
                 int destIdx = matDest_[slot];
 
-                if (srcIdx > 0 && srcIdx < 12 && destIdx > 0 && destIdx < 26) {
+                if (srcIdx > 0 && srcIdx < 12 && destIdx > 0 && destIdx < 27) {
                     destMods[destIdx] += modSourceStates[srcIdx] * matAmt_[slot];
                 }
             }
@@ -445,6 +453,7 @@ public:
 
             oscillator.setWavetablePosition(modPos);
             oscillator.setFMAmount(modFm);
+            oscillator.setFMRatio(juce::jlimit(0.25f, 16.0f, fmRatioBase_ + destMods[26] * 7.0f)); // ★FM Ratio宛先
             oscillator.setWavetablePitchOffset(modWtPitch);
             float modPDecayAmt = juce::jlimit(-24.0f, 24.0f, smoothedPDecayAmt.getNextValue() + destMods[24] * 24.0f);   // ★P.Decay宛先
             float modPDecayTime = juce::jlimit(1.0f, 2000.0f, smoothedPDecayTime.getNextValue() + destMods[25] * 2000.0f); // ★P.Time宛先
@@ -463,8 +472,8 @@ public:
             else {
                 currentFrequency = targetFrequency;
             }
-            // ★①マスターピッチ + ★MasterPitch宛先(destMods[23], ±24半音相当)
-            float cf = currentFrequency * masterPitchMult_ * std::exp2(destMods[23] * 2.0f);
+            // ★①マスターピッチ + ★MasterPitch宛先(destMods[23], ±12半音=±1oct相当)
+            float cf = currentFrequency * masterPitchMult_ * std::exp2(destMods[23]);
             if (cf < 1.0f) cf = 1.0f;
             oscillator.setFrequency(cf);
 

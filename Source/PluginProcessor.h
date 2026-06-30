@@ -155,6 +155,7 @@ private:
     std::atomic<float>* pMasterPitch = nullptr; // ★①マスターピッチ
     std::atomic<float>* pVelSens = nullptr;      // ★Velocity感度
     std::atomic<float>* pFmRatio = nullptr; std::atomic<float>* pVelSmooth = nullptr; std::atomic<float>* pVelGateN = nullptr; std::atomic<float>* pVelGateSmooth = nullptr; std::atomic<float>* pTrigRanSmooth = nullptr; // ★Config系
+    std::atomic<float>* pVelBip = nullptr; std::atomic<float>* pVelGateBip = nullptr; std::atomic<float>* pTrigRanBip = nullptr; // ★Uni/Bip
     std::atomic<float>* pAAtk = nullptr; std::atomic<float>* pADec = nullptr; std::atomic<float>* pASus = nullptr; std::atomic<float>* pARel = nullptr;
     std::atomic<float>* pFAtkA = nullptr; std::atomic<float>* pFDecA = nullptr; std::atomic<float>* pFSusA = nullptr; std::atomic<float>* pFRelA = nullptr;
     std::atomic<float>* pFAtkB = nullptr; std::atomic<float>* pFDecB = nullptr; std::atomic<float>* pFSusB = nullptr; std::atomic<float>* pFRelB = nullptr;

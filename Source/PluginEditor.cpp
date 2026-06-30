@@ -326,7 +326,7 @@ MatrixTab::MatrixTab(juce::AudioProcessorValueTreeState& vts) : apvts(vts) {
         "FLT A: Cutoff", "FLT A: Reso", "FLT B: Cutoff", "FLT B: Reso", "PRF: Gain",
         "WT: Pitch", "DIST: Drive", "DIST: Shaper Amt", "DIST: Rate", "DIST: Bits",
         "COLOR: Mix", "LFO 1: Rate", "LFO 2: Rate", "LFO 3: Rate",
-        "PRF: M.Pitch", "WT: P.Decay", "WT: P.Time" // ★末尾追加(23,24,25)
+        "PRF: M.Pitch", "WT: P.Decay", "WT: P.Time", "WT: FM Ratio" // ★末尾追加(23,24,25,26)
     };
 
     for (int i = 0; i < 10; ++i) {
@@ -380,44 +380,79 @@ void MatrixTab::resized() {
 // ConfigTab Implementation  ★ (新ソースのスムーズ/閾値 + FM Ratio)
 // ==============================================================================
 ConfigTab::ConfigTab(juce::AudioProcessorValueTreeState& vts) : apvts(vts) {
-    setupS(velSmooth, velSmoothL, "Vel Smooth", this);
-    setupS(velGateN, velGateNL, "Vel>n", this);
-    setupS(velGateSmooth, velGateSmoothL, "V>n Smooth", this);
-    setupS(trigRanSmooth, trigRanSmoothL, "Ran Smooth", this);
-    setupS(fmRatio, fmRatioL, "FM Ratio", this);
+    setupS(velSmooth, velSmoothL, "Smooth", this);
+    setupS(velGateN, velGateNL, "Thresh", this);
+    setupS(velGateSmooth, velGateSmoothL, "Smooth", this);
+    setupS(trigRanSmooth, trigRanSmoothL, "Smooth", this);
+    setupS(fmRatio, fmRatioL, "Ratio", this);
+    addAndMakeVisible(velBip); addAndMakeVisible(velGateBip); addAndMakeVisible(trigRanBip);
 
     auto add = [this](juce::Slider& s, const juce::String& id) {
         sliderAtts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, id, s));
+    };
+    auto addB = [this](juce::ToggleButton& b, const juce::String& id) {
+        btnAtts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(apvts, id, b));
     };
     add(velSmooth, "cfg_vel_smooth");
     add(velGateN, "cfg_velgate_n");
     add(velGateSmooth, "cfg_velgate_smooth");
     add(trigRanSmooth, "cfg_trigran_smooth");
     add(fmRatio, "osc_fm_ratio");
+    addB(velBip, "cfg_vel_bipolar");
+    addB(velGateBip, "cfg_velgate_bipolar");
+    addB(trigRanBip, "cfg_trigran_bipolar");
 }
 
 void ConfigTab::paint(juce::Graphics& g) {
     g.fillAll(juce::Colour::fromString("FF1A1A1A"));
-    auto section = [&](int x, int wdt, const char* t) {
+    const int ys[4] = { 12, 92, 172, 252 };
+    const char* names[4] = { "VELOCITY", "VEL > N", "TRIG.RAN", "FM" };
+    for (int i = 0; i < 4; ++i) {
         g.setColour(juce::Colours::white.withAlpha(0.05f));
-        g.fillRoundedRectangle((float)x, 18.0f, (float)wdt, 120.0f, 5.0f);
+        g.fillRoundedRectangle(10.0f, (float)ys[i], (float)getWidth() - 20.0f, 74.0f, 5.0f);
         g.setColour(juce::Colour::fromString("FFFF764D"));
-        g.setFont(13.0f);
-        g.drawText(t, x + 10, 24, wdt - 20, 18, juce::Justification::centredLeft);
-    };
-    section(10, 95, "VELOCITY");
-    section(115, 175, "VEL > N");
-    section(300, 95, "TRIG.RAN");
-    section(405, 95, "FM");
+        g.setFont(14.0f);
+        g.drawText(names[i], 20, ys[i] + 8, 95, 20, juce::Justification::centredLeft);
+    }
 }
 
 void ConfigTab::resized() {
-    int y = 55;
-    placeKnob(22, y, velSmoothL, velSmooth);          // VELOCITY
-    placeKnob(130, y, velGateNL, velGateN);           // VEL>N: 閾値
-    placeKnob(205, y, velGateSmoothL, velGateSmooth); // VEL>N: smooth
-    placeKnob(312, y, trigRanSmoothL, trigRanSmooth); // TRIG.RAN
-    placeKnob(417, y, fmRatioL, fmRatio);             // FM Ratio
+    const int b0 = 12, b1 = 92, b2 = 172, b3 = 252;
+    // VELOCITY: Smooth + Uni/Bip
+    placeKnob(120, b0 + 2, velSmoothL, velSmooth);
+    velBip.setBounds(230, b0 + 28, 60, 24);
+    // VEL>N: 閾値 + Smooth + Uni/Bip
+    placeKnob(120, b1 + 2, velGateNL, velGateN);
+    placeKnob(200, b1 + 2, velGateSmoothL, velGateSmooth);
+    velGateBip.setBounds(300, b1 + 28, 60, 24);
+    // TRIG.RAN: Smooth + Uni/Bip
+    placeKnob(120, b2 + 2, trigRanSmoothL, trigRanSmooth);
+    trigRanBip.setBounds(230, b2 + 28, 60, 24);
+    // FM: Ratio
+    placeKnob(120, b3 + 2, fmRatioL, fmRatio);
+}
+
+// ★ FM RatioノブのモジュレーションArcを更新（editorのtimerから呼ばれる）
+void ConfigTab::applyModRing(float minDepth, float maxDepth) {
+    auto& s = fmRatio;
+    bool shouldBeActive = (maxDepth - minDepth > 0.001f);
+    bool changed = false;
+    bool currentlyActive = s.getProperties().getWithDefault("mod_active", false);
+    if (currentlyActive != shouldBeActive) changed = true;
+    if (shouldBeActive) {
+        auto range = s.getNormalisableRange();
+        float pNorm = range.convertTo0to1((float)s.getValue());
+        float newMin = juce::jlimit(0.0f, 1.0f, pNorm + minDepth);
+        float newMax = juce::jlimit(0.0f, 1.0f, pNorm + maxDepth);
+        float oldMin = s.getProperties().getWithDefault("mod_min", 0.0f);
+        float oldMax = s.getProperties().getWithDefault("mod_max", 1.0f);
+        if (std::abs(newMin - oldMin) > 0.001f || std::abs(newMax - oldMax) > 0.001f) {
+            s.getProperties().set("mod_min", newMin); s.getProperties().set("mod_max", newMax); changed = true;
+        }
+        s.getProperties().set("mod_active", true);
+    }
+    else { s.getProperties().set("mod_active", false); }
+    if (changed) s.repaint();
 }
 
 // ==============================================================================
@@ -1067,15 +1102,15 @@ void LiquidDreamAudioProcessorEditor::timerCallback() {
         colorPanel.updateState(state, text, blinkCounter < 10);
     }
 
-    float modMinDepths[23] = { 0.0f };
-    float modMaxDepths[23] = { 0.0f };
+    float modMinDepths[27] = { 0.0f }; // ★+M.Pitch(23)/P.Decay(24)/P.Time(25)/FM Ratio(26)
+    float modMaxDepths[27] = { 0.0f };
 
     for (int slot = 0; slot < 10; ++slot) {
         int srcIdx = (int)apvts.getRawParameterValue("matrix_src_" + juce::String(slot))->load();
         int destIdx = (int)apvts.getRawParameterValue("matrix_dest_" + juce::String(slot))->load();
         float amt = apvts.getRawParameterValue("matrix_amt_" + juce::String(slot))->load();
 
-        if (srcIdx > 0 && destIdx > 0 && destIdx < 23) {
+        if (srcIdx > 0 && destIdx > 0 && destIdx < 27) {
             bool isBipolar = true;
             if (srcIdx >= 1 && srcIdx <= 3) {
                 isBipolar = apvts.getRawParameterValue("mod" + juce::String(srcIdx) + "_bipolar")->load() > 0.5f;
@@ -1086,6 +1121,9 @@ void LiquidDreamAudioProcessorEditor::timerCallback() {
             else if (srcIdx >= 7 && srcIdx <= 8) {
                 isBipolar = apvts.getRawParameterValue("mseg" + juce::String(srcIdx - 6) + "_unipolar")->load() <= 0.5f;
             }
+            else if (srcIdx == 9)  { isBipolar = apvts.getRawParameterValue("cfg_vel_bipolar")->load() > 0.5f; }
+            else if (srcIdx == 10) { isBipolar = apvts.getRawParameterValue("cfg_velgate_bipolar")->load() > 0.5f; }
+            else if (srcIdx == 11) { isBipolar = apvts.getRawParameterValue("cfg_trigran_bipolar")->load() > 0.5f; }
 
             float minDelta = 0.0f;
             float maxDelta = 0.0f;
@@ -1164,6 +1202,12 @@ void LiquidDreamAudioProcessorEditor::timerCallback() {
     updateRing(shpAmtSlider, modMinDepths[16], modMaxDepths[16]);
     updateRing(rateSlider, modMinDepths[17], modMaxDepths[17]);
     updateRing(bitSlider, modMinDepths[18], modMaxDepths[18]);
+
+    // ★追加宛先のArc表示
+    updateRing(pitchSlider, modMinDepths[23], modMaxDepths[23]);          // M.Pitch
+    updateRing(pitchDecayAmtSlider, modMinDepths[24], modMaxDepths[24]);  // P.Decay
+    updateRing(pitchDecayTimeSlider, modMinDepths[25], modMaxDepths[25]); // P.Time
+    configTab.applyModRing(modMinDepths[26], modMaxDepths[26]);          // FM Ratio (Configタブ内)
 }
 
 void LiquidDreamAudioProcessorEditor::resized()
