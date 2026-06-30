@@ -37,6 +37,11 @@ struct VoiceParams {
     std::atomic<float>* pSubPitch = nullptr;
     std::atomic<float>* pMasterPitch = nullptr; // ★①マスターピッチ(半音)
     std::atomic<float>* pVelSens = nullptr;      // ★Velocity感度(0=無効, 1=フル)
+    std::atomic<float>* pFmRatio = nullptr;      // ★FM比率
+    std::atomic<float>* pVelSmooth = nullptr;    // ★Velソース スムーズ
+    std::atomic<float>* pVelGateN = nullptr;     // ★Vel>n 閾値(1..127)
+    std::atomic<float>* pVelGateSmooth = nullptr;// ★Vel>n スムーズ
+    std::atomic<float>* pTrigRanSmooth = nullptr;// ★Trig.Ran スムーズ
 
     std::atomic<float>* pFltAType = nullptr;
     std::atomic<float>* pFltACutoff = nullptr;
@@ -148,6 +153,7 @@ public:
         bool wasActive = isActive;
         currentNoteNumber = noteNumber;
         currentVelocity = velocity;
+        trigRandomValue = juce::Random::getSystemRandom().nextFloat(); // ★Trig.Ran: 弾くたびに更新
         isActive = true;
         onTime = ++globalTimeCounter;
 
@@ -208,10 +214,11 @@ public:
         msegs[1].pushNewState(state1);
     }
 
-    void setUIParams(float pos, float fmAmt, int fmWave) {
+    void setUIParams(float pos, float fmAmt, int fmWave, float fmRatio = 1.0f) {
         oscillator.setWavetablePosition(pos);
         oscillator.setFMAmount(fmAmt);
         oscillator.setFMWaveform(fmWave);
+        oscillator.setFMRatio(fmRatio); // ★FM比率(表示)
     }
 
     // ★ 追加: ノート非再生時に、表示用オシレーターへMorph(位相ワープ系 mode1〜7)を反映させる
@@ -289,6 +296,7 @@ public:
         oscillator.setUnisonDetune(p.pDetune->load(std::memory_order_relaxed));
         oscillator.setStereoWidth(p.pWidth->load(std::memory_order_relaxed)); // ★②修正: WIDTHを配線(従来は未接続でstereoWidth=1.0固定だった)
         oscillator.setFMWaveform((int)p.pFmWave->load(std::memory_order_relaxed));
+        oscillator.setFMRatio(p.pFmRatio->load(std::memory_order_relaxed)); // ★FM比率
 
         ampEnv.setParameters(p.pAAtk->load(std::memory_order_relaxed), p.pADec->load(std::memory_order_relaxed), p.pASus->load(std::memory_order_relaxed), p.pARel->load(std::memory_order_relaxed));
         filterEnvA.setParameters(p.pFAtkA->load(std::memory_order_relaxed), p.pFDecA->load(std::memory_order_relaxed), p.pFSusA->load(std::memory_order_relaxed), p.pFRelA->load(std::memory_order_relaxed));
@@ -312,7 +320,7 @@ public:
         float stft_aA = 0.0f, stft_sA = 0.0f, stft_aB = 0.0f, stft_sB = 0.0f, stft_aC = 0.0f, stft_sC = 0.0f;
 
         float modAlpha = std::exp(-1.0f / static_cast<float>(sampleRate * 0.003));
-        float destMods[23] = { 0.0f };
+        float destMods[26] = { 0.0f }; // ★+M.Pitch(23)/P.Decay(24)/P.Time(25)
 
         // ★候補H: ブロック内で不変のパラメータはここで1回だけ読み込む（毎サンプルのatomic読み込みを排除。出力は完全一致）
         int   lfoWave_[3], lfoBeat_[3], lfoTrig_[3];
@@ -352,6 +360,20 @@ public:
         // ★Velocity感度: sens=0で常にフル音量、sens=1で音量がVelocityに比例
         float velGain_ = 1.0f - p.pVelSens->load(std::memory_order_relaxed) * (1.0f - currentVelocity);
 
+        // ★新ソース用: スムーズノブ(0..1)→時定数(0.5ms..200ms)→1次係数。閾値は0..1へ正規化。
+        auto smoothToAlpha = [&](float s) {
+            float tSec = 0.0005f + juce::jlimit(0.0f, 1.0f, s) * 0.2f;
+            return std::exp(-1.0f / static_cast<float>(sampleRate * tSec));
+        };
+        float velAlpha_     = smoothToAlpha(p.pVelSmooth->load(std::memory_order_relaxed));
+        float velGateAlpha_ = smoothToAlpha(p.pVelGateSmooth->load(std::memory_order_relaxed));
+        float trigRanAlpha_ = smoothToAlpha(p.pTrigRanSmooth->load(std::memory_order_relaxed));
+        float velGateThr_   = juce::jlimit(0.0f, 1.0f, p.pVelGateN->load(std::memory_order_relaxed) / 127.0f);
+        // Velソース(生Velocity), Vel>n(閾値以上をランプ), Trig.Ran(ノート毎乱数) は値が一定なので事前計算
+        float srcVelocity_ = currentVelocity;
+        float srcVelGate_  = (currentVelocity >= velGateThr_) ? (currentVelocity - velGateThr_) / std::max(1.0e-4f, 1.0f - velGateThr_) : 0.0f;
+        float srcTrigRan_  = trigRandomValue;
+
         // サンプル処理ループ
         for (int i = 0; i < numSamples; ++i) {
             if (ampEnv.popJustReset()) {
@@ -365,7 +387,7 @@ public:
             }
 
             // モジュレーション極性の適用
-            float rawSources[9] = {
+            float rawSources[12] = {
                 0.0f,
                 (modOn_[0] ? (modBip_[0] ? modEnvs[0].getNextSample() * 2.0f - 1.0f : modEnvs[0].getNextSample()) : 0.0f),
                 (modOn_[1] ? (modBip_[1] ? modEnvs[1].getNextSample() * 2.0f - 1.0f : modEnvs[1].getNextSample()) : 0.0f),
@@ -374,19 +396,26 @@ public:
                 (lfoOn_[1] ? (lfoUni_[1] ? (lfos[1].getNextSample(bpm) + 1.0f) * 0.5f : lfos[1].getNextSample(bpm)) : 0.0f),
                 (lfoOn_[2] ? (lfoUni_[2] ? (lfos[2].getNextSample(bpm) + 1.0f) * 0.5f : lfos[2].getNextSample(bpm)) : 0.0f),
                 (msegOn_[0] ? (msegUni_[0] ? (msegs[0].getNextSample(bpm) + 1.0f) * 0.5f : msegs[0].getNextSample(bpm)) : 0.0f),
-                (msegOn_[1] ? (msegUni_[1] ? (msegs[1].getNextSample(bpm) + 1.0f) * 0.5f : msegs[1].getNextSample(bpm)) : 0.0f)
+                (msegOn_[1] ? (msegUni_[1] ? (msegs[1].getNextSample(bpm) + 1.0f) * 0.5f : msegs[1].getNextSample(bpm)) : 0.0f),
+                srcVelocity_, // 9: Velocity (Unipolar)
+                srcVelGate_,  // 10: Vel>n (閾値以上をランプ)
+                srcTrigRan_   // 11: Trig.Ran
             };
 
             for (int s = 1; s < 9; ++s) {
                 modSourceStates[s] = modAlpha * modSourceStates[s] + (1.0f - modAlpha) * rawSources[s];
             }
+            // ★新ソースはソース毎のスムーズ係数で処理
+            modSourceStates[9]  = velAlpha_     * modSourceStates[9]  + (1.0f - velAlpha_)     * rawSources[9];
+            modSourceStates[10] = velGateAlpha_ * modSourceStates[10] + (1.0f - velGateAlpha_) * rawSources[10];
+            modSourceStates[11] = trigRanAlpha_ * modSourceStates[11] + (1.0f - trigRanAlpha_) * rawSources[11];
 
             std::fill(std::begin(destMods), std::end(destMods), 0.0f);
             for (int slot = 0; slot < 10; ++slot) {
                 int srcIdx = matSrc_[slot];
                 int destIdx = matDest_[slot];
 
-                if (srcIdx > 0 && srcIdx < 9 && destIdx > 0 && destIdx < 23) {
+                if (srcIdx > 0 && srcIdx < 12 && destIdx > 0 && destIdx < 26) {
                     destMods[destIdx] += modSourceStates[srcIdx] * matAmt_[slot];
                 }
             }
@@ -417,7 +446,9 @@ public:
             oscillator.setWavetablePosition(modPos);
             oscillator.setFMAmount(modFm);
             oscillator.setWavetablePitchOffset(modWtPitch);
-            oscillator.setPitchDecay(smoothedPDecayAmt.getNextValue(), smoothedPDecayTime.getNextValue());
+            float modPDecayAmt = juce::jlimit(-24.0f, 24.0f, smoothedPDecayAmt.getNextValue() + destMods[24] * 24.0f);   // ★P.Decay宛先
+            float modPDecayTime = juce::jlimit(1.0f, 2000.0f, smoothedPDecayTime.getNextValue() + destMods[25] * 2000.0f); // ★P.Time宛先
+            oscillator.setPitchDecay(modPDecayAmt, modPDecayTime);
             oscillator.setDriftAmount(smoothedDrift.getNextValue());
             oscillator.setMorphA(currentModeA, aA, sA);
             oscillator.setMorphB(currentModeB, aB, sB);
@@ -432,7 +463,8 @@ public:
             else {
                 currentFrequency = targetFrequency;
             }
-            float cf = currentFrequency * masterPitchMult_; // ★①マスターピッチを適用
+            // ★①マスターピッチ + ★MasterPitch宛先(destMods[23], ±24半音相当)
+            float cf = currentFrequency * masterPitchMult_ * std::exp2(destMods[23] * 2.0f);
             if (cf < 1.0f) cf = 1.0f;
             oscillator.setFrequency(cf);
 
@@ -557,6 +589,7 @@ private:
     juce::SmoothedValue<float> smoothedMorphAAmt, smoothedMorphAShift, smoothedMorphBAmt, smoothedMorphBShift, smoothedMorphCAmt, smoothedMorphCShift;
     std::array<juce::SmoothedValue<float>, 3> smoothedLfoRates;
 
-    std::array<float, 9> modSourceStates = { 0.0f };
+    std::array<float, 12> modSourceStates = { 0.0f }; // ★+Velocity/Vel>n/Trig.Ran
+    float trigRandomValue = 0.0f;                      // ★Trig.Ran: ノート毎の乱数
     int currentModeA = 0, currentModeB = 0, currentModeC = 0;
 };

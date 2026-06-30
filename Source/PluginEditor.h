@@ -152,6 +152,19 @@ private:
     std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment>> btnAtts;
 };
 
+// ★ Config タブ（新ソースのスムーズ/閾値 + FM Ratio）
+class ConfigTab : public juce::Component {
+public:
+    ConfigTab(juce::AudioProcessorValueTreeState& vts);
+    void paint(juce::Graphics& g) override;
+    void resized() override;
+private:
+    juce::AudioProcessorValueTreeState& apvts;
+    juce::Slider velSmooth, velGateN, velGateSmooth, trigRanSmooth, fmRatio;
+    juce::Label  velSmoothL, velGateNL, velGateSmoothL, trigRanSmoothL, fmRatioL;
+    std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>> sliderAtts;
+};
+
 class MatrixTab : public juce::Component {
 public:
     MatrixTab(juce::AudioProcessorValueTreeState& vts);
@@ -336,6 +349,7 @@ private:
     LfoTab lfoTab;
     MsegTab msegTab;
     ModEnvTab modEnvTab;
+    ConfigTab configTab; // ★Config
     MatrixTab matrixTab;
     FxTab fxTab; // ★④FX
 

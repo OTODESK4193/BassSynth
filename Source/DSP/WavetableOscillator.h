@@ -209,11 +209,12 @@ public:
         for (int i = 0; i < 512; ++i) {
             float originalPhase = i / 512.0f;
             float phase = originalPhase;
+            float mphase = phase * fmRatio; mphase -= std::floor(mphase); // ★FM比率(表示)
             float mod = 0.0f;
-            if (fmWaveform == 0) mod = std::sin(phase * juce::MathConstants<float>::twoPi);
-            else if (fmWaveform == 1) mod = phase * 2.0f - 1.0f;
-            else if (fmWaveform == 2) mod = phase < 0.5f ? 1.0f : -1.0f;
-            else if (fmWaveform == 3) mod = 4.0f * std::abs(phase - 0.5f) - 1.0f;
+            if (fmWaveform == 0) mod = std::sin(mphase * juce::MathConstants<float>::twoPi);
+            else if (fmWaveform == 1) mod = mphase * 2.0f - 1.0f;
+            else if (fmWaveform == 2) mod = mphase < 0.5f ? 1.0f : -1.0f;
+            else if (fmWaveform == 3) mod = 4.0f * std::abs(mphase - 0.5f) - 1.0f;
 
             float tp = phase + mod * fmAmount * 0.1f;
             tp -= std::floor(tp);
@@ -258,6 +259,7 @@ public:
     float getFMAmount() const { return fmAmount; }
     void setFMAmount(float amt) { fmAmount = amt; }
     void setFMWaveform(int shape) { fmWaveform = juce::jlimit(0, 3, shape); }
+    void setFMRatio(float r) { fmRatio = juce::jlimit(0.25f, 16.0f, r); } // ★FM比率(位相同期)
     void setDriftAmount(float amt) { driftAmount = amt; }
     // ★候補A: 値が変化したときだけ、しかも該当系統のみ前計算する（出力は従来と完全に同一）
     void setMorphA(int mode, float amt, float shift) {
@@ -334,7 +336,7 @@ public:
             if (fmActive) {
                 SIMDFloat modSignal(0.0f);
                 for (int i = 0; i < SimdWidth; ++i) {
-                    float pVal = p.get(i);
+                    float pVal = p.get(i) * fmRatio; pVal -= std::floor(pVal); // ★FM比率(位相同期)
                     float mVal = 0.0f;
                     if (fmWaveform == 0) {
                         float z = pVal - 0.5f;
@@ -486,6 +488,7 @@ private:
     float baseFreq = 440.0f, detuneAmount = 0.0f, stereoWidth = 1.0f, wtPosition = 0.0f, fmAmount = 0.0f, driftAmount = 0.0f;
     float lastCalcFreq = -1.0f; // ★候補B: recalculate済みの周波数を記録（センチネル -1 で初回/SR変更時に必ず計算）
     int unisonCount = 1, fmWaveform = 0;
+    float fmRatio = 1.0f; // ★FM比率(位相同期: modPhase = fmod(carrierPhase*ratio,1))
     bool oscOn = true, subOn = true;
     int morphAMode = 0, morphBMode = 0, morphCMode = 0;
     float morphAAmount = 0.0f, morphBAmount = 0.0f, morphCAmount = 0.0f;

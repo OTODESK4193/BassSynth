@@ -66,7 +66,7 @@ public:
             sC = pMorphCShift->load(std::memory_order_relaxed);
         }
 
-        voiceManager.setUIParams(currentPos, pFm->load(std::memory_order_relaxed), (int)pFmWave->load(std::memory_order_relaxed));
+        voiceManager.setUIParams(currentPos, pFm->load(std::memory_order_relaxed), (int)pFmWave->load(std::memory_order_relaxed), pFmRatio->load(std::memory_order_relaxed));
 
         // ★ 修正: ノート非再生時は、表示用オシレーターへ現在のMorph値を先に反映してから波形を生成する。
         //   これにより位相ワープ系Morph(mode1〜7)が、手動/LFOでノブを動かしただけでも表示に反映される。
@@ -154,6 +154,7 @@ private:
     std::atomic<float>* pGain = nullptr; std::atomic<float>* pGlide = nullptr; std::atomic<float>* pLegato = nullptr;
     std::atomic<float>* pMasterPitch = nullptr; // ★①マスターピッチ
     std::atomic<float>* pVelSens = nullptr;      // ★Velocity感度
+    std::atomic<float>* pFmRatio = nullptr; std::atomic<float>* pVelSmooth = nullptr; std::atomic<float>* pVelGateN = nullptr; std::atomic<float>* pVelGateSmooth = nullptr; std::atomic<float>* pTrigRanSmooth = nullptr; // ★Config系
     std::atomic<float>* pAAtk = nullptr; std::atomic<float>* pADec = nullptr; std::atomic<float>* pASus = nullptr; std::atomic<float>* pARel = nullptr;
     std::atomic<float>* pFAtkA = nullptr; std::atomic<float>* pFDecA = nullptr; std::atomic<float>* pFSusA = nullptr; std::atomic<float>* pFRelA = nullptr;
     std::atomic<float>* pFAtkB = nullptr; std::atomic<float>* pFDecB = nullptr; std::atomic<float>* pFSusB = nullptr; std::atomic<float>* pFRelB = nullptr;

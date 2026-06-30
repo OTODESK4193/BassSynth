@@ -29,6 +29,11 @@ LiquidDreamAudioProcessor::LiquidDreamAudioProcessor()
     pGain = apvts.getRawParameterValue("m_gain"); pGlide = apvts.getRawParameterValue("m_glide"); pLegato = apvts.getRawParameterValue("m_legato");
     pMasterPitch = apvts.getRawParameterValue("m_pitch"); // ★①マスターピッチ
     pVelSens = apvts.getRawParameterValue("m_velsens");   // ★Velocity感度
+    pFmRatio = apvts.getRawParameterValue("osc_fm_ratio");
+    pVelSmooth = apvts.getRawParameterValue("cfg_vel_smooth");
+    pVelGateN = apvts.getRawParameterValue("cfg_velgate_n");
+    pVelGateSmooth = apvts.getRawParameterValue("cfg_velgate_smooth");
+    pTrigRanSmooth = apvts.getRawParameterValue("cfg_trigran_smooth");
 
     // ★④ FX パラメータ
     pChoOn = apvts.getRawParameterValue("fx_cho_on"); pChoMix = apvts.getRawParameterValue("fx_cho_mix"); pChoDepth = apvts.getRawParameterValue("fx_cho_depth"); pChoSpeed = apvts.getRawParameterValue("fx_cho_speed");
@@ -99,6 +104,7 @@ LiquidDreamAudioProcessor::LiquidDreamAudioProcessor()
     vp.pSubOn = pSubOn; vp.pSubWave = pSubWave; vp.pSubVol = pSubVol; vp.pSubPitch = pSubPitch;
     vp.pMasterPitch = pMasterPitch; // ★①マスターピッチ
     vp.pVelSens = pVelSens;         // ★Velocity感度
+    vp.pFmRatio = pFmRatio; vp.pVelSmooth = pVelSmooth; vp.pVelGateN = pVelGateN; vp.pVelGateSmooth = pVelGateSmooth; vp.pTrigRanSmooth = pTrigRanSmooth;
     vp.pFltAType = pFltAType; vp.pFltACutoff = pFltACutoff; vp.pFltAReso = pFltAReso;
     vp.pFltBType = pFltBType; vp.pFltBCutoff = pFltBCutoff; vp.pFltBReso = pFltBReso;
     vp.pFltRouting = pFltRouting; vp.pFltMix = pFltMix; vp.pFltAEnvAmt = pFltAEnvAmt; vp.pFltBEnvAmt = pFltBEnvAmt;
@@ -159,6 +165,13 @@ juce::AudioProcessorValueTreeState::ParameterLayout LiquidDreamAudioProcessor::c
     params.push_back(std::make_unique<juce::AudioParameterFloat>("osc_pdecay_time", "P.Time", timeRange, 100.0f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("osc_fm", "FM Amt", 0.0f, 3.0f, 0.0f));
     params.push_back(std::make_unique<juce::AudioParameterInt>("osc_fm_wave", "FM Wave", 0, 3, 0));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("osc_fm_ratio", "FM Ratio", 0.5f, 8.0f, 1.0f)); // ★FM比率(位相同期)
+
+    // ★Config (新ソースのスムーズ/閾値)
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("cfg_vel_smooth", "Vel Smooth", 0.0f, 1.0f, 0.2f));
+    params.push_back(std::make_unique<juce::AudioParameterInt>("cfg_velgate_n", "Vel>n Threshold", 1, 127, 120));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("cfg_velgate_smooth", "Vel>n Smooth", 0.0f, 1.0f, 0.2f));
+    params.push_back(std::make_unique<juce::AudioParameterFloat>("cfg_trigran_smooth", "Trig.Ran Smooth", 0.0f, 1.0f, 0.2f));
     params.push_back(std::make_unique<juce::AudioParameterInt>("osc_morph_a_mode", "Morph A", 0, 13, 0));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("osc_morph_a_amt", "Amount A", -1.0f, 1.0f, 0.0f));
     params.push_back(std::make_unique<juce::AudioParameterFloat>("osc_morph_a_shift", "Shift A", -1.0f, 1.0f, 0.0f));
@@ -307,8 +320,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout LiquidDreamAudioProcessor::c
 
     for (int i = 0; i < 10; ++i) {
         juce::String sIdx = juce::String(i);
-        params.push_back(std::make_unique<juce::AudioParameterInt>("matrix_src_" + sIdx, "Src", 0, 8, 0));
-        params.push_back(std::make_unique<juce::AudioParameterInt>("matrix_dest_" + sIdx, "Dest", 0, 22, 0));
+        params.push_back(std::make_unique<juce::AudioParameterInt>("matrix_src_" + sIdx, "Src", 0, 11, 0));   // ★+Velocity/Vel>n/Trig.Ran
+        params.push_back(std::make_unique<juce::AudioParameterInt>("matrix_dest_" + sIdx, "Dest", 0, 25, 0)); // ★+M.Pitch/P.Decay/P.Time
         params.push_back(std::make_unique<juce::AudioParameterFloat>("matrix_amt_" + sIdx, "Amt", -1.0f, 1.0f, 0.0f));
     }
 

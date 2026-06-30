@@ -317,14 +317,16 @@ void ModEnvTab::resized() {
 // ==============================================================================
 MatrixTab::MatrixTab(juce::AudioProcessorValueTreeState& vts) : apvts(vts) {
     juce::StringArray sources = {
-        "None", "MOD 1", "MOD 2", "MOD 3", "LFO 1", "LFO 2", "LFO 3", "MSEG 1", "MSEG 2"
+        "None", "MOD 1", "MOD 2", "MOD 3", "LFO 1", "LFO 2", "LFO 3", "MSEG 1", "MSEG 2",
+        "Velocity", "Vel>n", "Trig.Ran" // ★末尾追加(9,10,11)
     };
     juce::StringArray dests = {
         "None", "WT: Position", "WT: FM Amt", "WT: MorphA Amt", "WT: MorphA Shf",
         "WT: MorphB Amt", "WT: MorphB Shf", "WT: MorphC Amt", "WT: MorphC Shf",
         "FLT A: Cutoff", "FLT A: Reso", "FLT B: Cutoff", "FLT B: Reso", "PRF: Gain",
         "WT: Pitch", "DIST: Drive", "DIST: Shaper Amt", "DIST: Rate", "DIST: Bits",
-        "COLOR: Mix", "LFO 1: Rate", "LFO 2: Rate", "LFO 3: Rate"
+        "COLOR: Mix", "LFO 1: Rate", "LFO 2: Rate", "LFO 3: Rate",
+        "PRF: M.Pitch", "WT: P.Decay", "WT: P.Time" // ★末尾追加(23,24,25)
     };
 
     for (int i = 0; i < 10; ++i) {
@@ -372,6 +374,50 @@ void MatrixTab::resized() {
         slots[i].amt.setBounds(140, y + 2, 135, 20);
         slots[i].dest.setBounds(285, y, 180, 24);
     }
+}
+
+// ==============================================================================
+// ConfigTab Implementation  ★ (新ソースのスムーズ/閾値 + FM Ratio)
+// ==============================================================================
+ConfigTab::ConfigTab(juce::AudioProcessorValueTreeState& vts) : apvts(vts) {
+    setupS(velSmooth, velSmoothL, "Vel Smooth", this);
+    setupS(velGateN, velGateNL, "Vel>n", this);
+    setupS(velGateSmooth, velGateSmoothL, "V>n Smooth", this);
+    setupS(trigRanSmooth, trigRanSmoothL, "Ran Smooth", this);
+    setupS(fmRatio, fmRatioL, "FM Ratio", this);
+
+    auto add = [this](juce::Slider& s, const juce::String& id) {
+        sliderAtts.push_back(std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(apvts, id, s));
+    };
+    add(velSmooth, "cfg_vel_smooth");
+    add(velGateN, "cfg_velgate_n");
+    add(velGateSmooth, "cfg_velgate_smooth");
+    add(trigRanSmooth, "cfg_trigran_smooth");
+    add(fmRatio, "osc_fm_ratio");
+}
+
+void ConfigTab::paint(juce::Graphics& g) {
+    g.fillAll(juce::Colour::fromString("FF1A1A1A"));
+    auto section = [&](int x, int wdt, const char* t) {
+        g.setColour(juce::Colours::white.withAlpha(0.05f));
+        g.fillRoundedRectangle((float)x, 18.0f, (float)wdt, 120.0f, 5.0f);
+        g.setColour(juce::Colour::fromString("FFFF764D"));
+        g.setFont(13.0f);
+        g.drawText(t, x + 10, 24, wdt - 20, 18, juce::Justification::centredLeft);
+    };
+    section(10, 95, "VELOCITY");
+    section(115, 175, "VEL > N");
+    section(300, 95, "TRIG.RAN");
+    section(405, 95, "FM");
+}
+
+void ConfigTab::resized() {
+    int y = 55;
+    placeKnob(22, y, velSmoothL, velSmooth);          // VELOCITY
+    placeKnob(130, y, velGateNL, velGateN);           // VEL>N: 閾値
+    placeKnob(205, y, velGateSmoothL, velGateSmooth); // VEL>N: smooth
+    placeKnob(312, y, trigRanSmoothL, trigRanSmooth); // TRIG.RAN
+    placeKnob(417, y, fmRatioL, fmRatio);             // FM Ratio
 }
 
 // ==============================================================================
@@ -654,7 +700,7 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     dualScope(p.getOutputScopePtr()), browser(p.getAPVTS()),
     presetBrowser(juce::File::getSpecialLocation(juce::File::userDocumentsDirectory).getChildFile("BassSynthPresets")),
     colorPanel(p), modTabs(juce::TabbedButtonBar::TabsAtTop),
-    lfoTab(p.getAPVTS()), msegTab(p, p.getAPVTS()), modEnvTab(p.getAPVTS()), matrixTab(p.getAPVTS()), fxTab(p.getAPVTS())
+    lfoTab(p.getAPVTS()), msegTab(p, p.getAPVTS()), modEnvTab(p.getAPVTS()), configTab(p.getAPVTS()), matrixTab(p.getAPVTS()), fxTab(p.getAPVTS())
 {
     setLookAndFeel(&abletonLnF);
 
@@ -914,6 +960,7 @@ LiquidDreamAudioProcessorEditor::LiquidDreamAudioProcessorEditor(LiquidDreamAudi
     modTabs.addTab("LFOs", juce::Colour::fromString("FF2A2A2A"), &lfoTab, false);
     modTabs.addTab("MSEGs", juce::Colour::fromString("FF2A2A2A"), &msegTab, false);
     modTabs.addTab("MOD ENVs", juce::Colour::fromString("FF2A2A2A"), &modEnvTab, false);
+    modTabs.addTab("CONFIG", juce::Colour::fromString("FF2A2A2A"), &configTab, false); // ★ModEnvsとMatrixの間
     modTabs.addTab("MATRIX", juce::Colour::fromString("FF2A2A2A"), &matrixTab, false);
     modTabs.addTab("FX", juce::Colour::fromString("FF2A2A2A"), &fxTab, false); // ★④Matrixの次にFXタブ
 

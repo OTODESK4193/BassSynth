@@ -159,8 +159,8 @@ public:
         outputBuffer.applyGain(0.25f);
     }
 
-    void setUIParams(float pos, float fmAmt, int fmWave) {
-        voices[0].setUIParams(pos, fmAmt, fmWave);
+    void setUIParams(float pos, float fmAmt, int fmWave, float fmRatio = 1.0f) {
+        voices[0].setUIParams(pos, fmAmt, fmWave, fmRatio);
     }
 
     // ★ 追加: 表示用(voices[0])オシレーターへMorphを反映
